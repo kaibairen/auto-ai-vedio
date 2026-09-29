@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -49,19 +50,41 @@ def parse_title_body(markdown: str) -> tuple[str, str]:
     return title, body
 
 
+def _yaml_scalar(value: Any) -> str:
+    """Stable scalars. Do not use yaml.dump() per field — it appends `...`."""
+    if value is None:
+        return '""'
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    text = str(value)
+    if text == "":
+        return '""'
+    special = set(":#{[]}&*!|>'\"%@`,\n\t")
+    if (
+        text != text.strip()
+        or text[:1] in special
+        or any(ch in special for ch in text)
+        or text.lower() in {"true", "false", "null", "yes", "no", "on", "off"}
+        or text.replace(".", "", 1).isdigit()
+    ):
+        return json.dumps(text, ensure_ascii=False)
+    return text
+
+
 def dump_frontmatter(meta: dict[str, Any]) -> str:
     lines = ["---"]
     for key in FRONTMATTER_KEYS:
         value = meta.get(key, "")
-        if key == "locked":
-            lines.append(f"{key}: {str(bool(value)).lower()}")
+        if key == "node":
+            lines.append("node: N1")
+        elif key == "locked":
+            lines.append(f"locked: {_yaml_scalar(bool(value))}")
         elif key in {"chars", "version"}:
             lines.append(f"{key}: {int(value or 0)}")
-        elif key == "node":
-            lines.append("node: N1")
         else:
-            text = "" if value is None else str(value)
-            lines.append(f"{key}: {yaml.safe_dump(text, allow_unicode=True).strip()}")
+            lines.append(f"{key}: {_yaml_scalar('' if value is None else value)}")
     lines.append("---")
     return "\n".join(lines) + "\n"
 

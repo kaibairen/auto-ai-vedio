@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import re
+
 from aiv.curriculum import CHAR_LIMIT, TITLE_LIMIT_B, frameworks_for
 from aiv.providers.base import GenerateRequest, GenerateResponse
 from aiv.validation import count_chars
+
+_CLAUSE = re.compile(r"[，。！？\n;；]")
+_STOP = set("的了吗啊吧呢是在有和与或就把被让到从对为这那我你他她它还也都很可一个")
+_PREFIXES = ("就是", "那个", "这个", "然后", "所以", "其实", "我觉得", "很多人")
 
 
 def _clip(text: str, limit: int) -> str:
@@ -17,31 +23,42 @@ def _clip(text: str, limit: int) -> str:
     return "".join(buf).rstrip()
 
 
+def _strip_prefixes(text: str) -> str:
+    s = text.strip()
+    changed = True
+    while changed:
+        changed = False
+        for p in _PREFIXES:
+            if s.startswith(p):
+                s = s[len(p) :]
+                changed = True
+    return s
+
+
 def _topic(raw: str) -> str:
-    line = raw.strip().splitlines()[0] if raw.strip() else "这段原料"
-    return line[:32]
+    words = _seed_words(raw)
+    return words[0] if words else "这段原料"
 
 
 def _seed_words(raw: str) -> list[str]:
-    # Prefer CJK runs / latin words; keep short.
-    parts = []
-    buf = ""
-    for ch in raw:
-        if ch.isalnum() or "\u4e00" <= ch <= "\u9fff":
-            buf += ch
-        else:
-            if buf:
-                parts.append(buf)
-                buf = ""
-    if buf:
-        parts.append(buf)
-    uniq: list[str] = []
-    for p in parts:
-        if len(p) >= 2 and p not in uniq:
-            uniq.append(p)
-        if len(uniq) >= 6:
+    grams: list[str] = []
+    for clause in _CLAUSE.split(raw or ""):
+        s = _strip_prefixes(clause)
+        hans = "".join(ch for ch in s if "\u4e00" <= ch <= "\u9fff")
+        for n in (3, 2, 4):
+            if len(hans) >= n:
+                g = hans[:n]
+                if g[0] not in _STOP and g not in grams:
+                    grams.append(g)
+        if len(grams) >= 6:
+            return grams
+    latin = re.findall(r"[A-Za-z0-9]{2,}", raw or "")
+    for w in latin:
+        if w not in grams:
+            grams.append(w)
+        if len(grams) >= 6:
             break
-    return uniq or ["核心观点"]
+    return grams or ["核心观点"]
 
 
 class FixtureProvider:
@@ -192,10 +209,10 @@ def _path_a_piece(topic: str, keys: list[str], framework: str, idx: int) -> tupl
     hook = hooks[idx % 5]
     body = (
         f"{hook}"
-        f"{topic}里最常被忽略的是{k1}。"
-        f"先看现象，再看能立刻做的一步：把{k0}用起来，而不是扔掉。"
-        f"转折在于，真正省事的不是再买新工具，而是改变这一个习惯。"
-        f"框架用的是{framework}。"
+        f"很多人只看见表面，真正被忽略的是{k1}。"
+        f"先看现象，再做一步：把{k0}用起来，而不是扔掉。"
+        f"转折在于，省事的不是再买新工具，而是改这一个习惯。"
+        f"框架是{framework}。"
         f"你还用过{k0}做什么？评论区只留一个做法。"
     )
     title = f"{k0}别再浪费"

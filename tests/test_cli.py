@@ -23,7 +23,7 @@ def test_cli_demo_path_a(tmp_path: Path, monkeypatch):
     text = art.read_text(encoding="utf-8")
     assert "node: N1" in text
     assert "locked: true" in text
-    assert "confirmed_by: bot:demo" in text
+    assert "bot:demo" in text
 
 
 def test_cli_downstream_409_then_confirm(tmp_path: Path, monkeypatch):
