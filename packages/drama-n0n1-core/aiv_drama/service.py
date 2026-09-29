@@ -653,9 +653,9 @@ class DramaService:
         raw: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        raw = raw or (body.model_dump() if body else {})
-        reject_force_keys(raw)
-        reject_dual_skill(raw)
+        incoming = raw if isinstance(raw, dict) else {}
+        reject_force_keys(incoming)
+        reject_dual_skill(incoming)
         cached = self._idem_get(idempotency_key, f"generate:{project_id}:{ep}")
         if cached:
             return cached

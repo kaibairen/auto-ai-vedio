@@ -54,7 +54,6 @@ class OutlineGenerateRequest(BaseModel):
     provider: Literal["fixture", "llm"] | None = None
     shot_cap: int | None = Field(default=None, ge=1)
     actor: str | None = None
-    dual_skill_preview: Any | None = None
 
 
 class OutlineWrite(BaseModel):

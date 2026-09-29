@@ -188,7 +188,7 @@ def outline_generate(
         shot_cap=shot_cap,
         actor=actor,
     )
-    _print(_guard(lambda: _service().generate_outline(project_id, ep, body, raw=body.model_dump())))
+    _print(_guard(lambda: _service().generate_outline(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @outline_app.command("put")
