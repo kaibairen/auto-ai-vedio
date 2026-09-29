@@ -1,0 +1,23 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# N1 runtime
+data/
+episodes/**/.aiv/
+**/.aiv/
+.aiv/
+
+.env
+.env.*
+!.env.example
+*.pem

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>N1 口播定稿</title>
+  <link rel="stylesheet" href="/workbench/n1.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <strong id="epLabel">EP01 · N1 口播定稿</strong>
+      <span class="badge" id="badge">empty</span>
+      <span class="muted" id="ver"></span>
+    </div>
+    <p class="muted">门只走 POST gates/g1/confirm · ForcePass=never · provisional: D1 默认 A · D2 锁后不进编剧</p>
+  </header>
+  <main>
+    <section class="card" id="main">
+      <h2 id="stepTitle">当前步</h2>
+      <p id="stepHelp" class="muted"></p>
+      <div id="banner"></div>
+      <div id="fields"></div>
+      <p id="err" class="err"></p>
+      <div class="bar">
+        <button class="ghost" id="btnBack" type="button">退回本步</button>
+        <button class="ghost" id="btnSave" type="button" hidden>保存草稿</button>
+        <button id="btnSubmit" type="button">提交本步 →</button>
+        <button id="btnGate" type="button" hidden>打开门 G1</button>
+        <button class="ghost" id="btnCopy" type="button" hidden>复制定稿</button>
+      </div>
+    </section>
+    <aside class="card">
+      <h2>摘要</h2>
+      <label>路径 〔provisional:P-D1〕</label>
+      <div class="row">
+        <label class="inline"><input type="radio" name="path" value="A" checked /> A 口水话</label>
+        <label class="inline"><input type="radio" name="path" value="B" /> B 长文</label>
+      </div>
+      <p class="muted">切换路径会重建会话。</p>
+      <p>chars: <span id="chars">0</span> / <span id="lim">400</span></p>
+      <p>framework: <span id="fw">—</span></p>
+      <p>source_ref: <span id="src">—</span></p>
+      <div class="hint">
+        <strong>〔编导〕钩子 / CTA</strong>
+        <p>前 3 秒完成钩子：反常识 / 人物悬念 / 数据冲击 / 痛点承诺 / 挑战邀约。禁止「大家好今天讲」起笔。</p>
+        <p>结尾仅一个主 CTA（评 / 转 / 提问 / 邀请参与）。不要叠关注+点赞+三连。</p>
+      </div>
+      <label>project</label>
+      <input id="project" value="default" />
+      <label>episode</label>
+      <input id="ep" value="EP01" />
+      <div class="bar">
+        <button id="btnCreate" type="button">创建会话</button>
+        <button class="ghost" id="btnRefresh" type="button">刷新</button>
+        <button class="ghost" id="btnDemo" type="button">Fixture 走通</button>
+      </div>
+    </aside>
+  </main>
+  <dialog id="g1">
+    <form method="dialog" class="g1">
+      <h3>门 G1 · 口播确认</h3>
+      <p id="g1meta" class="muted"></p>
+      <pre id="g1preview"></pre>
+      <label>点头人 actor</label>
+      <input id="actor" value="user:local" />
+      <fieldset>
+        <legend>创作侧 C1–C6（人过审；不替代机械校验）</legend>
+        <label><input type="checkbox" class="ck" /> C1 钩子：首句完成框架钩子功能</label>
+        <label><input type="checkbox" class="ck" /> C2 CTA：末段仅一个主行动号召</label>
+        <label><input type="checkbox" class="ck" /> C3 忠于原意：无虚构加点</label>
+        <label><input type="checkbox" class="ck" /> C4 框架落实：中段有揭秘/高潮/技巧/挑战</label>
+        <label><input type="checkbox" class="ck" /> C5 单一主线</label>
+        <label><input type="checkbox" class="ck" /> C6 定稿可读：有标题、能一口气念</label>
+      </fieldset>
+      <label>notes</label>
+      <input id="notes" />
+      <div class="bar">
+        <button value="cancel" class="ghost" type="button" id="btnReject">退回修改草稿</button>
+        <button value="ok" type="button" id="btnPass">通过并锁定</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/workbench/n1.js"></script>
+</body>
+</html>

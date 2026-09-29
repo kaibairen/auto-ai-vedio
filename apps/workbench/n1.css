@@ -1,0 +1,32 @@
+:root {
+  --bg: #0f1419; --panel: #1a222c; --ink: #e8eef4; --muted: #93a1b1;
+  --line: #2a3644; --accent: #5ee0b5; --warn: #f5c36e; --danger: #f07178;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, "Noto Sans SC", "Noto Sans CJK SC", "Noto Sans CJK", sans-serif; background: var(--bg); color: var(--ink); }
+header { padding: 16px 20px; border-bottom: 1px solid var(--line); }
+header .badge { background: #243040; border-radius: 999px; padding: 2px 8px; margin-left: 8px; font-size: 12px; }
+main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+h2, h3 { margin: 0 0 10px; font-size: 15px; }
+.muted { color: var(--muted); font-size: 13px; }
+.err { color: var(--danger); min-height: 1.2em; }
+label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+label.inline { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); margin-right: 12px; }
+input, textarea, select { width: 100%; background: #0d1218; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+textarea { min-height: 120px; }
+button { background: var(--accent); color: #072018; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 650; cursor: pointer; }
+button.ghost { background: #243040; color: var(--ink); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.hint { background: #3a2c12; color: var(--warn); border-radius: 8px; padding: 8px; font-size: 13px; margin: 12px 0; }
+.banner { background: #3a2c12; color: var(--warn); border-radius: 8px; padding: 8px; margin-bottom: 10px; font-size: 13px; }
+article { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 8px 0; }
+dialog { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 12px; padding: 16px; max-width: 560px; }
+pre { white-space: pre-wrap; background: #0d1218; padding: 8px; border-radius: 8px; font-size: 13px; max-height: 200px; overflow: auto; }
+fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-block; background: #243040; border-radius: 999px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: 12px; }
+.over { color: var(--danger); font-weight: 650; }
+.editor label { margin-top: 10px; }
