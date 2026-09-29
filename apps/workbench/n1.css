@@ -3,7 +3,7 @@
   --line: #2a3644; --accent: #5ee0b5; --warn: #f5c36e; --danger: #f07178;
 }
 * { box-sizing: border-box; }
-body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, "Noto Sans SC", sans-serif; background: var(--bg); color: var(--ink); }
+body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, "Noto Sans SC", "Noto Sans CJK SC", "Noto Sans CJK", sans-serif; background: var(--bg); color: var(--ink); }
 header { padding: 16px 20px; border-bottom: 1px solid var(--line); }
 header .badge { background: #243040; border-radius: 999px; padding: 2px 8px; margin-left: 8px; font-size: 12px; }
 main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px; }
