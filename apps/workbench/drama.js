@@ -109,13 +109,17 @@ $("btn-gen").onclick = async () => {
   dump("cast-out", data.cast);
 };
 $("btn-save-outline").onclick = async () => {
-  const data = await api("PUT", `/projects/${state.projectId}/episodes/${state.ep}/drama/outline`, {
-    body_md: $("body-md").value,
-    shot_cap: Number($("shot-cap").value),
-    unlock_edit: $("unlock").checked,
-    actor: "yangzhou",
-  });
-  dump("cast-out", data.outline);
+  try {
+    const data = await api("PUT", `/projects/${state.projectId}/episodes/${state.ep}/drama/outline`, {
+      body_md: $("body-md").value,
+      shot_cap: Number($("shot-cap").value),
+      unlock_edit: $("unlock").checked,
+      actor: "yangzhou",
+    });
+    dump("cast-out", data.outline);
+  } catch (err) {
+    dump("cast-out", err.data || { error: String(err) });
+  }
 };
 $("btn-reset").onclick = async () => {
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/outline/reset`, {

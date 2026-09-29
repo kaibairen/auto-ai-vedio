@@ -6,7 +6,7 @@
   --accent: #c9a227;
   --danger: #d4676a;
   --ok: #6fbf8a;
-  font-family: "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+  font-family: "Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", "Noto Sans SC", sans-serif;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); }
