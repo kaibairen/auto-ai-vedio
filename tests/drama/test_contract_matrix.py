@@ -89,6 +89,10 @@ def test_t_c1_attach_then_generate_keeps_ref(svc):
     env = generate_ready(svc, pid)
     refs = [c.get("library_ref") for c in env["cast"]["characters"]]
     assert {"id": "CHAR-01", "version": 3} in refs
+    lin = [c for c in env["cast"]["characters"] if c["name"] == "林晚"]
+    assert len(lin) == 1
+    assert lin[0]["id"] == "CHAR-01"
+    assert lin[0]["library_ref"] == {"id": "CHAR-01", "version": 3}
 
 
 def test_t_c2_fe_invented_char_id(svc):

@@ -30,9 +30,10 @@ class FixtureProvider:
         notes = (brief.get("setting_notes") or "").strip()
         setting = notes or ("架空古代边关" if lane == "female" else "都市底层翻盘")
         n = episode_id.lstrip("EP").lstrip("0") or "1"
+        preattached = [c for c in (brief.get("preattached_characters") or []) if isinstance(c, dict)]
 
         if lane == "female":
-            chars = [
+            default_chars = [
                 {"name": "林晚", "one_line": "被流放的庶女 / 重生女主"},
                 {"name": "谢衡", "one_line": "边关主将，旧识"},
             ]
@@ -40,6 +41,42 @@ class FixtureProvider:
                 {"name": "边关营帐", "one_line": "开场受辱与立规"},
                 {"name": "校场", "one_line": "身份反转主爽"},
             ]
+            lead_default = "林晚"
+            genre = f"女频 · 身份反转 · {title}"
+        else:
+            default_chars = [
+                {"name": "陈铮", "one_line": "被贬边军的废物少爷"},
+                {"name": "赵缺", "one_line": "克扣军饷的副将"},
+            ]
+            scenes = [
+                {"name": "城门校场", "one_line": "当众受辱与立威"},
+                {"name": "夜巡城墙", "one_line": "预知兑现、反杀"},
+            ]
+            lead_default = "陈铮"
+            genre = f"男频 · 身份/预知 · {title}"
+
+        if preattached:
+            chars: list[dict[str, str]] = []
+            seen: set[str] = set()
+            for raw in preattached:
+                name = (raw.get("name") or "").strip() or "未命名"
+                if name in seen:
+                    continue
+                seen.add(name)
+                chars.append(
+                    {
+                        "name": name,
+                        "one_line": (raw.get("one_line") or "").strip() or "预挂角色",
+                    }
+                )
+            for extra in default_chars:
+                if extra["name"] == lead_default or extra["name"] in seen:
+                    continue
+                chars.append(dict(extra))
+                seen.add(extra["name"])
+            body = _fixture_body_with_cast(n, genre, setting, chars, scenes, shot_cap)
+        elif lane == "female":
+            chars = default_chars
             body = f"""# 第 {n} 集大纲
 
 - 题材 / 赛道：女频 · 身份反转 · {title}
@@ -56,14 +93,7 @@ class FixtureProvider:
 - 预计镜头数上限：{shot_cap}
 """
         else:
-            chars = [
-                {"name": "陈铮", "one_line": "被贬边军的废物少爷"},
-                {"name": "赵缺", "one_line": "克扣军饷的副将"},
-            ]
-            scenes = [
-                {"name": "城门校场", "one_line": "当众受辱与立威"},
-                {"name": "夜巡城墙", "one_line": "预知兑现、反杀"},
-            ]
+            chars = default_chars
             body = f"""# 第 {n} 集大纲
 
 - 题材 / 赛道：男频 · 身份/预知 · {title}
@@ -88,3 +118,32 @@ class FixtureProvider:
             scenes=scenes,
             source_skills=[SKILL_PATHS[lane]],
         )
+
+
+def _fixture_body_with_cast(
+    n: str,
+    genre: str,
+    setting: str,
+    chars: list[dict[str, str]],
+    scenes: list[dict[str, str]],
+    shot_cap: int,
+) -> str:
+    lead = chars[0]["name"] if chars else "主角"
+    support = chars[1]["name"] if len(chars) > 1 else lead
+    people = "；".join(f"{c['name']} · {c['one_line']}" for c in chars) or "待补"
+    places = "；".join(f"{s['name']} · {s['one_line']}" for s in scenes) or "待补"
+    return f"""# 第 {n} 集大纲
+
+- 题材 / 赛道：{genre}
+- 设定：{setting}
+- 主要人物（姓名 · 一句话身份）：{people}
+- 场景清单（场景名 · 一句话）：{places}
+- 桥段序列：
+  1. 开篇钩子：{lead}登场立住冲突（镜1–2）
+  2. 立规：{lead}用预挂身份反将对手
+  3. 中段加压（40–60%）：{support}误判局势，当众施压
+  4. 主爽（70–85%）：{lead}亮出底牌，场面翻转
+  5. 集尾悬念：新线升起，观众想看下一集
+- 爽点 / 钩子位置：钩子镜1–2；中段 40–60%；主爽 70–85%；集尾悬念末镜
+- 预计镜头数上限：{shot_cap}
+"""

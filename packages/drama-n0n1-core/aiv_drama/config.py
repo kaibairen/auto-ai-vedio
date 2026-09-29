@@ -11,7 +11,28 @@ SKILL_PATHS = {
     "male": ".skill/writing/男频短剧编剧/SKILL.md",
 }
 
+# references/ tables next to each lane SKILL.md (read-only excerpts; do not edit textbooks)
+SKILL_REFERENCE_FILENAMES = (
+    "ticai-yurenshe.md",
+    "jiegou-kuangjia.md",
+    "shuangdian-sheji.md",
+    "luoji-jiaoyan-qingdan.md",
+)
+
+SKILL_ENTRY_EXCERPT_LIMIT = 2000
+SKILL_REFERENCE_EXCERPT_LIMIT = 800
+SKILL_REFERENCES_TOTAL_LIMIT = 2400
+
 SHOT_CAP_HARD = 12
+
+
+def skill_dir_relpath(lane: str) -> str:
+    return SKILL_PATHS[lane].rsplit("/", 1)[0]
+
+
+def skill_reference_relpaths(lane: str) -> list[str]:
+    base = skill_dir_relpath(lane)
+    return [f"{base}/references/{name}" for name in SKILL_REFERENCE_FILENAMES]
 
 
 def _walk_for_repo(start: Path) -> Path | None:
@@ -72,3 +93,6 @@ class Settings:
 
     def skill_abspath(self, lane: str) -> Path:
         return self.repo_root / SKILL_PATHS[lane]
+
+    def skill_reference_paths(self, lane: str) -> list[tuple[str, Path]]:
+        return [(rel, self.repo_root / rel) for rel in skill_reference_relpaths(lane)]

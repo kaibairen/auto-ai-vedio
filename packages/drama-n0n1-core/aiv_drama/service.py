@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import re
+import unicodedata
 from copy import deepcopy
 from typing import Any
 
@@ -45,9 +48,48 @@ from aiv_drama.validate import (
 )
 from aiv_schema.models import GATE_G1B, NODE_DN0, NODE_DN1, NODE_DN2, PIPELINE_DRAMA
 
+logger = logging.getLogger(__name__)
+
+_PROTAG_MARKERS = ("主角", "女主", "男主", "主人公")
+_MALE_IDENTITY_RE = re.compile(r"(男主|男主角|男性|男生|·男|／男|/男)")
+_FEMALE_IDENTITY_RE = re.compile(r"(女主|女主角|女性|女生|·女|／女|/女)")
+_PLACEHOLDER_ONE_LINES = frozenset({"", "待补一句话", "预挂角色"})
+
 
 def _key(project_id: str, ep: str) -> str:
     return f"{project_id}/{ep}"
+
+
+def normalize_cast_name(name: str) -> str:
+    text = unicodedata.normalize("NFKC", (name or "").strip())
+    return " ".join(text.split())
+
+
+def is_protagonist_row(row: dict[str, Any]) -> bool:
+    text = f"{row.get('name') or ''}{row.get('one_line') or ''}"
+    return any(marker in text for marker in _PROTAG_MARKERS)
+
+
+def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
+    """L1: warn when preattach gender/identity clashes with lane. Never 422."""
+    warnings: list[str] = []
+    if lane not in {"female", "male"}:
+        return warnings
+    for card in cards:
+        text = f"{card.get('name') or ''} {card.get('one_line') or ''}"
+        cid = card.get("id") or "?"
+        name = card.get("name") or cid
+        if lane == "female" and _MALE_IDENTITY_RE.search(text):
+            warnings.append(
+                f"lane female may clash with preattached {cid} ({name}); "
+                "outline kept the preattach — G1b may FAIL; not a 422"
+            )
+        elif lane == "male" and _FEMALE_IDENTITY_RE.search(text):
+            warnings.append(
+                f"lane male may clash with preattached {cid} ({name}); "
+                "outline kept the preattach — G1b may FAIL; not a 422"
+            )
+    return warnings
 
 
 class DramaService:
@@ -208,10 +250,10 @@ class DramaService:
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
 
-    def outline_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
+    def outline_envelope(self, rec: dict[str, Any], *, warnings: list[str] | None = None) -> dict[str, Any]:
         if not rec.get("outline"):
             raise AppError(404, "not_found", "outline not found", node=NODE_DN1)
-        return {
+        env: dict[str, Any] = {
             "ok": True,
             "project_id": rec["episode"]["project_id"],
             "episode_id": rec["episode"]["episode_id"],
@@ -220,6 +262,9 @@ class DramaService:
             "cast": deepcopy(rec["cast"]) if rec.get("cast") else None,
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
+        if warnings:
+            env["warnings"] = list(warnings)
+        return env
 
     def cast_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
         if not rec.get("cast"):
@@ -554,67 +599,144 @@ class DramaService:
             "updated_at": now_iso(),
         }
 
+    def _preattached_ids(self, rec: dict[str, Any]) -> list[str]:
+        return list((rec.get("brief") or {}).get("preattached_character_ids") or [])
+
+    def _resolve_preattached_characters(self, project_id: str, rec: dict[str, Any]) -> list[dict[str, Any]]:
+        existing = {c["id"]: c for c in ((rec.get("cast") or {}).get("characters") or [])}
+        cards: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for cid in self._preattached_ids(rec):
+            if cid in seen:
+                continue
+            seen.add(cid)
+            lib = self._latest_library(project_id, cid)
+            ex = existing.get(cid)
+            name = (ex or {}).get("name") or (lib or {}).get("name") or cid
+            one_line = (ex or {}).get("one_line") or (lib or {}).get("one_line") or "预挂角色"
+            ref = None
+            if ex and ex.get("library_ref"):
+                ref = deepcopy(ex["library_ref"])
+            elif lib:
+                ref = {"id": lib["id"], "version": lib["version"]}
+            card: dict[str, Any] = {"id": cid, "name": name, "one_line": one_line}
+            if ref is not None:
+                card["library_ref"] = ref
+            cards.append(card)
+        return cards
+
+    def _seed_preattached_row(
+        self,
+        rec: dict[str, Any],
+        project_id: str,
+        cid: str,
+        existing: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        lib = self._latest_library(project_id, cid)
+        if cid not in rec["allocated_char_ids"]:
+            self._register_char(rec, cid)
+        if existing:
+            row = deepcopy(existing)
+            if not row.get("library_ref") and lib:
+                row["library_ref"] = {"id": lib["id"], "version": lib["version"]}
+            if lib:
+                if not (row.get("name") or "").strip() or row.get("name") == cid:
+                    row["name"] = lib["name"]
+                if (row.get("one_line") or "").strip() in _PLACEHOLDER_ONE_LINES:
+                    row["one_line"] = lib["one_line"]
+            return row
+        if lib:
+            return {
+                "id": cid,
+                "name": lib["name"],
+                "one_line": lib["one_line"],
+                "library_ref": {"id": lib["id"], "version": lib["version"]},
+            }
+        return {
+            "id": cid,
+            "name": cid,
+            "one_line": "预挂角色",
+            "library_ref": None,
+        }
+
     def _merge_generated_cast(
         self,
         rec: dict[str, Any],
         draft: GeneratedDraft,
         project_id: str,
+        *,
+        warnings: list[str] | None = None,
     ) -> dict[str, Any]:
+        notes = warnings if warnings is not None else []
         existing_by_id = {c["id"]: c for c in ((rec.get("cast") or {}).get("characters") or [])}
         existing_scenes = {s["id"]: s for s in ((rec.get("cast") or {}).get("scenes") or [])}
+        preattached = self._preattached_ids(rec)
+        preattached_set = set(preattached)
+
         characters: list[dict[str, Any]] = []
-        used_names: set[str] = set()
+        used_names: dict[str, dict[str, Any]] = {}
+        have_ids: set[str] = set()
+
+        def _index(row: dict[str, Any]) -> None:
+            characters.append(row)
+            have_ids.add(row["id"])
+            key = normalize_cast_name(row.get("name") or "")
+            if key and key not in used_names:
+                used_names[key] = row
+
+        # Keepers: existing library-backed rows and explicit preattach ids (name fold reads this table).
+        for ident, prev in existing_by_id.items():
+            if prev.get("library_ref") or ident in preattached_set:
+                _index(self._seed_preattached_row(rec, project_id, ident, prev))
+
+        for cid in preattached:
+            if cid in have_ids:
+                continue
+            _index(self._seed_preattached_row(rec, project_id, cid, existing_by_id.get(cid)))
+
+        bound = [c for c in characters if c.get("library_ref")]
+        lead: dict[str, Any] | None = next((c for c in bound if is_protagonist_row(c)), None)
+        if lead is None:
+            for cid in preattached:
+                row = next((c for c in characters if c["id"] == cid and c.get("library_ref")), None)
+                if row:
+                    lead = row
+                    break
+        if lead is None and bound:
+            lead = bound[0]
 
         for row in draft.characters:
+            name = (row.get("name") or "").strip() or "未命名"
+            one_line = (row.get("one_line") or "").strip() or "待补一句话"
+            key = normalize_cast_name(name)
+            if key and key in used_names:
+                target = used_names[key]
+                if (target.get("one_line") or "").strip() in _PLACEHOLDER_ONE_LINES:
+                    target["one_line"] = one_line
+                # never overwrite library_ref
+                msg = f"folded generated name {name!r} onto {target['id']}"
+                logger.warning(msg)
+                notes.append(msg)
+                continue
+            if lead and is_protagonist_row(row) and normalize_cast_name(lead.get("name") or "") != key:
+                msg = (
+                    f"soft-suppressed parallel protagonist {name!r} "
+                    f"(kept preattached {lead['id']} {lead.get('name')!r})"
+                )
+                logger.warning(msg)
+                notes.append(msg)
+                continue
             ident = self._alloc_char(rec)
             prev = existing_by_id.get(ident)
             ref = deepcopy(prev.get("library_ref")) if prev and prev.get("library_ref") else None
-            characters.append(
+            _index(
                 {
                     "id": ident,
-                    "name": row.get("name") or "未命名",
-                    "one_line": row.get("one_line") or "待补一句话",
+                    "name": name,
+                    "one_line": one_line,
                     "library_ref": ref,
                 }
             )
-            used_names.add((row.get("name") or "").strip())
-
-        # keep previously attached rows not overwritten
-        for ident, prev in existing_by_id.items():
-            if prev.get("library_ref") and ident not in {c["id"] for c in characters}:
-                characters.append(deepcopy(prev))
-
-        preattached = list((rec.get("brief") or {}).get("preattached_character_ids") or [])
-        have_ids = {c["id"] for c in characters}
-        for cid in preattached:
-            lib = self._latest_library(project_id, cid)
-            existing = next((c for c in characters if c["id"] == cid), None)
-            if existing:
-                if not existing.get("library_ref") and lib:
-                    existing["library_ref"] = {"id": lib["id"], "version": lib["version"]}
-                continue
-            # append preattached row
-            if cid not in rec["allocated_char_ids"]:
-                self._register_char(rec, cid)
-            if lib:
-                characters.append(
-                    {
-                        "id": cid,
-                        "name": lib["name"],
-                        "one_line": lib["one_line"],
-                        "library_ref": {"id": lib["id"], "version": lib["version"]},
-                    }
-                )
-            else:
-                characters.append(
-                    {
-                        "id": cid,
-                        "name": cid,
-                        "one_line": "预挂角色",
-                        "library_ref": None,
-                    }
-                )
-            have_ids.add(cid)
 
         scenes: list[dict[str, Any]] = []
         for row in draft.scenes:
@@ -669,7 +791,18 @@ class DramaService:
         lane = self._resolve_lane(rec, req.lane)
         shot_cap = require_shot_cap(req.shot_cap)
         provider = get_provider(req.provider, self.settings)
-        draft = provider.generate(episode_id=rec["episode"]["episode_id"], lane=lane, shot_cap=shot_cap, brief=brief)
+        brief_for_gen = deepcopy(brief)
+        cards = self._resolve_preattached_characters(project_id, rec)
+        brief_for_gen["preattached_characters"] = cards
+        warnings = lane_identity_warnings(lane, cards)
+        for item in warnings:
+            logger.warning(item)
+        draft = provider.generate(
+            episode_id=rec["episode"]["episode_id"],
+            lane=lane,
+            shot_cap=shot_cap,
+            brief=brief_for_gen,
+        )
         reject_outline_prompts(draft.body_md)
         require_shot_cap(draft.shot_cap)
         rec["source_skills"] = list(draft.source_skills)
@@ -684,14 +817,18 @@ class DramaService:
             "updated_at": now_iso(),
             "job_id": None,
         }
-        rec["cast"] = self._merge_generated_cast(rec, draft, project_id)
+        rec["cast"] = self._merge_generated_cast(rec, draft, project_id, warnings=warnings)
         rec["gate"]["state"] = "ready"
         rec["gate"]["locked"] = False
         rec["episode"]["status"] = "awaiting_g1b"
         rec["episode"]["next_edges"] = []
         self._touch_episode(rec)
         self._commit(rec)
-        return self._idem_put(idempotency_key, f"generate:{project_id}:{ep}", self.outline_envelope(rec))
+        return self._idem_put(
+            idempotency_key,
+            f"generate:{project_id}:{ep}",
+            self.outline_envelope(rec, warnings=warnings),
+        )
 
     def put_outline(
         self,
@@ -980,6 +1117,12 @@ class DramaService:
         ts = now_iso()
         if decision == "pass":
             self._validate_pass(rec)
+            confirm_lane = (rec.get("outline") or {}).get("lane") or (rec.get("brief") or {}).get("lane_preference")
+            for item in lane_identity_warnings(
+                confirm_lane or "",
+                self._resolve_preattached_characters(project_id, rec),
+            ):
+                logger.warning(item)
             rec["outline"]["locked"] = True
             rec["outline"]["confirmed_by"] = actor
             rec["cast"]["locked"] = True

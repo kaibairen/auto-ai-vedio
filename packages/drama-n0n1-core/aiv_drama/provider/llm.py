@@ -6,7 +6,14 @@ from typing import Any
 
 import httpx
 
-from aiv_drama.config import SKILL_PATHS, Settings
+from aiv_drama.config import (
+    SKILL_ENTRY_EXCERPT_LIMIT,
+    SKILL_PATHS,
+    SKILL_REFERENCE_EXCERPT_LIMIT,
+    SKILL_REFERENCES_TOTAL_LIMIT,
+    Settings,
+    skill_reference_relpaths,
+)
 from aiv_drama.errors import AppError
 from aiv_drama.models import GeneratedDraft
 from aiv_drama.provider.fixture import FixtureProvider
@@ -36,11 +43,25 @@ class LlmProvider:
                 node="D-N1",
             )
 
-        skill_path = self.settings.skill_abspath(lane)
-        skill_excerpt = ""
-        if skill_path.is_file():
-            # read-only reference; do not copy full curriculum into the package
-            skill_excerpt = skill_path.read_text(encoding="utf-8")[:2000]
+        skill_excerpt, entry_paths = _excerpt_skill_entry(self.settings, lane)
+        refs_excerpt, ref_paths = _excerpt_skill_references(self.settings, lane)
+        preattached = _prompt_preattached(brief.get("preattached_characters"))
+
+        rules = [
+            "Output JSON only: body_md, characters[{name,one_line}], scenes[{name,one_line}]",
+            "body_md is a 分集大纲 with 桥段序列 (numbered), 爽点/钩子, 预计镜头数上限",
+            "Do NOT write 提示词, 宫格, Seedance, 分镜表, or 成稿台词",
+            f"shot_cap hard cap {shot_cap}",
+            "Ceiling is outline/beats only (D-N1), not D-N2",
+        ]
+        if preattached:
+            rules.extend(
+                [
+                    "大纲主角必须使用预挂角色的姓名；禁止另造同名角色",
+                    "Reuse preattached names as story subjects; do not invent a parallel protagonist",
+                    "Same-name extras merge onto the preattached id; never allocate a second id for that name",
+                ]
+            )
 
         prompt = {
             "episode_id": episode_id,
@@ -50,15 +71,11 @@ class LlmProvider:
                 "title_intent": brief.get("title_intent"),
                 "pin": brief.get("pin"),
                 "setting_notes": brief.get("setting_notes"),
+                "preattached_characters": preattached,
             },
-            "rules": [
-                "Output JSON only: body_md, characters[{name,one_line}], scenes[{name,one_line}]",
-                "body_md is a 分集大纲 with 桥段序列 (numbered), 爽点/钩子, 预计镜头数上限",
-                "Do NOT write 提示词, 宫格, Seedance, 分镜表, or 成稿台词",
-                f"shot_cap hard cap {shot_cap}",
-                "Ceiling is outline/beats only (D-N1), not D-N2",
-            ],
+            "rules": rules,
             "skill_excerpt": skill_excerpt,
+            "skill_references_excerpt": refs_excerpt,
         }
         try:
             resp = httpx.post(
@@ -102,8 +119,58 @@ class LlmProvider:
             shot_cap=shot_cap,
             characters=[{"name": c.get("name", ""), "one_line": c.get("one_line", "")} for c in chars],
             scenes=[{"name": s.get("name", ""), "one_line": s.get("one_line", "")} for s in scenes],
-            source_skills=[SKILL_PATHS[lane]],
+            source_skills=entry_paths + ref_paths,
         )
+
+
+def _prompt_preattached(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    cards: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        card: dict[str, Any] = {
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "one_line": item.get("one_line"),
+        }
+        if item.get("library_ref") is not None:
+            card["library_ref"] = item.get("library_ref")
+        cards.append(card)
+    return cards
+
+
+def _excerpt_skill_entry(settings: Settings, lane: str) -> tuple[str, list[str]]:
+    path = settings.skill_abspath(lane)
+    rel = SKILL_PATHS[lane]
+    if not path.is_file():
+        return "", []
+    return path.read_text(encoding="utf-8")[:SKILL_ENTRY_EXCERPT_LIMIT], [rel]
+
+
+def _excerpt_skill_references(settings: Settings, lane: str) -> tuple[str, list[str]]:
+    chunks: list[str] = []
+    used: list[str] = []
+    total = 0
+    for rel in skill_reference_relpaths(lane):
+        path = settings.repo_root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")[:SKILL_REFERENCE_EXCERPT_LIMIT]
+        if not text.strip():
+            continue
+        room = SKILL_REFERENCES_TOTAL_LIMIT - total
+        if room <= 0:
+            break
+        if len(text) > room:
+            text = text[:room]
+        if not text:
+            break
+        chunks.append(f"### {rel}\n{text}")
+        used.append(rel)
+        total += len(text)
+    return "\n\n".join(chunks), used
 
 
 def _parse_llm_json(content: str) -> dict[str, Any]:
