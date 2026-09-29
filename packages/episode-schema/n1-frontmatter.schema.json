@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiv.local/schema/n1-frontmatter.json",
+  "title": "N1-口播定稿 frontmatter",
+  "type": "object",
+  "required": ["node", "path", "framework", "chars", "source_ref", "confirmed_by", "locked", "version"],
+  "properties": {
+    "node": { "const": "N1" },
+    "path": { "enum": ["A", "B"] },
+    "framework": { "type": "string" },
+    "chars": { "type": "integer", "minimum": 0 },
+    "source_ref": { "type": "string" },
+    "confirmed_by": { "type": "string" },
+    "locked": { "type": "boolean" },
+    "version": { "type": "integer", "minimum": 1 },
+    "defects": { "type": "array", "items": { "type": "string" } },
+    "provider": { "type": "string" }
+  },
+  "additionalProperties": true
+}

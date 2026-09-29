@@ -1,7 +1,7 @@
 [project]
 name = "aiv"
 version = "0.1.0"
-description = "N1 口播定稿 runtime (session machine, REST, CLI) for auto-ai-vedio"
+description = "N1 口播定稿 runtime — n1-core + api + cli (provisional:P-STACK=Python)"
 readme = "readme.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -14,27 +14,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-  "pytest>=8.3.0",
-]
+dev = ["pytest>=8.3.0"]
 
 [project.scripts]
-aiv = "aiv.cli:app"
+aiv = "aiv_cli.cli:app"
 
 [build-system]
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-aiv = ["web/*.html"]
+where = ["packages/n1-core", "apps/api", "apps/cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["packages/n1-core", "apps/api", "apps/cli"]
 addopts = "-q"
-
-[tool.setuptools]
-include-package-data = true

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiv.local/schema/n1-session.json",
+  "title": "N1 session",
+  "type": "object",
+  "required": ["episode_id", "path", "status", "current_step"],
+  "properties": {
+    "session_id": { "type": "string" },
+    "episode_id": { "type": "string", "pattern": "^EP[0-9]{2,}$" },
+    "path": { "enum": ["A", "B"] },
+    "status": { "enum": ["idle", "active", "awaiting_g1", "locked", "abandoned", "failed"] },
+    "current_step": { "type": ["string", "null"] },
+    "provider": { "type": "string" },
+    "defects": { "type": "array", "items": { "type": "string" } },
+    "candidates": { "type": "array" },
+    "draft": { "type": ["object", "null"] }
+  }
+}
