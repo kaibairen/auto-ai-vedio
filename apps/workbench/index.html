@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>短剧 D-N0 / D-N1 · 门 G1b</title>
+  <link rel="stylesheet" href="/workbench/static/drama.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <strong>短剧 · pipeline_profile=drama</strong>
+      <span class="badge">D-N0 / D-N1</span>
+      <span class="badge muted">provisional · 待挂起面 D3</span>
+    </div>
+    <div class="meta" id="hdr-meta">未建集</div>
+  </header>
+  <nav class="tabs">
+    <button data-screen="hub" class="on">Hub</button>
+    <button data-screen="a">A · D-N0 Brief</button>
+    <button data-screen="b">B · D-N1 Outline</button>
+    <button data-screen="c">C · 门 G1b</button>
+    <button data-screen="d">D · Locked</button>
+  </nav>
+  <p class="banner" id="banner" hidden></p>
+
+  <section id="screen-hub" class="screen">
+    <h1>Episode Hub</h1>
+    <p>本批薄 UI 只服务 drama 轨。不复用 koubo-N1 壳；无 force_pass。</p>
+    <label>项目名 <input id="proj-name" value="短剧狗粮-01" /></label>
+    <button id="btn-proj">创建项目</button>
+    <label>集 ID <input id="ep-id" value="EP01" /></label>
+    <button id="btn-ep">建集 pipeline_profile=drama</button>
+    <label>预置角色 id@version（D12，无 list/search）
+      <input id="seed-char" value="CHAR-01" />
+      <input id="seed-ver" type="number" value="1" />
+      <input id="seed-name" value="林晚" />
+      <input id="seed-line" value="重生女主" />
+    </label>
+    <button id="btn-seed">写入 project 库（dogfood seed）</button>
+    <pre id="hub-out" class="out"></pre>
+  </section>
+
+  <section id="screen-a" class="screen" hidden>
+    <h1>D-N0 题材入口</h1>
+    <label>一句话题材 title_intent
+      <textarea id="title-intent">被流放的庶女在边关翻盘</textarea>
+    </label>
+    <label>PIN JSON（可选） <textarea id="pin" placeholder='{"logline":"..."}'></textarea></label>
+    <label>设定笔记 <textarea id="notes">架空古代；禁用现代道具</textarea></label>
+    <fieldset>
+      <legend>赛道偏好 lane_preference 〔provisional · 待挂起面〕</legend>
+      <label><input type="radio" name="lane0" value="unset" checked /> 未选</label>
+      <label><input type="radio" name="lane0" value="female" /> 女频</label>
+      <label><input type="radio" name="lane0" value="male" /> 男频</label>
+    </fieldset>
+    <button id="btn-save-brief">保存 Brief</button>
+    <div class="row">
+      <input id="att-id" placeholder="CHAR-01" />
+      <input id="att-ver" type="number" value="1" />
+      <button id="btn-attach">attach</button>
+      <button id="btn-detach">detach</button>
+    </div>
+    <pre id="a-out" class="out"></pre>
+  </section>
+
+  <section id="screen-b" class="screen" hidden>
+    <h1>D-N1 编剧扩场</h1>
+    <fieldset>
+      <legend>生成赛道 〔未选则禁用生成 · 无 dual Skill〕</legend>
+      <label><input type="radio" name="lane1" value="" /> 未选</label>
+      <label><input type="radio" name="lane1" value="female" checked /> 女频</label>
+      <label><input type="radio" name="lane1" value="male" /> 男频</label>
+    </fieldset>
+    <button id="btn-gen">生成大纲初稿（fixture）</button>
+    <label>大纲 body_md <textarea id="body-md" rows="14"></textarea></label>
+    <label>shot_cap <input id="shot-cap" type="number" value="12" min="1" max="12" /></label>
+    <div class="row">
+      <button id="btn-save-outline">保存大纲</button>
+      <button id="btn-reset">重置</button>
+      <label class="inline"><input type="checkbox" id="unlock" /> unlock_edit</label>
+    </div>
+    <pre id="cast-out" class="out"></pre>
+  </section>
+
+  <section id="screen-c" class="screen" hidden>
+    <h1>门 G1b</h1>
+    <p>唯一锁入口。无强制通过 / force_pass / skip_gate。</p>
+    <label>actor <input id="actor" value="yangzhou" /></label>
+    <label>note <input id="note" placeholder="驳回时建议填" /></label>
+    <div class="row">
+      <button id="btn-reject">驳回 reject</button>
+      <button id="btn-pass" class="primary">通过 pass</button>
+    </div>
+    <pre id="c-out" class="out"></pre>
+  </section>
+
+  <section id="screen-d" class="screen" hidden>
+    <h1>D-N1 已锁定</h1>
+    <p>next_edges 仅候选，<strong>不</strong>自动开 D-N2。</p>
+    <pre id="d-out" class="out"></pre>
+    <button id="btn-downstream">读下游定稿（未锁 → 409）</button>
+    <pre id="dn-out" class="out"></pre>
+  </section>
+
+  <script src="/workbench/static/drama.js"></script>
+</body>
+</html>

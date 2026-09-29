@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GateG1bStatus",
+  "type": "object",
+  "required": ["gate_id", "state", "locked", "version"],
+  "properties": {
+    "gate_id": { "type": "string", "const": "g1b" },
+    "state": { "type": "string", "enum": ["idle", "ready", "passed", "rejected"] },
+    "locked": { "type": "boolean" },
+    "version": { "type": "integer" },
+    "last_decision": { "type": ["string", "null"], "enum": ["pass", "reject", null] }
+  }
+}
