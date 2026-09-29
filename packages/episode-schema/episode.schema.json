@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Episode",
+  "type": "object",
+  "required": ["episode_id", "project_id", "pipeline_profile", "status"],
+  "properties": {
+    "episode_id": { "type": "string", "pattern": "^EP\\d{2,}$" },
+    "project_id": { "type": "string" },
+    "pipeline_profile": { "type": "string", "const": "drama" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "in_progress", "awaiting_g1b", "locked_g1b", "abandoned", "failed"]
+    },
+    "locks": {
+      "type": "object",
+      "properties": { "g1b": { "type": "boolean" } }
+    },
+    "stale_downstream": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

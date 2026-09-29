@@ -1,0 +1,32 @@
+[project]
+name = "aiv"
+version = "0.1.0"
+description = "Drama D-N0 / D-N1 (gate G1b) runtime — drama-n0n1-core + api + cli"
+readme = "readme.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "typer>=0.15.0",
+  "pydantic>=2.9.0",
+  "pyyaml>=6.0.2",
+  "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.0"]
+
+[project.scripts]
+aiv = "aiv_cli.cli:app"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["packages/episode-schema", "packages/drama-n0n1-core", "apps/api", "apps/cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["packages/episode-schema", "packages/drama-n0n1-core", "apps/api", "apps/cli"]
+addopts = "-q"

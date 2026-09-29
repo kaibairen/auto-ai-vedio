@@ -1,0 +1,1082 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N0 / D-N1 API
+  version: 0.1.0
+  description: |
+    短剧轨 `pipeline_profile=drama` 的 **D-N0（题材入口）** 与 **D-N1（编剧扩场 · 门 G1b）** 接口权威源 v0。
+    - 对齐产品权威源 `DRAMA-N0N1-PRD-v0.md`（已冻结）与 BRIEF-AIV-009 §3。
+    - docs≠PASS；ForcePass=never；ACCEPT≠实施（本文件为设计契约，非运行时已通证明）。
+    - 命名：短剧 **D-N0 / D-N1**；口播 **koubo-N1**；禁止混称裸「N1」。
+    - Provisional：D3=生成前必选 female|male（unset→422）；D12=仅 project 内库；D13–D15=无 promote/fork。
+    - 存储：API 为源 · 盘为投影（ENG）。
+    - 门：统一 `POST .../gates/{gate_id}/confirm`；G1b pass 后 `next_edges: ["D-N2"]` 仅候选，不自动开 D-N2。
+  contact:
+    name: AI视频-后端
+servers:
+  - url: /api/v0
+tags:
+  - name: Projects
+  - name: Episodes
+  - name: DramaBrief
+  - name: OutlineDraft
+  - name: CastDraft
+  - name: Gates
+  - name: LibraryAttach
+security:
+  - bearerAuth: []
+paths:
+  /projects:
+    post:
+      tags: [Projects]
+      operationId: createProject
+      summary: 创建项目 stub
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+            example:
+              name: 短剧狗粮-01
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Projects]
+      operationId: getProject
+      summary: 读项目
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Projects]
+      operationId: patchProject
+      summary: 补丁项目元数据
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [Projects]
+      operationId: archiveProject
+      summary: 软归档项目
+      responses:
+        '200':
+          description: 已归档
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /projects/{project_id}/episodes:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [Episodes]
+      operationId: createEpisode
+      summary: 建集（pipeline_profile=drama）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EpisodeCreate'
+            example:
+              episode_id: EP01
+              pipeline_profile: drama
+              title: 第一集
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [Episodes]
+      operationId: getEpisode
+      summary: 读集元数据、锁、version、进度
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Episodes]
+      operationId: patchEpisode
+      summary: 补丁集元数据（不绕过 outline/cast 锁）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EpisodePatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [Episodes]
+      operationId: abandonEpisode
+      summary: 软放弃本集
+      responses:
+        '200':
+          description: abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /projects/{project_id}/episodes/{ep}/drama/brief:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [DramaBrief]
+      operationId: getDramaBrief
+      summary: 读 D-N0 brief
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DramaBriefEnvelope'
+              example:
+                ok: true
+                project_id: proj_01
+                episode_id: EP01
+                node: D-N0
+                brief:
+                  episode_id: EP01
+                  pipeline_profile: drama
+                  title_intent: 被流放的庶女在边关翻盘
+                  pin: null
+                  setting_notes: 架空古代
+                  lane_preference: unset
+                  preattached_character_ids: [CHAR-01]
+                  version: 1
+                  updated_at: '2026-09-29T15:00:00+08:00'
+                  updated_by: yangzhou
+                next_edges: []
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [DramaBrief]
+      operationId: putDramaBrief
+      summary: Upsert D-N0 brief
+      description: |
+        进 D-N1 硬校验：`title_intent` 去空白非空 **或** `pin` 为含至少一个非空叶子的对象；否则 422 `brief_incomplete`。
+        `lane_preference=unset` **允许保存**（D3：仅生成大纲前强制选赛道）。
+        brief 自身无 G1b 锁。若 outline 已 locked：默认 409 `downstream_locked`；带 `confirm_stale_outline:true` 时允许写 brief 并标记大纲 stale（PRD 待 SYNC 倾向）。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DramaBriefWrite'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DramaBriefEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}/drama/outline:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [OutlineDraft]
+      operationId: getOutline
+      summary: 读 D-N1 大纲
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutlineEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [OutlineDraft]
+      operationId: generateOutline
+      summary: 生成大纲（D-N1）
+      description: |
+        **D3 provisional（PRD §6 写死）**：生成前请求体 `lane` 或 `brief.lane_preference` 必须为 `female` 或 `male`。
+        二者皆为 `unset` / 缺失 → **422 `lane_required`**（禁用生成）。
+        brief 须已通过进 D-N1 校验，否则 422 `brief_incomplete`。
+        `locked=true` 且未先 unlock-edit → 409 `locked`。
+        禁止大纲含提示词/宫格/出片参数 → 422 `outline_contains_prompts`。
+        `shot_cap` 默认 12；硬超上限 → 422 `shot_cap_exceeded`（PRD：硬/软待 SYNC，本契约狗粮按硬）。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutlineGenerateRequest'
+            example:
+              lane: female
+              provider: fixture
+              actor: yangzhou
+      responses:
+        '200':
+          description: 生成完成（可含 cast 副作用）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutlineEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    put:
+      tags: [OutlineDraft]
+      operationId: putOutline
+      summary: 改大纲
+      description: |
+        - `locked=false`：正常改稿；成功 version++。
+        - `locked=true` 且 `unlock_edit≠true`：409 `locked`（禁止静默改）。
+        - `locked=true` 且 `unlock_edit=true`：**升 version、清 locked、下游 stale**（PRD §3.3 / BRIEF G-D）。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutlineWrite'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutlineEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}/drama/outline/reset:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [OutlineDraft]
+      operationId: resetOutline
+      summary: 重置大纲
+      description: |
+        通常须未锁。若已锁：须 `unlock_edit=true`（或等效确认）→ 升 version + 清 locked + 下游 stale 后清空正文。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clear_cast:
+                  type: boolean
+                  default: false
+                unlock_edit:
+                  type: boolean
+                  default: false
+                actor:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutlineEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /projects/{project_id}/episodes/{ep}/drama/cast:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [CastDraft]
+      operationId: getCast
+      summary: 读 cast
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CastEnvelope'
+              example:
+                ok: true
+                project_id: proj_01
+                episode_id: EP01
+                node: D-N1
+                cast:
+                  episode: EP01
+                  lane: female
+                  characters:
+                    - id: CHAR-01
+                      name: 林晚
+                      one_line: 重生女主
+                      library_ref: { id: CHAR-01, version: 3 }
+                  scenes:
+                    - id: SCENE-01
+                      name: 咖啡厅
+                      one_line: 重逢
+                      library_ref: null
+                  version: 2
+                  locked: false
+                  confirmed_by: null
+                next_edges: []
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [CastDraft]
+      operationId: putCast
+      summary: 改 cast（锁前；锁后须 unlock_edit）
+      description: |
+        `id` 由后端分配，FE 不得自造新 CHAR/SCENE id（增行可省略 id，由服务端发号）。
+        `one_line` 必填。合并预挂时不覆盖已有 `library_ref`。
+        锁后静默 PUT → 409；`unlock_edit=true` → 升 version + 清 locked + stale。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CastWrite'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CastEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}/drama/cast/attach:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [LibraryAttach]
+      operationId: attachCharacter
+      summary: 本集引用 project 内 CHAR@version（D12）
+      description: |
+        出项目库 → 404/422。无 promote/fork。锁后 → 409（须先 unlock_edit）。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachRequest'
+            example:
+              character_id: CHAR-01
+              version: 3
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CastEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}/drama/cast/detach:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [LibraryAttach]
+      operationId: detachCharacter
+      summary: 解除本集引用（不删库）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetachRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CastEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /projects/{project_id}/episodes/{ep}/gates/g1b:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [Gates]
+      operationId: getGateG1b
+      summary: 读门 G1b 状态
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{project_id}/episodes/{ep}/gates/g1b/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [Gates]
+      operationId: confirmGateG1b
+      summary: 确认门 G1b（唯一锁入口）
+      description: |
+        pass → outline+cast `locked=true`，`confirmed_by=actor`；`next_edges: ["D-N2"]`；不自动开 D-N2。
+        reject → 保持 locked=false；记 note；不写通过态 confirmed_by。
+        含 force_pass/force/skip_gate → 400 `force_pass_forbidden`。
+        大纲空桥段 → 422 `outline_empty`；cast 缺人/缺场 → 422 `cast_incomplete`；
+        library_ref 不可解析 → 422；shot_cap 硬超 → 422。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GateConfirmRequest'
+            examples:
+              pass:
+                value: { decision: pass, actor: yangzhou, note: ok }
+              reject:
+                value: { decision: reject, actor: yangzhou, note: 中段空 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateEnvelope'
+              example:
+                ok: true
+                project_id: proj_01
+                episode_id: EP01
+                node: D-N1
+                gate:
+                  gate_id: g1b
+                  state: passed
+                  locked: true
+                  version: 3
+                  last_decision: pass
+                  note: ok
+                  actor: yangzhou
+                  decided_at: '2026-09-29T16:00:00+08:00'
+                outline:
+                  body_md: '# 第1集大纲\n...'
+                  lane: female
+                  shot_cap: 12
+                  version: 3
+                  locked: true
+                  confirmed_by: yangzhou
+                cast:
+                  episode: EP01
+                  lane: female
+                  characters:
+                    - { id: CHAR-01, name: 林晚, one_line: 重生女主, library_ref: null }
+                  scenes:
+                    - { id: SCENE-01, name: 边关, one_line: 开场, library_ref: null }
+                  version: 3
+                  locked: true
+                  confirmed_by: yangzhou
+                next_edges: [D-N2]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string, example: proj_01 }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, pattern: '^EP\\d{2,}$', example: EP01 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema: { type: string }
+      description: 资源 version；不匹配 → 409 version_conflict
+  responses:
+    BadRequest:
+      description: 400
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: force_pass_forbidden, message: ForcePass=never, details: {} }
+    NotFound:
+      description: 404
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: not_found, message: not found, details: {} }
+    Conflict:
+      description: 409 locked / version / upstream_unlocked / downstream_locked
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            locked:
+              value:
+                ok: false
+                error: { code: locked, message: locked; set unlock_edit to edit, details: { node: D-N1 } }
+            version_conflict:
+              value:
+                ok: false
+                error: { code: version_conflict, message: If-Match mismatch, details: { expected: 2, actual: 3 } }
+            upstream_unlocked:
+              value:
+                ok: false
+                error: { code: upstream_unlocked, message: D-N1 not locked, details: { node: D-N1, gate: g1b } }
+    Unprocessable:
+      description: 422
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            lane_required:
+              value:
+                ok: false
+                error:
+                  code: lane_required
+                  message: select female|male before generate
+                  details: { provisional: D3 }
+            brief_incomplete:
+              value:
+                ok: false
+                error: { code: brief_incomplete, message: title_intent and pin both empty, details: {} }
+            cast_incomplete:
+              value:
+                ok: false
+                error: { code: cast_incomplete, message: need ≥1 character and ≥1 scene, details: {} }
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - validation
+        - not_found
+        - conflict
+        - locked
+        - upstream_unlocked
+        - downstream_locked
+        - version_conflict
+        - lane_required
+        - outline_empty
+        - outline_contains_prompts
+        - shot_cap_exceeded
+        - brief_incomplete
+        - cast_incomplete
+        - episode_abandoned
+        - force_pass_forbidden
+        - provider
+        - library_ref_unresolved
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    ErrorEnvelope:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { $ref: '#/components/schemas/ErrorBody' }
+    LibraryRef:
+      type: object
+      required: [id, version]
+      properties:
+        id: { type: string }
+        version: { type: integer, minimum: 1 }
+    Project:
+      type: object
+      required: [id, name, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [active, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+    ProjectPatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+    ProjectEnvelope:
+      type: object
+      required: [ok, project]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project: { $ref: '#/components/schemas/Project' }
+    EpisodeLocks:
+      type: object
+      properties:
+        g1b: { type: boolean, default: false }
+    EpisodeVersions:
+      type: object
+      properties:
+        brief: { type: integer, minimum: 0 }
+        outline: { type: integer, minimum: 0 }
+        cast: { type: integer, minimum: 0 }
+        episode: { type: integer, minimum: 1 }
+    Episode:
+      type: object
+      required: [episode_id, project_id, pipeline_profile, status]
+      properties:
+        episode_id: { type: string, pattern: '^EP\\d{2,}$' }
+        project_id: { type: string }
+        pipeline_profile: { type: string, enum: [drama] }
+        title: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [draft, in_progress, awaiting_g1b, locked_g1b, abandoned, failed]
+        aspect_ratio: { type: string, nullable: true, example: '9:16' }
+        target_duration_sec: { type: integer, nullable: true }
+        locks: { $ref: '#/components/schemas/EpisodeLocks' }
+        versions: { $ref: '#/components/schemas/EpisodeVersions' }
+        stale_downstream:
+          type: array
+          items: { type: string }
+          description: 如 D-N2；unlock-edit / reject 后可非空
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EpisodeCreate:
+      type: object
+      required: [episode_id, pipeline_profile]
+      properties:
+        episode_id: { type: string, pattern: '^EP\\d{2,}$' }
+        pipeline_profile: { type: string, enum: [drama] }
+        title: { type: string }
+        aspect_ratio: { type: string }
+        target_duration_sec: { type: integer }
+    EpisodePatch:
+      type: object
+      properties:
+        title: { type: string }
+        aspect_ratio: { type: string }
+        target_duration_sec: { type: integer }
+    EpisodeEnvelope:
+      type: object
+      required: [ok, episode]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        episode: { $ref: '#/components/schemas/Episode' }
+        next_edges:
+          type: array
+          items: { type: string }
+    PinObject:
+      type: object
+      description: PRD §2.1 pin 最小骨架；至少一非空叶子视为 PIN 非空
+      properties:
+        logline: { type: string }
+        protagonist: { type: string }
+        conflict: { type: string }
+        genre_tags:
+          type: array
+          items: { type: string }
+        raw: { type: string }
+      additionalProperties: true
+    DramaBrief:
+      type: object
+      required: [version, lane_preference, preattached_character_ids]
+      properties:
+        episode_id: { type: string, pattern: '^EP\\d{2,}$' }
+        pipeline_profile: { type: string, enum: [drama] }
+        title_intent: { type: string, nullable: true }
+        pin:
+          allOf: [{ $ref: '#/components/schemas/PinObject' }]
+          nullable: true
+        setting_notes: { type: string, nullable: true }
+        lane_preference:
+          type: string
+          enum: [female, male, unset]
+          default: unset
+          description: D3；unset 可保存 brief，不可生成大纲
+        preattached_character_ids:
+          type: array
+          items: { type: string }
+        version: { type: integer, minimum: 1 }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: string, nullable: true }
+    DramaBriefWrite:
+      type: object
+      properties:
+        title_intent: { type: string, nullable: true }
+        pin:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/PinObject' }]
+        setting_notes: { type: string, nullable: true }
+        lane_preference: { type: string, enum: [female, male, unset] }
+        preattached_character_ids:
+          type: array
+          items: { type: string }
+        confirm_stale_outline:
+          type: boolean
+          default: false
+          description: outline 已锁时改 brief 须确认 stale
+        actor: { type: string }
+    DramaBriefEnvelope:
+      type: object
+      required: [ok, brief]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N0] }
+        brief: { $ref: '#/components/schemas/DramaBrief' }
+        next_edges:
+          type: array
+          items: { type: string }
+    OutlineDraft:
+      type: object
+      required: [body_md, lane, shot_cap, version, locked]
+      properties:
+        body_md:
+          type: string
+          description: 大纲正文（PRD 骨架）；禁止提示词/宫格/出片参数
+        lane:
+          type: string
+          enum: [female, male]
+        shot_cap:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 12
+        version: { type: integer, minimum: 0 }
+        locked: { type: boolean }
+        confirmed_by: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+        job_id: { type: string, nullable: true }
+    OutlineGenerateRequest:
+      type: object
+      properties:
+        lane:
+          type: string
+          enum: [female, male]
+          description: 覆盖 brief.lane_preference；与 brief 皆 unset → 422
+        provider:
+          type: string
+          enum: [fixture, llm]
+          default: fixture
+        shot_cap:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 12
+        actor: { type: string }
+    OutlineWrite:
+      type: object
+      required: [body_md]
+      properties:
+        body_md: { type: string, minLength: 1 }
+        shot_cap: { type: integer, minimum: 1, maximum: 12 }
+        unlock_edit:
+          type: boolean
+          default: false
+          description: 锁后改稿开关；true 时升 version+清 locked+stale
+        actor: { type: string }
+    OutlineEnvelope:
+      type: object
+      required: [ok, outline]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N1] }
+        outline: { $ref: '#/components/schemas/OutlineDraft' }
+        cast:
+          allOf: [{ $ref: '#/components/schemas/CastDraft' }]
+          nullable: true
+        next_edges:
+          type: array
+          items: { type: string }
+    CastCharacter:
+      type: object
+      required: [id, name, one_line]
+      properties:
+        id: { type: string, description: 后端分配 CHAR-## }
+        name: { type: string }
+        one_line: { type: string }
+        library_ref:
+          allOf: [{ $ref: '#/components/schemas/LibraryRef' }]
+          nullable: true
+    CastScene:
+      type: object
+      required: [id, name, one_line]
+      properties:
+        id: { type: string, description: 后端分配 SCENE-## }
+        name: { type: string }
+        one_line: { type: string }
+        library_ref:
+          allOf: [{ $ref: '#/components/schemas/LibraryRef' }]
+          nullable: true
+    CastDraft:
+      type: object
+      required: [characters, scenes, version, locked]
+      properties:
+        episode: { type: string, pattern: '^EP\\d{2,}$' }
+        lane:
+          type: string
+          enum: [female, male]
+          nullable: true
+        characters:
+          type: array
+          items: { $ref: '#/components/schemas/CastCharacter' }
+        scenes:
+          type: array
+          items: { $ref: '#/components/schemas/CastScene' }
+        version: { type: integer, minimum: 0 }
+        locked: { type: boolean }
+        confirmed_by: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+    CastWrite:
+      type: object
+      required: [characters, scenes]
+      properties:
+        lane: { type: string, enum: [female, male] }
+        characters:
+          type: array
+          items:
+            type: object
+            required: [name, one_line]
+            properties:
+              id: { type: string, description: 省略则后端发号；禁止 FE 自造新 id }
+              name: { type: string }
+              one_line: { type: string }
+              library_ref:
+                allOf: [{ $ref: '#/components/schemas/LibraryRef' }]
+                nullable: true
+        scenes:
+          type: array
+          items:
+            type: object
+            required: [name, one_line]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              one_line: { type: string }
+              library_ref:
+                allOf: [{ $ref: '#/components/schemas/LibraryRef' }]
+                nullable: true
+        unlock_edit: { type: boolean, default: false }
+        actor: { type: string }
+    CastEnvelope:
+      type: object
+      required: [ok, cast]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N1] }
+        cast: { $ref: '#/components/schemas/CastDraft' }
+        next_edges:
+          type: array
+          items: { type: string }
+    AttachRequest:
+      type: object
+      required: [character_id, version]
+      properties:
+        character_id: { type: string }
+        version: { type: integer, minimum: 1 }
+        unlock_edit: { type: boolean, default: false }
+        actor: { type: string }
+    DetachRequest:
+      type: object
+      required: [character_id]
+      properties:
+        character_id: { type: string }
+        unlock_edit: { type: boolean, default: false }
+        actor: { type: string }
+    GateG1bStatus:
+      type: object
+      required: [gate_id, state, locked, version]
+      properties:
+        gate_id: { type: string, enum: [g1b] }
+        state: { type: string, enum: [idle, ready, passed, rejected] }
+        locked: { type: boolean }
+        version: { type: integer }
+        last_decision: { type: string, enum: [pass, reject], nullable: true }
+        note: { type: string, nullable: true }
+        actor: { type: string, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+    GateConfirmRequest:
+      type: object
+      required: [decision, actor]
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [pass, reject] }
+        note: { type: string }
+        actor: { type: string, minLength: 1 }
+        idempotency_key: { type: string }
+      description: additionalProperties=false 拒绝 force_pass 等字段
+    GateEnvelope:
+      type: object
+      required: [ok, gate]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N1] }
+        gate: { $ref: '#/components/schemas/GateG1bStatus' }
+        outline:
+          allOf: [{ $ref: '#/components/schemas/OutlineDraft' }]
+          nullable: true
+        cast:
+          allOf: [{ $ref: '#/components/schemas/CastDraft' }]
+          nullable: true
+        next_edges:
+          type: array
+          items: { type: string }
+          description: pass 后为 ["D-N2"]；不自动开 D-N2
