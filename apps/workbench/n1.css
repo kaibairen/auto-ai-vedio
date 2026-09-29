@@ -27,3 +27,6 @@ dialog { border: 1px solid var(--line); background: var(--panel); color: var(--i
 pre { white-space: pre-wrap; background: #0d1218; padding: 8px; border-radius: 8px; font-size: 13px; max-height: 200px; overflow: auto; }
 fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-block; background: #243040; border-radius: 999px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: 12px; }
+.over { color: var(--danger); font-weight: 650; }
+.editor label { margin-top: 10px; }

@@ -84,6 +84,35 @@ def test_t_d02_downstream_ok_after_lock(service, project, ep):
     assert env["artifact"]["frontmatter"]["locked"] is True
 
 
+def test_version_first_lock_is_one(service, project, ep):
+    _ready(service, project, ep)
+    env = service.confirm_g1(project, ep, {"decision": "pass", "actor": "bot:ci"})
+    assert env["artifact"]["frontmatter"]["version"] == 1
+
+
+def test_version_stays_when_relock_same_content(service, project, ep):
+    _ready(service, project, ep)
+    service.confirm_g1(project, ep, {"decision": "pass", "actor": "bot:ci"})
+    service.confirm_g1(project, ep, {"decision": "reject", "actor": "bot:ci"})
+    env = service.confirm_g1(project, ep, {"decision": "pass", "actor": "bot:ci"})
+    assert env["artifact"]["frontmatter"]["version"] == 1
+    assert env["artifact"]["frontmatter"]["locked"] is True
+
+
+def test_version_bumps_on_relock_after_edit(service, project, ep):
+    _ready(service, project, ep)
+    service.confirm_g1(project, ep, {"decision": "pass", "actor": "bot:ci"})
+    service.confirm_g1(project, ep, {"decision": "reject", "actor": "bot:ci"})
+    service.put_draft(
+        project,
+        ep,
+        DraftPayload(title="改过的标题", body="每天扔掉的咖啡渣其实能除臭。你还用过它做什么？评论区告诉我。", framework="惊喜揭秘型"),
+    )
+    env = service.confirm_g1(project, ep, {"decision": "pass", "actor": "bot:ci"})
+    assert env["artifact"]["frontmatter"]["version"] == 2
+    assert env["artifact"]["frontmatter"]["locked"] is True
+
+
 def test_t_r02_no_auto_writer(service, project, ep):
     _ready(service, project, ep)
     env = service.confirm_g1(project, ep, {"decision": "pass", "actor": "bot:ci"})

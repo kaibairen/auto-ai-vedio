@@ -6,6 +6,8 @@
 - Gate lock only `POST .../gates/g1/confirm`. No `n1/lock`, no ForcePass.
 - Path B: explicit `b3_skipped` + `defects: missing_step_3`; `.prompt/koubo-长文章.md` not rewritten.
 - Package layout: `packages/n1-core`, `apps/api`, `apps/cli`, `apps/workbench`.
+- Workbench: single-step IA, draft editor (`PUT nodes/n1/draft`), DIR C1–C6 on G1.
+- Relock after edit increments artifact `version`; same content keeps version.
 
 ### Known debt
 

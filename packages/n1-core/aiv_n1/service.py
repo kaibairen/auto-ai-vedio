@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from typing import Any
 
@@ -380,7 +381,8 @@ class N1Service:
         session["status"] = "locked"
         session["updated_at"] = utcnow()
         session["actor_last"] = actor
-        self._write_draft_file(project_id, ep, session, locked=True, confirmed_by=actor, keep_version=True)
+        # BE §2.7: first lock version=1; bump only when content changed vs last lock.
+        self._write_draft_file(project_id, ep, session, locked=True, confirmed_by=actor)
         self._save_session(ep, session)
         self._patch_episode(
             project_id,
@@ -534,6 +536,14 @@ class N1Service:
         session["current_step"] = nxt
         session["updated_at"] = utcnow()
 
+    def _content_hash(self, draft: dict[str, Any]) -> str:
+        blob = (
+            f"{(draft.get('title') or '').strip()}\n"
+            f"{(draft.get('body') or '').strip()}\n"
+            f"{(draft.get('framework') or '').strip()}"
+        )
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
     def _write_draft_file(
         self,
         project_id: str,
@@ -550,9 +560,14 @@ class N1Service:
         version = 1
         if art.is_file():
             meta, _ = read_n1_markdown(art)
-            version = int(meta.get("version") or 1)
-            if keep_version:
-                version = int(meta.get("version") or 1)
+            version = max(1, int(meta.get("version") or 1))
+        if locked and not keep_version:
+            new_hash = self._content_hash(draft)
+            prev_hash = session.get("last_locked_hash")
+            if prev_hash and prev_hash != new_hash:
+                version += 1
+            session["last_locked_hash"] = new_hash
+            session["version"] = version
         chars = draft_chars(draft.get("title") or "", draft.get("body") or "")
         fw = draft.get("framework") or (session.get("frameworks_selected") or [""])[0]
         meta = {

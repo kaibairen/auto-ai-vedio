@@ -48,6 +48,39 @@ def test_prompt_not_rewritten(service, project, ep, repo_root):
     assert "缺第3步" in text or "missing_step_3" in PATH_B_SKIP_REASON
 
 
+def test_t_b04_b5_b6_chars_501(service, project, ep, monkeypatch):
+    from aiv_n1.provider.base import GenerateResponse
+    from aiv_n1.provider.fixture import FixtureProvider
+
+    class OverLimit:
+        name = "fixture"
+
+        def generate(self, req):
+            if req.kind in {"reconstruct", "optimize"}:
+                return GenerateResponse(
+                    kind="draft",
+                    message="over",
+                    draft_title="短标题",
+                    draft_body="字" * 501,
+                )
+            return FixtureProvider().generate(req)
+
+    service.create_session(project, ep, SessionCreate(path="B", provider="fixture"))
+    service.submit_step(project, ep, "b1_raw", StepSubmit(raw_text="长文章：一个痛点加一个行动。"))
+    service.submit_step(project, ep, "b2_analyze", StepSubmit(decision="approve"))
+    service.submit_step(project, ep, "b3_skipped", StepSubmit(ack_defect=True))
+    service.submit_step(project, ep, "b4_titles", StepSubmit(title_id="t1"))
+    monkeypatch.setattr("aiv_n1.service.get_provider", lambda *_a, **_k: OverLimit())
+    try:
+        service.submit_step(project, ep, "b5_framework_draft", StepSubmit(framework="痛点共鸣式"))
+        raise AssertionError("expected chars_limit on b5")
+    except AppError as exc:
+        assert exc.code == "chars_limit"
+        assert exc.status_code == 422
+        assert exc.details["limit"] == 500
+        assert exc.details["actual"] >= 501
+
+
 def test_t_b_walk(service, project, ep):
     service.create_session(project, ep, SessionCreate(path="B", provider="fixture"))
     service.submit_step(project, ep, "b1_raw", StepSubmit(raw_text="长文章：一个痛点加一个行动。"))
