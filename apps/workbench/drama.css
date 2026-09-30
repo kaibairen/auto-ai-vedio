@@ -17,12 +17,29 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 .tabs button.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
 .screen { padding: 20px 24px 48px; max-width: 880px; }
 label, fieldset { display: block; margin: 12px 0; color: var(--muted); }
-input, textarea { width: 100%; margin-top: 4px; padding: 8px; background: var(--card); color: var(--ink); border: 1px solid #333; }
+input, textarea, select { width: 100%; margin-top: 4px; padding: 8px; background: var(--card); color: var(--ink); border: 1px solid #333; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .row input { width: auto; }
 button { background: #2c3340; color: var(--ink); border: 0; padding: 8px 14px; cursor: pointer; border-radius: 6px; }
 button.primary { background: var(--accent); color: #1a1406; }
 .out { background: #0b0d10; padding: 12px; overflow: auto; max-height: 320px; font-size: 12px; }
 .banner { margin: 0; padding: 8px 20px; background: #3a2020; color: #ffd4d4; }
+.banner.warn { background: #3a3420; color: #ffe8b0; }
+.banner.error { background: #3a2020; color: #ffd4d4; }
+.banner.info { background: #1d2a3a; color: #cfe4ff; }
+.banner.ok { background: #1d3a28; color: #c8f0d4; }
+.hint { color: var(--muted); font-size: 13px; margin: 8px 0; }
+.chip {
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2a2e36;
+  color: var(--muted);
+}
+.chip.warn { background: #3a3420; color: #ffe8b0; }
+.chip.error { background: #3a2020; color: #ffd4d4; }
+.chip.ok { background: #1d3a28; color: #c8f0d4; }
 .inline { display: inline-flex; align-items: center; gap: 6px; width: auto; }
 .meta { color: var(--muted); font-size: 13px; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }

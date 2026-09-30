@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any
 
 from aiv_drama.config import SHOT_CAP_HARD, Settings
+from aiv_drama.copy_contract import catalog_public, evaluate, enforce_intent_for_generate
 from aiv_drama.errors import AppError
 from aiv_drama.ids import next_id, require_known_or_omit
 from aiv_drama.models import (
@@ -783,6 +784,7 @@ class DramaService:
             return cached
         rec = self._rec(project_id, validate_ep(ep))
         self._require_unlock(rec, unlock_edit=False)
+        enforce_intent_for_generate(rec)
         brief = rec.get("brief")
         if not brief:
             raise AppError(422, "brief_incomplete", "title_intent and pin both empty", node=NODE_DN0)
@@ -1164,6 +1166,27 @@ class DramaService:
         self._commit(rec)
         env = self.gate_envelope(rec)
         return self._idem_put(idempotency_key or raw.get("idempotency_key"), f"confirm:{project_id}:{ep}", env)
+
+    def evaluate_copy_contract(
+        self,
+        project_id: str,
+        ep: str,
+        raw: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """018d thin evaluator: raises catalog HTTP codes from a snapshot."""
+        incoming = raw if isinstance(raw, dict) else {}
+        rec: dict[str, Any] | None
+        try:
+            rec = self._rec(project_id, validate_ep(ep))
+        except AppError as exc:
+            if exc.code == "not_found":
+                rec = None
+            else:
+                raise
+        return evaluate(incoming, rec=rec)
+
+    def error_catalog(self) -> dict[str, Any]:
+        return catalog_public()
 
     def get_downstream(self, project_id: str, ep: str) -> dict[str, Any]:
         """Read-only surface for D-N2 consumers. Does not start D-N2."""

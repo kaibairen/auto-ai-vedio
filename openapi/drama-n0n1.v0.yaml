@@ -6,6 +6,9 @@ info:
     短剧轨 `pipeline_profile=drama` 的 **D-N0（题材入口）** 与 **D-N1（编剧扩场 · 门 G1b）** 接口权威源 v0。
     - 对齐产品权威源 `DRAMA-N0N1-PRD-v0.md`（已冻结）与 BRIEF-AIV-009 §3。
     - docs≠PASS；ForcePass=never；ACCEPT≠实施（本文件为设计契约，非运行时已通证明）。
+    - **0.1.0 诚实增量（018d COPY-CONTRACT）**：ErrorCode 增补 `intent_unconfirmed` /
+      `intent_stale` / `intent_lane_conflict`，ErrorBody 增补 `messages.zh` / `messages.en`。
+      非无变化；**不**另起 0.2.0。
     - 命名：短剧 **D-N0 / D-N1**；口播 **koubo-N1**；禁止混称裸「N1」。
     - Provisional：D3=生成前必选 female|male（unset→422）；D12=仅 project 内库；D13–D15=无 promote/fork。
     - 存储：API 为源 · 盘为投影（ENG）。
@@ -292,6 +295,9 @@ paths:
         `locked=true` 且未先 unlock-edit → 409 `locked`。
         禁止大纲含提示词/宫格/出片参数 → 422 `outline_contains_prompts`。
         `shot_cap` 默认 12；硬超上限 → 422 `shot_cap_exceeded`（PRD：硬/软待 SYNC，本契约狗粮按硬）。
+        若本集已写入 `intent` 权威字段且未确认 → **422 `intent_unconfirmed`**；
+        已确认但 fingerprint / stale 标记不一致 → **422 `intent_stale`**
+        （018a 落地前：无 `intent` 键则不挡生成）。
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -385,6 +391,49 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /drama/error-catalog:
+    get:
+      tags: [DramaBrief]
+      operationId: getErrorCatalog
+      summary: 018d 中英 ErrorCode / issue 文案目录
+      description: |
+        诚实增量。用户通道中文优先。docs≠PASS。ForcePass=never。
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+  /projects/{project_id}/episodes/{ep}/drama/copy-contract/evaluate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [DramaBrief]
+      operationId: evaluateCopyContract
+      summary: 018d 文案/门禁机检（时长档 · 具名入表 · 意图）
+      description: |
+        薄 handler：按快照抛出已登记 ErrorCode（含 `intent_*` / `named_cast_gate` /
+        `duration_bucket_mismatch` / `ready_for_n4_requires_tool_profile`）。
+        未选 `tool_profile` 且未请求 ready → 200 + warn `tool_profile_unset`（不挡 G2）。
+        确认意图且 lane×预挂冲突 → 422 `intent_lane_conflict`。
+        ForcePass=never。docs≠PASS。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopyContractEvaluateRequest'
+      responses:
+        '200':
+          description: warn-only（如未选工具）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopyContractEvaluateEnvelope'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /projects/{project_id}/episodes/{ep}/drama/cast:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -690,11 +739,41 @@ components:
             brief_incomplete:
               value:
                 ok: false
-                error: { code: brief_incomplete, message: title_intent and pin both empty, details: {} }
+                error: { code: brief_incomplete, message: 题材入口不完整：一句话题材与 PIN 不能都为空。, details: {} }
+            intent_unconfirmed:
+              value:
+                ok: false
+                error:
+                  code: intent_unconfirmed
+                  message: 尚未确认入口意图。请先在意图确认页完成确认，再生成大纲。
+                  messages:
+                    zh: 尚未确认入口意图。请先在意图确认页完成确认，再生成大纲。
+                    en: Entry intent is not confirmed. Confirm intent before generating the outline.
+                  details: {}
+            intent_stale:
+              value:
+                ok: false
+                error:
+                  code: intent_stale
+                  message: 入口意图已过期：关键设定（赛道/题材/身份或预挂）已变更，请重新确认后再生成。
+                  messages:
+                    zh: 入口意图已过期：关键设定（赛道/题材/身份或预挂）已变更，请重新确认后再生成。
+                    en: "Entry intent is stale: MUST fields changed. Re-confirm before generating."
+                  details: {}
+            intent_lane_conflict:
+              value:
+                ok: false
+                error:
+                  code: intent_lane_conflict
+                  message: 赛道与预挂角色频向不一致。请使用「跟预挂改赛道」对齐后再确认。
+                  messages:
+                    zh: 赛道与预挂角色频向不一致。请使用「跟预挂改赛道」对齐后再确认。
+                    en: Lane conflicts with preattached cast direction. Align lane (follow preattach) before confirming.
+                  details: {}
             cast_incomplete:
               value:
                 ok: false
-                error: { code: cast_incomplete, message: need ≥1 character and ≥1 scene, details: {} }
+                error: { code: cast_incomplete, message: 角色表不完整：至少需要 1 个角色和 1 个场景。, details: {} }
   schemas:
     ErrorCode:
       type: string
@@ -711,17 +790,38 @@ components:
         - outline_contains_prompts
         - shot_cap_exceeded
         - brief_incomplete
+        - intent_unconfirmed
+        - intent_stale
+        - intent_lane_conflict
         - cast_incomplete
         - episode_abandoned
         - force_pass_forbidden
         - provider
         - library_ref_unresolved
+      x-error-messages:
+        intent_unconfirmed:
+          zh: 尚未确认入口意图。请先在意图确认页完成确认，再生成大纲。
+          en: Entry intent is not confirmed. Confirm intent before generating the outline.
+        intent_stale:
+          zh: 入口意图已过期：关键设定（赛道/题材/身份或预挂）已变更，请重新确认后再生成。
+          en: "Entry intent is stale: MUST fields changed. Re-confirm before generating."
+        intent_lane_conflict:
+          zh: 赛道与预挂角色频向不一致。请使用「跟预挂改赛道」对齐后再确认。
+          en: Lane conflicts with preattached cast direction. Align lane (follow preattach) before confirming.
     ErrorBody:
       type: object
       required: [code, message]
       properties:
         code: { $ref: '#/components/schemas/ErrorCode' }
-        message: { type: string }
+        message:
+          type: string
+          description: 用户通道（中文优先，018d）
+        messages:
+          type: object
+          description: 中英对照；与 message 同义
+          properties:
+            zh: { type: string }
+            en: { type: string }
         details: { type: object, additionalProperties: true }
     ErrorEnvelope:
       type: object
@@ -729,6 +829,60 @@ components:
       properties:
         ok: { type: boolean, enum: [false] }
         error: { $ref: '#/components/schemas/ErrorBody' }
+    CopyContractEvaluateRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        tool_profile:
+          type: string
+          nullable: true
+          enum: [seedance_2, kling, hailuo, veo]
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              shot_id: { type: string }
+              duration_s: { type: integer }
+              camera: { type: string }
+              tool_duration_bucket: { type: string }
+        ready_for_n4: { type: boolean, default: false }
+        g2_pass: { type: boolean, default: false }
+        named_cast_check: { type: string, enum: [off, warn, error], default: warn }
+        named_cast_issues:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+        intent:
+          type: object
+          properties:
+            confirmed: { type: boolean }
+            stale: { type: boolean }
+            fingerprint: { type: string, nullable: true }
+            current_fingerprint: { type: string, nullable: true }
+        confirm_intent: { type: boolean, default: false }
+        lane: { type: string, enum: [female, male, unset] }
+        preattached:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              one_line: { type: string }
+    CopyContractEvaluateEnvelope:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        warnings:
+          type: array
+          items: { type: object }
+        chip: { type: string }
+        ready_for_n4: { type: boolean }
+        g2_pass_blocked: { type: boolean }
+        docs_pass: { type: boolean, enum: [false] }
     LibraryRef:
       type: object
       required: [id, version]

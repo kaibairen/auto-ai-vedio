@@ -1,0 +1,157 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N2 ErrorCode / COPY-CONTRACT
+  version: 0.1.0
+  description: |
+    短剧轨 `pipeline_profile=drama` 的 **D-N2 ErrorCode + 中英文案** 契约增量（BRIEF-AIV-018d）。
+    - **保持 0.1.0 字面**；诚实扩 enum / `messages.zh|en`。**不**另起 0.2.0。
+    - 本文件是码表与文案 SoT。完整 D-N2 路径（storyboard / G2 runtime）由独立 D-N2 PR 落地；
+      本包提供薄 `evaluateCopyContract` 使枚举码 ⊆ handler 实际抛出。
+    - `tool_profile_unset` 为 **warn issue**，不进 HTTP ErrorCode（O9：不挡 G2，挡 ready_for_n4）。
+    - `duration_below_camera_floor` 为 `duration_bucket_mismatch.details.reason`，不升独立 ErrorCode。
+    - docs≠PASS；ForcePass=never；≠产品 / G2 PASS。
+  contact:
+    name: AI视频-后端
+  x-assign: AIV-018d-COPY-CONTRACT
+servers:
+  - url: /api/v0
+tags:
+  - name: CopyContract
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/copy-contract/evaluate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [CopyContract]
+      operationId: evaluateCopyContractN2
+      summary: 时长档 / 具名入表 / ready_for_n4 机检
+      description: |
+        未选工具且未请求 ready → 200 + `tool_profile_unset` 中文 warn。
+        已选 + 错档 → 422 `duration_bucket_mismatch`。
+        强行 ready 未选工具 → 422 `ready_for_n4_requires_tool_profile`。
+        G2 pass 仍有阻断具名 issue → 422 `named_cast_gate`。
+      responses:
+        '200':
+          description: warn-only
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+components:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string, example: proj_01 }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, pattern: '^EP\\d{2,}$', example: EP01 }
+  responses:
+    Unprocessable:
+      description: 422
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            named_cast_gate:
+              value:
+                ok: false
+                error:
+                  code: named_cast_gate
+                  message: 仍有具名角色未正确入表或未挂到分镜，无法通过门 G2。请处理角色表问题后再确认。
+                  messages:
+                    zh: 仍有具名角色未正确入表或未挂到分镜，无法通过门 G2。请处理角色表问题后再确认。
+                    en: Named-cast issues remain; gate G2 cannot pass. Fix cast/storyboard linkage first.
+            duration_bucket_mismatch:
+              value:
+                ok: false
+                error:
+                  code: duration_bucket_mismatch
+                  message: 还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。
+                  messages:
+                    zh: 还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。
+                    en: One or more shot durations do not match the selected tool duration buckets. Fix or re-adsorb before ready-for-n4.
+                  details:
+                    reason: duration_not_in_allow
+                    duration_s: 3
+                    tool_profile: seedance_2
+                    tool_duration_bucket: seedance:5
+            ready_for_n4_requires_tool_profile:
+              value:
+                ok: false
+                error:
+                  code: ready_for_n4_requires_tool_profile
+                  message: 请先选择出片工具。未选工具时不能进入出片准备。
+                  messages:
+                    zh: 请先选择出片工具。未选工具时不能进入出片准备。
+                    en: Select a tool profile before marking ready for n4.
+  schemas:
+    ErrorCode:
+      type: string
+      description: |
+        D-N2 HTTP ErrorCode（018d 必加 + 时长机检）。完整 runtime 码（storyboard_empty 等）随 D-N2 PR 并入。
+      enum:
+        - named_cast_gate
+        - named_cast_missing
+        - duration_bucket_mismatch
+        - ready_for_n4_requires_tool_profile
+      x-error-messages:
+        named_cast_gate:
+          zh: 仍有具名角色未正确入表或未挂到分镜，无法通过门 G2。请处理角色表问题后再确认。
+          en: Named-cast issues remain; gate G2 cannot pass. Fix cast/storyboard linkage first.
+        named_cast_missing:
+          zh: 对戏中的具名角色未出现在本集角色表中。请侧车补角或重新生成并入表。
+          en: A named speaking role is missing from the episode cast.
+        duration_bucket_mismatch:
+          zh: 还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。
+          en: One or more shot durations do not match the selected tool duration buckets. Fix or re-adsorb before ready-for-n4.
+        ready_for_n4_requires_tool_profile:
+          zh: 请先选择出片工具。未选工具时不能进入出片准备。
+          en: Select a tool profile before marking ready for n4.
+    ValidateIssueCode:
+      type: string
+      description: issue / warn 面；不全部抬 HTTP ErrorCode
+      enum:
+        - tool_profile_unset
+        - named_cast_unreferenced
+        - named_cast_row_gap
+        - named_cast_auto_merged
+      x-issue-messages:
+        tool_profile_unset:
+          zh: 尚未选择出片工具。分镜门审仍可进行，但不能标记「可进下一出片节点」。请在需要出片前选择工具；系统会按工具允许的时长档校正各镜秒数。
+          en: No tool profile selected. Gate review may continue, but ready-for-n4 stays false until a tool is chosen.
+        named_cast_unreferenced:
+          zh: 角色表中有具名角色从未出现在任何分镜的人物列。请挂到镜头或移除。
+          en: A cast member is never referenced by any shot.
+        named_cast_row_gap:
+          zh: 本镜出现了具名角色但人物列未包含对应 id。请补全 char_ids。
+          en: This shot mentions a named role not listed in char_ids.
+        named_cast_auto_merged:
+          zh: 已自动将具名角色并入角色表（G1b 仍锁定，大纲正文未改）。
+          en: Named roles were auto-merged into cast (G1b still locked; outline unchanged).
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message:
+          type: string
+          description: 用户通道（中文优先）
+        messages:
+          type: object
+          properties:
+            zh: { type: string }
+            en: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+          description: duration_bucket_mismatch 带 reason / shot_id / duration_s / tool_duration_bucket / tool_profile
+    ErrorEnvelope:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { $ref: '#/components/schemas/ErrorBody' }

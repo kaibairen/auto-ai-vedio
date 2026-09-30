@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from aiv_api.routes import router
 from aiv_drama import __version__
 from aiv_drama.config import Settings
+from aiv_drama.copy_contract import lookup_messages
 from aiv_drama.errors import AppError
 from aiv_drama.service import DramaService
 from aiv_drama.validate import FORCE_KEYS
@@ -45,13 +46,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if isinstance(data, dict):
                     for key in FORCE_KEYS:
                         if key in data:
+                            pair = lookup_messages("force_pass_forbidden") or {
+                                "zh": "禁止强制通过（ForcePass=never）。",
+                                "en": "ForcePass=never",
+                            }
                             return JSONResponse(
                                 status_code=400,
                                 content={
                                     "ok": False,
                                     "error": {
                                         "code": "force_pass_forbidden",
-                                        "message": "ForcePass=never",
+                                        "message": pair["zh"],
+                                        "messages": pair,
                                         "details": {"field": key, "node": NODE_DN1, "gate": GATE_G1B},
                                     },
                                 },
@@ -64,11 +70,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _pyd(_: Request, exc: RequestValidationError) -> JSONResponse:
+        pair = lookup_messages("validation") or {"zh": "请求校验失败。", "en": "validation"}
         return JSONResponse(
             status_code=422,
             content={
                 "ok": False,
-                "error": {"code": "validation", "message": "invalid body", "details": exc.errors()},
+                "error": {
+                    "code": "validation",
+                    "message": pair["zh"],
+                    "messages": pair,
+                    "details": exc.errors(),
+                },
             },
         )
 
@@ -99,11 +111,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         def wizard_routes(project_id: str, ep: str) -> FileResponse:
             return FileResponse(wb / "index.html")
 
-    openapi_copy = settings.repo_root / "openapi" / "drama-n0n1.v0.yaml"
+    openapi_dir = settings.repo_root / "openapi"
 
     @app.get("/openapi/drama-n0n1.v0.yaml")
     def openapi_file() -> FileResponse:
-        return FileResponse(openapi_copy, media_type="application/yaml")
+        return FileResponse(openapi_dir / "drama-n0n1.v0.yaml", media_type="application/yaml")
+
+    @app.get("/openapi/drama-n2.v0.yaml")
+    def openapi_n2_file() -> FileResponse:
+        return FileResponse(openapi_dir / "drama-n2.v0.yaml", media_type="application/yaml")
 
     app.include_router(router)
     return app

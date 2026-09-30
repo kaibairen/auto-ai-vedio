@@ -140,5 +140,16 @@ libraries/characters/CHAR-01/v1/character.yaml   # 不在 episodes/** 下
 | `outline_contains_prompts` | 422 | 正文含宫格/提示词 |
 | `cast_incomplete` | 422 | pass 时缺人/缺场 |
 | `shot_cap_exceeded` | 422 | 超 12 |
+| `intent_unconfirmed` | 422 | 已写入 `intent` 且未确认时生成大纲（018a/018d） |
+| `intent_stale` | 422 | 意图已确认但 MUST 指纹/stale 不一致 |
+| `intent_lane_conflict` | 422 | 确认意图时赛道×预挂频向冲突 |
+| `named_cast_gate` | 422 | G2 pass 仍有阻断具名入表 issue（018d 机检） |
+| `duration_bucket_mismatch` | 422 | 已选出片工具但时长对不上工具档 |
+| `ready_for_n4_requires_tool_profile` | 422 | 未选工具时标记可出片 |
+| `tool_profile_unset` | warn | 未选工具；不挡 G2，挡 ready_for_n4 |
+
+018d 中英目录：`GET /api/v0/drama/error-catalog`。机检：`POST .../drama/copy-contract/evaluate`。
+OpenAPI 仍标 **0.1.0**（诚实增量，非 0.2.0）。契约 CI：`tests/contract/test_error_codes_sync.py`。
+docs≠PASS；ForcePass=never。
 
 CONTRACT-BE §8 测试矩阵见 `tests/drama/test_contract_matrix.py`。

@@ -11,6 +11,7 @@
     <div>
       <strong>短剧 · pipeline_profile=drama</strong>
       <span class="badge">D-N0 / D-N1</span>
+      <span class="badge muted">018d 文案契约 · docs≠PASS</span>
       <span class="badge muted">provisional · 待挂起面 D3</span>
     </div>
     <div class="meta" id="hdr-meta">未建集</div>
@@ -21,8 +22,10 @@
     <button data-screen="b">B · D-N1 Outline</button>
     <button data-screen="c">C · 门 G1b</button>
     <button data-screen="d">D · Locked</button>
+    <button data-screen="e">E · 出片档 / G2</button>
   </nav>
   <p class="banner" id="banner" hidden></p>
+  <p class="banner warn" id="cast-hint" hidden></p>
 
   <section id="screen-hub" class="screen">
     <h1>Episode Hub</h1>
@@ -72,6 +75,7 @@
       <label><input type="radio" name="lane1" value="female" checked /> 女频</label>
       <label><input type="radio" name="lane1" value="male" /> 男频</label>
     </fieldset>
+    <p class="hint" id="intent-hint">请先完成意图确认</p>
     <button id="btn-gen">生成大纲初稿（fixture）</button>
     <label>大纲 body_md <textarea id="body-md" rows="14"></textarea></label>
     <label>shot_cap <input id="shot-cap" type="number" value="12" min="1" max="12" /></label>
@@ -101,6 +105,52 @@
     <pre id="d-out" class="out"></pre>
     <button id="btn-downstream">读下游定稿（未锁 → 409）</button>
     <pre id="dn-out" class="out"></pre>
+  </section>
+
+  <section id="screen-e" class="screen" hidden>
+    <h1>出片档 / 门 G2 文案挂点</h1>
+    <p>GAP-COPY：时长档中文横幅。未选工具<strong>不</strong>禁 G2；未对齐或未选工具时不能 ready_for_n4。≠产品 PASS。</p>
+    <div class="row">
+      <span id="export-chip" class="chip warn">出片：未选工具</span>
+    </div>
+    <label>出片工具 tool_profile
+      <select id="tool-profile">
+        <option value="">（未选）</option>
+        <option value="seedance_2">Seedance 2（5 / 8 / 10）</option>
+        <option value="kling">Kling（5 / 10）</option>
+      </select>
+    </label>
+    <p class="hint">未选工具：各镜可用任意意图秒数做分镜；选定工具后须落入该工具档位。</p>
+    <div class="row">
+      <label>S01 秒 <input id="shot-d1" type="number" value="5" /></label>
+      <label>运镜
+        <select id="shot-cam1">
+          <option value="STATIC">STATIC</option>
+          <option value="HANDHELD">HANDHELD（下限 8）</option>
+        </select>
+      </label>
+      <label>bucket <input id="shot-b1" value="seedance:5" /></label>
+    </div>
+    <div class="row">
+      <label>S02 秒 <input id="shot-d2" type="number" value="3" /></label>
+      <label>运镜
+        <select id="shot-cam2">
+          <option value="PUSH">PUSH</option>
+          <option value="ORBIT">ORBIT（下限 8）</option>
+        </select>
+      </label>
+      <label>bucket <input id="shot-b2" value="seedance:3" /></label>
+    </div>
+    <div class="row">
+      <button id="btn-eval-copy">校验时长档</button>
+      <button id="btn-ready-n4">标记可出片 / ready_for_n4</button>
+    </div>
+    <label class="inline"><input type="checkbox" id="named-gap" /> 模拟具名未入表（named_cast_missing）</label>
+    <p class="banner error" id="g2-gate-note" hidden></p>
+    <div class="row">
+      <button id="btn-g2-pass" class="primary">G2 通过（演示门禁）</button>
+    </div>
+    <pre id="e-out" class="out"></pre>
   </section>
 
   <script src="/workbench/static/drama.js"></script>
