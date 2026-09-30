@@ -190,9 +190,16 @@ class DramaN2Ops:
         warnings: list[dict[str, Any]] | None,
     ) -> list[dict[str, Any]]:
         merged: list[dict[str, Any]] = list(warnings or [])
-        seen = {(item.get("code"), str(item.get("details") or {}).get("source")) for item in merged}
+
+        def _src(item: dict[str, Any]) -> str | None:
+            details = item.get("details")
+            if isinstance(details, dict):
+                return details.get("source")
+            return None
+
+        seen = {(item.get("code"), _src(item)) for item in merged}
         for item in self._named_cast_observability_issues(rec):
-            key = (item.get("code"), str((item.get("details") or {}).get("source")))
+            key = (item.get("code"), _src(item))
             if key not in seen:
                 merged.append(item)
                 seen.add(key)
