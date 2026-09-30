@@ -14,6 +14,9 @@ from aiv_drama_n2.named_cast import (
     auto_merge_named_cast,
     blocking_named_cast_issues,
     collect_named_hits,
+    expand_group,
+    is_dialogue_fragment,
+    is_generic_title,
     is_registerable_name,
     is_system_speaker,
 )
@@ -95,6 +98,16 @@ def test_system_voice_and_dirty_prefix_not_registerable():
     assert not is_registerable_name("两王子")
     assert is_registerable_name("CODEX王子")
     assert is_registerable_name("CURSOR(Opus5.5)王子")
+    assert is_registerable_name("GPT王子")
+    assert is_registerable_name("Opus5.5王子")
+    assert is_dialogue_fragment("你被双王子")
+    assert is_dialogue_fragment("而是两王子")
+    assert not is_registerable_name("你被双王子")
+    assert not is_registerable_name("而是两王子")
+    assert is_generic_title("王国王子")
+    assert is_generic_title("AI王子")
+    assert not is_registerable_name("王国王子")
+    assert not is_registerable_name("AI王子")
 
 
 def test_collect_hits_skips_b_class_keeps_princes():
@@ -314,3 +327,144 @@ def test_skill_excerpt_and_trace_persist_on_generate_get_validate(svc):
     evidence = load_storyboard_skill_evidence(svc.settings)
     assert STORYBOARD_SKILL_PATH in evidence["paths"]
     assert STORYBOARD_GUIDE_PATH in evidence["paths"]
+
+
+def _eng020_half_line_rows(scene: str, lead: str, support: str) -> list[dict]:
+    """eng-020 S04/S11 pollution: question/narration slices + generic titles."""
+    return [
+        sample_row(
+            shot_id="S04",
+            seq=4,
+            scene_id=scene,
+            char_ids=[lead, support],
+            action="两大AI王国王子同时现身茶水间",
+            dialogue="你被双王子联猎了？",
+        ),
+        sample_row(
+            shot_id="S11",
+            seq=11,
+            scene_id=scene,
+            char_ids=[lead],
+            action="停战现场",
+            dialogue="不是追杀，而是两王子同时伸出手。",
+        ),
+        sample_row(
+            shot_id="S05",
+            seq=5,
+            scene_id=scene,
+            char_ids=[lead],
+            action="GPT王子与Opus5.5王子对峙",
+            dialogue="GPT王子：联猎协议。",
+        ),
+    ]
+
+
+def test_half_line_fragments_never_open_char():
+    rec = {
+        "outline": {
+            "body_md": "1. 开钩\nCODEX王国GPT王子与CURSOR王国Opus5.5王子联猎\n两大AI王国王子\n"
+        },
+        "cast": {
+            "characters": [
+                {"id": "CHAR-01", "name": "林晚"},
+                {"id": "CHAR-02", "name": "豆包"},
+            ],
+            "scenes": [{"id": "SCENE-01"}],
+            "version": 3,
+            "locked": True,
+        },
+        "gate": {"locked": True, "last_decision": "pass"},
+    }
+    n = {"i": 2}
+
+    def alloc(_rec):
+        n["i"] += 1
+        return f"CHAR-{n['i']:02d}"
+
+    rows, added = auto_merge_named_cast(
+        rec, _eng020_half_line_rows("SCENE-01", "CHAR-01", "CHAR-02"), alloc_char=alloc
+    )
+    names = {c["name"] for c in rec["cast"]["characters"]}
+    assert "林晚" in names and "豆包" in names
+    assert "GPT王子" in names
+    assert "Opus5.5王子" in names
+    assert "你被双王子" not in names
+    assert "而是两王子" not in names
+    assert "王国王子" not in names
+    assert "AI王子" not in names
+    by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
+    wired = {r["shot_id"]: r for r in rows}
+    for shot in ("S04", "S11"):
+        ids = wired[shot]["char_ids"]
+        assert by_name["GPT王子"] in ids
+        assert by_name["Opus5.5王子"] in ids
+        assert "CHAR-01" in ids
+        assert all(by_name.get(dirty) not in ids for dirty in ("你被双王子", "而是两王子", "王国王子", "AI王子"))
+        assert all(cid in by_name.values() for cid in ids if cid != "NONE")
+    assert added
+
+
+def test_full_dialogue_shuang_wangzi_maps_to_prince_slots():
+    assert expand_group("双王子", ["GPT王子", "Opus5.5王子", "林晚"]) == ["GPT王子", "Opus5.5王子"]
+    hits = collect_named_hits(
+        [
+            {
+                "shot_id": "S04",
+                "action": "茶水间对峙",
+                "dialogue": "你被双王子联猎了？",
+                "char_ids": ["CHAR-01"],
+            }
+        ],
+        cast={
+            "characters": [
+                {"id": "CHAR-01", "name": "林晚"},
+                {"id": "CHAR-04", "name": "GPT王子"},
+                {"id": "CHAR-05", "name": "Opus5.5王子"},
+            ]
+        },
+        outline_body="GPT王子 / Opus5.5王子",
+    )
+    names = {h["name"] for h in hits}
+    assert "你被双王子" not in names
+    assert "双王子" in names
+    resolved = {h["name"] for h in hits if h.get("registerable")}
+    assert "GPT王子" in resolved or "双王子" in names
+
+
+def test_generate_skips_half_line_and_generic_titles(svc, monkeypatch):
+    pid = seed_project_episode(svc)
+    lock_g1b(svc, pid)
+    rec = svc._rec(pid, "EP01")
+    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\nCODEX王国GPT王子与CURSOR王国Opus5.5王子\n"
+    lead = rec["cast"]["characters"][0]["id"]
+    support = rec["cast"]["characters"][1]["id"]
+    scene = rec["cast"]["scenes"][0]["id"]
+    leads = {rec["cast"]["characters"][0]["name"], rec["cast"]["characters"][1]["name"]}
+
+    def fake_rows(settings, **kw):
+        return _eng020_half_line_rows(scene, lead, support)
+
+    monkeypatch.setattr("aiv_drama_n2.ops.generate_rows", fake_rows)
+    env = svc.generate_storyboard(
+        pid, "EP01", StoryboardGenerateRequest(provider="llm"), raw={"provider": "llm"}
+    )
+    rec = svc._rec(pid, "EP01")
+    names = {c["name"] for c in rec["cast"]["characters"]}
+    assert leads <= names
+    assert "GPT王子" in names
+    assert "Opus5.5王子" in names
+    assert "你被双王子" not in names
+    assert "而是两王子" not in names
+    assert "王国王子" not in names
+    assert "AI王子" not in names
+    by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
+    rows = {r["shot_id"]: r for r in env["storyboard"]["rows"]}
+    for shot in ("S04", "S11"):
+        ids = rows[shot]["char_ids"]
+        assert by_name["GPT王子"] in ids
+        assert by_name["Opus5.5王子"] in ids
+        assert lead in ids
+        assert all(cid in {c["id"] for c in rec["cast"]["characters"]} for cid in ids)
+    assert env["storyboard"]["skill_excerpt"]
+    durations = [r["duration_s"] for r in env["storyboard"]["rows"]]
+    assert all(d in {5, 8, 10} for d in durations)

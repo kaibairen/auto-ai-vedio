@@ -107,6 +107,10 @@ GROUP_LABELS = frozenset(
         "两个王子",
         "双王子",
         "指出两王子",
+        "两大王子",
+        "两大AI王子",
+        "AI王子",
+        "王国王子",
         "公主们",
         "两位公主",
         "俩公主",
@@ -155,6 +159,50 @@ VERB_LEADERS = (
     "推开",
 )
 
+# Cut from questions/narration: 「你被双王子联猎了？」 / 「不是追杀，而是两王子同时…」
+HALF_LINE_STARTERS = (
+    "你被",
+    "我被",
+    "他被",
+    "她被",
+    "而是",
+    "不是",
+    "但是",
+    "只是",
+    "就是",
+    "还是",
+    "因为",
+    "所以",
+    "如果",
+    "虽然",
+)
+# Grammar/function chars that never start a real proper name before 王子/公主.
+FRAGMENT_PREFIX_MARKERS = frozenset("被是而你我他她它咱这那把让给吗呢吧啊不没无")
+
+# Vague collection / compound-title prefixes (大纲「两大AI王国王子」抽词).
+GENERIC_TITLE_PREFIXES = frozenset(
+    {
+        "王国",
+        "ai",
+        "双",
+        "两",
+        "两大",
+        "人类",
+        "机器",
+        "虚拟",
+        "数字",
+        "所有",
+        "各位",
+        "一群",
+        "一对",
+        "两个",
+        "两位",
+        "两名",
+        "俩",
+    }
+)
+GENERIC_LATIN_PREFIXES = frozenset({"ai", "npc", "ui", "os", "vo", "a.i", "a.i."})
+
 # Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
 SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,32})[：:]")
 
@@ -181,6 +229,7 @@ BRAND_TOKEN_RES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"OPUS\s*5\.5", re.I), "CURSOR(Opus5.5)王子"),
     (re.compile(r"Opus\s*5\.5", re.I), "CURSOR(Opus5.5)王子"),
     (re.compile(r"\bCODEX\b", re.I), "CODEX王子"),
+    (re.compile(r"\bGPT\b", re.I), "GPT王子"),
 )
 
 NONE_ID = "NONE"
@@ -205,11 +254,59 @@ def strip_dirty_prefix(name: str) -> str:
         text = stripped
 
 
+def _split_title(name: str) -> tuple[str, str] | None:
+    key = strip_dirty_prefix(normalize_name(name))
+    for title in TITLES:
+        if key.endswith(title) and len(key) > len(title):
+            return key[: -len(title)], title
+    return None
+
+
+def is_dialogue_fragment(name: str) -> bool:
+    """Half-slice of a question/narration, not a registerable proper name."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key:
+        return True
+    if any(key.startswith(starter) for starter in HALF_LINE_STARTERS):
+        return True
+    split = _split_title(key)
+    if not split:
+        return False
+    prefix, _title = split
+    if any(prefix.startswith(starter) for starter in HALF_LINE_STARTERS):
+        return True
+    if any(ch in FRAGMENT_PREFIX_MARKERS for ch in prefix):
+        return True
+    return False
+
+
+def is_generic_title(name: str) -> bool:
+    """Vague collection / compound title (王国王子 / AI王子), not a true A-class slot."""
+    key = strip_dirty_prefix(normalize_name(name))
+    split = _split_title(key)
+    if not split:
+        return False
+    prefix, _title = split
+    folded = prefix.casefold().replace(" ", "")
+    if folded in GENERIC_TITLE_PREFIXES or folded in GENERIC_LATIN_PREFIXES:
+        return True
+    if prefix in TITLES or prefix in BARE_TITLES:
+        return True
+    return False
+
+
 def is_half_line(name: str) -> bool:
     key = normalize_name(name)
     if not key:
         return True
-    if PROPER_NAME_RE.fullmatch(key):
+    if is_dialogue_fragment(key):
+        return True
+    cleaned = strip_dirty_prefix(key)
+    if (
+        PROPER_NAME_RE.fullmatch(cleaned)
+        and not is_generic_title(cleaned)
+        and not is_dialogue_fragment(cleaned)
+    ):
         return False
     if len(key) > 16:
         return True
@@ -256,13 +353,18 @@ def is_b_class(name: str) -> bool:
     """F1: system-vo / popup / VO / half-line / verb phrase / dirty leftover."""
     if is_system_speaker(name) or is_generic_ref(name):
         return True
-    if is_group_label(name):
+    if is_group_label(name) or is_generic_title(name):
         return True
-    if is_verb_phrase(name) or is_half_line(name):
+    if is_dialogue_fragment(name) or is_verb_phrase(name) or is_half_line(name):
         return True
     stripped = strip_dirty_prefix(name)
     if stripped != normalize_name(name) and (
-        is_system_speaker(stripped) or is_group_label(stripped) or is_verb_phrase(stripped) or is_half_line(stripped)
+        is_system_speaker(stripped)
+        or is_group_label(stripped)
+        or is_generic_title(stripped)
+        or is_dialogue_fragment(stripped)
+        or is_verb_phrase(stripped)
+        or is_half_line(stripped)
     ):
         return True
     return False
@@ -569,7 +671,7 @@ def collect_named_hits(
 
 
 def resolve_hit_names(name: str, individual_pool: Iterable[str]) -> list[str]:
-    if is_group_label(name):
+    if is_group_label(name) or is_generic_title(name):
         return expand_group(name, individual_pool)
     target = resolve_to_pool_name(name, individual_pool)
     if target:
@@ -757,7 +859,7 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
             if target:
                 mentioned.add(target)
         for name in extract_speakers(dialogue) + extract_speakers(action):
-            if is_group_label(name):
+            if is_group_label(name) or is_generic_title(name):
                 mentioned.update(expand_group(name, pool))
                 continue
             if is_b_class(name):
@@ -781,6 +883,41 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
             if cid not in current:
                 current.append(cid)
         updated["char_ids"] = current or [NONE_ID]
+        out.append(updated)
+    return out
+
+
+def _is_dirty_cast_name(name: str) -> bool:
+    return (
+        is_dialogue_fragment(name)
+        or is_generic_title(name)
+        or is_group_label(name)
+        or is_system_speaker(name)
+        or is_verb_phrase(name)
+    )
+
+
+def prune_dirty_char_ids(rows: list[dict[str, Any]], cast: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Drop half-line / generic-title ids from shots so S04-like rows only keep A slots."""
+    by_id = {
+        str(row["id"]): str(row.get("name") or "")
+        for row in ((cast or {}).get("characters") or [])
+        if isinstance(row, dict) and row.get("id")
+    }
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        updated = dict(row)
+        kept: list[str] = []
+        for cid in updated.get("char_ids") or []:
+            ident = str(cid)
+            if not ident or ident == NONE_ID:
+                continue
+            name = by_id.get(ident) or ident
+            if _is_dirty_cast_name(name) or _is_dirty_cast_name(ident):
+                continue
+            if ident not in kept:
+                kept.append(ident)
+        updated["char_ids"] = kept or [NONE_ID]
         out.append(updated)
     return out
 
@@ -857,4 +994,5 @@ def auto_merge_named_cast(
         cast["version"] = (cast.get("version") or 0) + 1
 
     wired = apply_char_id_wiring(rows, by_name)
+    wired = prune_dirty_char_ids(wired, cast)
     return wired, added

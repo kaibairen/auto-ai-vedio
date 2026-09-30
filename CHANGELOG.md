@@ -2,6 +2,8 @@
 
 ## 0.2.3 — BRIEF-AIV-020 cast hygiene + duration buckets + skill excerpt (docs≠PASS)
 
+LOOP-CONTINUE (eng-020 FIT-GAP): skip dialogue half-slices `你被双王子` / `而是两王子` and generic titles `王国王子` / `AI王子`; full lines with `双王子` still map to GPT/Opus (or CODEX/CURSOR) A slots. P0-B/C unchanged.
+
 P0 engineering loop on tip `0d16e92` (PR#11 stack). ForcePass=never. Does not merge to main. Does not rewrite eng-015/019 dogfood artifacts.
 
 - **P0-A**: named_cast skips B-class (`【系统音】` / 系统音 / 弹窗 / 旁白 / 广播半截台词 / 动词短语 / leading `/`); dedupes near-duplicates; A-class `CODEX王子` / `CURSOR(Opus5.5)王子` (or outline-equivalent) auto-enter cast and hang `char_ids`. Collection `两王子` / `指出两王子` resolve to individual A slots. Sidecar still does not unlock G1b or rewrite outline; bump `cast.version` + warn `named_cast_auto_merged` / `named_cast_sidecar_added` on generate/GET/validate.
