@@ -24,6 +24,32 @@
         "confirmed_by": { "type": ["string", "null"] }
       }
     },
+    "versions": {
+      "type": "object",
+      "properties": {
+        "brief": { "type": "integer" },
+        "outline": { "type": "integer" },
+        "cast": { "type": "integer" },
+        "storyboard": { "type": "integer" }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "g1b": { "type": "object" },
+        "g2": { "type": "object" }
+      }
+    },
+    "storyboard_meta": {
+      "type": "object",
+      "properties": {
+        "shot_cap": { "type": "integer" },
+        "storyboard_skill": { "type": ["string", "null"] },
+        "skill_paths": { "type": "array", "items": { "type": "string" } },
+        "tool_profile": { "type": ["string", "null"] }
+      }
+    },
+    "projection_dirty": { "type": "boolean" },
     "stale_downstream": {
       "type": "array",
       "items": { "type": "string" }

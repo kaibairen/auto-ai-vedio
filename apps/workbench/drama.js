@@ -4,6 +4,21 @@ const state = {
   intent: { confirmed: false, fingerprint: null },
   check: { conflict: false, can_confirm: false, suggested_lane: null },
   sawConfirmed: false,
+  seenCastVersion: 0,
+  cast: null,
+  storyboard: null,
+  validate: null,
+  episode: null,
+  g1bLocked: false,
+  selectedShot: null,
+};
+
+const SHOT_SIZE_ZH = { ELS: "远景", LS: "全景", MS: "中景", CU: "近景", ECU: "特写" };
+const CAMERA_ZH = {
+  STATIC: "固定", PUSH: "推", PULL: "拉", PAN_H: "横摇", PAN_V: "垂直摇",
+  TRACK: "跟", TRUCK: "移", CRANE_UP: "升", CRANE_DOWN: "降", ORBIT: "环绕",
+  HANDHELD: "手持", POV: "主观", OTS: "过肩", DEEP_FOCUS: "深焦", ROLL: "旋转",
+  DOLLY_ZOOM: "滑动变焦", WHIP_PUSH: "急推", WHIP_PULL: "急拉", STATIC_TO_MOVE: "静动转换",
 };
 
 function $(id) { return document.getElementById(id); }
@@ -27,24 +42,104 @@ function showBanner(msg, ok) {
   el.textContent = msg || "";
   el.style.background = ok ? "#1d3a28" : "#3a2020";
 }
+function isStoryboardLocked(sb) {
+  if (!sb) return false;
+  return sb.locked === true && Boolean(sb.confirmed_by);
+}
+function blockingNamedCast(issues) {
+  return (issues || []).filter((i) => {
+    const code = String(i.code || "");
+    return code.startsWith("named_cast_") && code !== "named_cast_auto_merged";
+  });
+}
+function hardErrors(issues) {
+  return (issues || []).filter((i) => i.severity === "error");
+}
+function redactSkillPath(path) {
+  const text = String(path || "");
+  if (!text) return "";
+  if (text === "none") return "none";
+  if (/^(\/home\/|\/Users\/|~\/|\\\\|[A-Za-z]:\\)/.test(text)) return "«redacted»";
+  return text;
+}
+function hintVersions(data) {
+  const hint = (data?.hints && data.hints[0]) || {};
+  const oldV = hint.cast_version_old ?? data?.hints?.cast_version_old;
+  const newV = hint.cast_version_new ?? hint.cast_version ?? data?.hints?.cast_version_new
+    ?? data?.cast?.version;
+  return { oldV, newV, hint };
+}
 function showCastHint(data) {
   const el = $("cast-hint");
   if (!el) return;
-  const hints = data?.hints || [];
-  const named = (data?.validate_warnings || data?.issues || []).filter((i) =>
-    String(i.code || "").startsWith("named_cast_")
-  );
-  if (data?.cast_changed || hints.length || named.length) {
-    const hintMsg = hints[0]?.message || "角色表已更新；G1b 仍锁定，大纲正文未改。";
+  const hints = Array.isArray(data?.hints) ? data.hints : [];
+  const named = blockingNamedCast(data?.validate_warnings || data?.issues || []);
+  const { oldV, newV } = hintVersions(data);
+  const bumped = data?.cast_changed || (newV != null && state.seenCastVersion && Number(newV) > Number(state.seenCastVersion));
+  if (bumped || hints.length || named.length) {
+    let hintMsg = "";
+    if (bumped || data?.cast_changed) {
+      if (oldV != null && newV != null) {
+        hintMsg = `角色表已更新（v${oldV} → v${newV}）。下拉已刷新；大纲门 G1b 仍锁定，未改大纲正文。`;
+      } else {
+        hintMsg = hints[0]?.message || "角色表已更新；G1b 仍锁定，大纲正文未改。";
+      }
+    }
     const namedMsg = named.length
       ? `具名配角 issue ${named.length} 条（${named.map((i) => i.code).join(", ")}）— G2 pass 将被阻断。`
       : "";
     el.hidden = false;
-    el.textContent = [data?.cast_changed ? hintMsg : "", namedMsg].filter(Boolean).join(" ");
+    el.textContent = [hintMsg, namedMsg].filter(Boolean).join(" ");
+    el.onclick = () => {
+      if (newV != null) state.seenCastVersion = Number(newV);
+      el.hidden = true;
+    };
   } else {
     el.hidden = true;
     el.textContent = "";
   }
+}
+function renderSkillStrip(detailsId, bodyId, data) {
+  const box = $(detailsId);
+  const body = $(bodyId);
+  if (!box || !body) return;
+  const flag = data?.storyboard_skill || data?.skill_flag || (data?.outline && data.skill_paths);
+  const paths = (data?.skill_paths || []).filter((p) => p && p !== "none");
+  const excerpt = data?.skill_excerpt;
+  const excerpts = data?.excerpts || [];
+  if (!flag && !paths.length && !excerpt && !excerpts.length) {
+    box.hidden = true;
+    body.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  const rows = [];
+  if (data?.storyboard_skill) {
+    rows.push(`<div>旗标: storyboard_skill = <code>${escapeHtml(data.storyboard_skill)}</code></div>`);
+  } else if (paths.length) {
+    rows.push("<div>旗标: outline skill = true</div>");
+  }
+  if (paths.length && !flag && !data?.storyboard_skill) {
+    rows.push('<div class="hint">旗标与 paths 不一致</div>');
+  }
+  if (paths.length) {
+    rows.push("<div>paths:</div><ul>" + paths.map((p) => `<li><code>${escapeHtml(redactSkillPath(p))}</code></li>`).join("") + "</ul>");
+  } else {
+    rows.push("<div>本次无 Skill 摘录（none）</div>");
+  }
+  if (excerpts.length) {
+    rows.push("<div>excerpt / hash:</div><ul>" + excerpts.map((ex) => {
+      const p = redactSkillPath(ex.path || "");
+      const bits = [p, ex.chars != null ? `${ex.chars} chars` : "", ex.hash ? `sha256:${ex.hash}` : ""].filter(Boolean);
+      return `<li><code>${escapeHtml(bits.join(" · "))}</code></li>`;
+    }).join("") + "</ul>");
+  } else if (excerpt && excerpt !== "none") {
+    rows.push(`<details><summary>摘录（折叠）</summary><pre class="out">${escapeHtml(String(excerpt).slice(0, 2000))}</pre></details>`);
+  }
+  body.innerHTML = rows.join("");
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach((s) => { s.hidden = s.id !== `screen-${name}`; });
@@ -52,6 +147,12 @@ function showScreen(name) {
   if (name === "a2" || name === "b") {
     refreshIntent().catch(() => {});
   }
+  if (name === "hub" || name === "e" || name === "f" || name === "g" || name === "d") {
+    refreshEpisodeChrome().catch(() => {});
+  }
+  if (name === "e") refreshScreenE().catch(() => {});
+  if (name === "f") refreshScreenF().catch(() => {});
+  if (name === "g") refreshScreenG().catch(() => {});
 }
 function isIntentConfirmed() {
   return state.intent && state.intent.confirmed === true;
@@ -106,6 +207,13 @@ async function api(method, path, body, headers) {
     } else if (code === "intent_stale") {
       showBanner("422 intent_stale: 意图已过期 · 请回 A2 重确认", false);
       applyIntent({ intent: { confirmed: false, fingerprint: null }, conflict: false });
+    } else if (code === "named_cast_gate") {
+      showBanner(`422 named_cast_gate: ${data?.error?.message || "还有未入表的具名角色，无法通过分镜门审。"}`, false);
+      applyG2PassGate(data?.error?.details?.issues || [{ code: "named_cast_gate" }]);
+    } else if (code === "upstream_unlocked") {
+      showBanner("409 upstream_unlocked: 上游门 G1b 未锁，不能进 D-N2。", false);
+      state.g1bLocked = false;
+      applyEGate();
     } else {
       showBanner(`${res.status} ${code}: ${data?.error?.message || ""}`, false);
     }
@@ -114,14 +222,265 @@ async function api(method, path, body, headers) {
   showBanner("", true);
   return data;
 }
-function dump(id, data) { $(id).textContent = JSON.stringify(data, null, 2); }
+function dump(id, data) {
+  const el = $(id);
+  if (el) el.textContent = JSON.stringify(data, null, 2);
+}
 function hdr() {
-  $("hdr-meta").textContent = state.projectId ? `${state.projectId} / ${state.ep} · drama` : "未建集";
+  const ep = state.ep || "–";
+  const lane = state.episode?.lane_preference || "unset";
+  const profile = state.episode?.episode?.pipeline_profile || (state.projectId ? "drama" : "–");
+  const castV = state.cast?.version ?? state.episode?.episode?.versions?.cast;
+  $("hdr-meta").textContent = state.projectId ? `${state.projectId} / ${ep} · ${profile}` : "未建集";
+  const laneEl = $("hdr-lane");
+  if (laneEl) laneEl.textContent = `lane:${lane}`;
+  const castEl = $("hdr-cast");
+  if (castEl) castEl.textContent = castV != null ? `cast v${castV}` : "cast v–";
+  const profileEl = $("hdr-profile");
+  if (profileEl) {
+    profileEl.textContent = `profile:${profile}`;
+    if (state.projectId && profile && profile !== "drama") {
+      showBanner("pipeline_profile 必须是 drama，不能进分镜表。", false);
+    }
+  }
+  const hub = $("hub-ep");
+  if (hub) {
+    hub.textContent = state.projectId
+      ? `${ep} · lane ${lane} · profile ${profile} · cast v${castV ?? "–"}`
+      : "EP / lane / profile 将在建集后回显。";
+  }
 }
 function parsePin(raw) {
   const text = (raw || "").trim();
   if (!text) return null;
   try { return JSON.parse(text); } catch { return { raw: text }; }
+}
+
+async function refreshEpisodeChrome() {
+  if (!state.projectId) {
+    hdr();
+    return null;
+  }
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}`);
+    state.episode = data;
+    if (data.episode?.versions?.cast && !state.seenCastVersion) {
+      state.seenCastVersion = data.episode.versions.cast;
+    }
+  } catch {
+    /* hub may not have episode yet */
+  }
+  try {
+    const gate = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/gates/g1b`);
+    state.g1bLocked = Boolean(gate.gate?.locked && gate.gate?.last_decision === "pass");
+  } catch {
+    state.g1bLocked = false;
+  }
+  hdr();
+  return state.episode;
+}
+
+function applyEGate() {
+  const gate = $("e-gate");
+  if (gate) gate.hidden = state.g1bLocked;
+  const gen = $("btn-sb-gen");
+  if (gen) gen.disabled = !state.g1bLocked || isStoryboardLocked(state.storyboard);
+}
+
+function charName(id) {
+  if (id === "NONE") return "NONE";
+  const row = (state.cast?.characters || []).find((c) => c.id === id);
+  return row?.name || "?";
+}
+
+function chipLabel(id) {
+  return `${id} · ${charName(id)}`;
+}
+
+function renderShots() {
+  const tbody = $("e-tbody");
+  if (!tbody) return;
+  const rows = (state.storyboard?.rows || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  const locked = isStoryboardLocked(state.storyboard);
+  const options = (state.cast?.characters || []).map((c) => c.id).concat(["NONE"]);
+  tbody.innerHTML = rows.map((row) => {
+    const selected = state.selectedShot === row.shot_id ? "selected" : "";
+    const chips = (row.char_ids || []).map((id) => `<span class="chip">${escapeHtml(chipLabel(id))}</span>`).join("");
+    const selects = locked ? "" : `<select data-shot="${escapeHtml(row.shot_id)}" class="char-pick" multiple size="2">${
+      options.map((id) => `<option value="${escapeHtml(id)}" ${(row.char_ids || []).includes(id) ? "selected" : ""}>${escapeHtml(chipLabel(id))}</option>`).join("")
+    }</select>`;
+    return `<tr class="${selected}" data-shot="${escapeHtml(row.shot_id)}">
+      <td><input type="radio" name="shot-pick" value="${escapeHtml(row.shot_id)}" ${state.selectedShot === row.shot_id ? "checked" : ""} /></td>
+      <td>${row.seq ?? ""}</td>
+      <td>${escapeHtml(row.shot_id || "")}</td>
+      <td>${escapeHtml(row.bridge_id || "")}</td>
+      <td>${row.duration_s ?? ""}</td>
+      <td>${escapeHtml(SHOT_SIZE_ZH[row.shot_size] || "")} <code>${escapeHtml(row.shot_size || "")}</code></td>
+      <td>${escapeHtml(CAMERA_ZH[row.camera] || "")} <code>${escapeHtml(row.camera || "")}</code></td>
+      <td>${escapeHtml(row.action || "")}</td>
+      <td class="chars">${chips}${selects}</td>
+      <td>${escapeHtml(row.scene_id || "")}</td>
+      <td>${escapeHtml(row.dialogue || "")}</td>
+      <td>${escapeHtml(row.notes || "")}</td>
+    </tr>`;
+  }).join("");
+  tbody.querySelectorAll("input[name=shot-pick]").forEach((el) => {
+    el.addEventListener("change", () => { state.selectedShot = el.value; });
+  });
+  tbody.querySelectorAll("select.char-pick").forEach((el) => {
+    el.addEventListener("change", () => {
+      const shot = el.getAttribute("data-shot");
+      const row = (state.storyboard?.rows || []).find((r) => r.shot_id === shot);
+      if (row) row.char_ids = [...el.selectedOptions].map((o) => o.value);
+      renderShots();
+    });
+  });
+}
+
+function renderIssues(el, issues) {
+  if (!el) return;
+  const list = issues || [];
+  if (!list.length) {
+    el.innerHTML = '<p class="meta">无 validate issues</p>';
+    return;
+  }
+  el.innerHTML = "<ul>" + list.map((i) => {
+    const sev = i.severity === "error" ? "hard" : "soft";
+    return `<li class="${sev}"><code>${escapeHtml(i.code || "")}</code> ${escapeHtml(i.message || "")}${i.shot_id ? ` · ${escapeHtml(i.shot_id)}` : ""}</li>`;
+  }).join("") + "</ul>";
+}
+
+function applyG2PassGate(issues) {
+  const btn = $("btn-g2-pass");
+  const block = $("f-block");
+  const named = blockingNamedCast(issues);
+  const errors = hardErrors(issues);
+  const locked = isStoryboardLocked(state.storyboard);
+  const disable = named.length > 0 || errors.length > 0 || locked || !(state.storyboard?.rows || []).length;
+  if (btn) btn.disabled = disable;
+  if (block) {
+    block.hidden = named.length === 0;
+    if (named.length) {
+      block.textContent = `还有未入表的具名角色（${named.map((i) => i.code).join(", ")}），无法通过分镜门审。`;
+    }
+  }
+}
+
+async function refreshCast() {
+  if (!state.projectId) return null;
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/drama/cast`);
+    state.cast = data.cast;
+    if (state.cast?.version && !state.seenCastVersion) state.seenCastVersion = state.cast.version;
+    hdr();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshStoryboard() {
+  if (!state.projectId) return null;
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard`);
+    state.storyboard = data.storyboard;
+    showCastHint(data);
+    renderSkillStrip("e-skill", "e-skill-body", data);
+    return data;
+  } catch (err) {
+    if (err.message === "upstream_unlocked") {
+      state.storyboard = null;
+    }
+    return null;
+  }
+}
+
+function paintEStatus(extra) {
+  const sb = state.storyboard;
+  const locked = isStoryboardLocked(sb);
+  const status = $("e-status");
+  const cap = sb?.shot_cap ?? 12;
+  const n = sb?.shot_count ?? (sb?.rows || []).length;
+  if (status) {
+    status.textContent = `${state.ep || "EP"} · 短剧 · D-N2 · ${locked ? "locked" : "draft"} · cast v${state.cast?.version ?? "–"} · ${state.g1bLocked ? "G1b✓" : "G1b未锁"}`;
+  }
+  const count = $("e-shot-count");
+  if (count) count.textContent = `镜数 ${n}/${cap}`;
+  const badge = $("e-skill-badge");
+  if (badge) badge.textContent = `skill:${sb?.storyboard_skill || extra?.storyboard_skill || "–"}`;
+  const up = $("e-upstream");
+  if (up) {
+    up.textContent = sb
+      ? `lane ${sb.lane || "–"} · shot_cap ${cap} · upstream outline v${sb.upstream_outline_version ?? "–"} / cast v${sb.upstream_cast_version ?? "–"}`
+      : "上游只读摘要将在刷新后出现。";
+  }
+  const ready = $("e-ready");
+  if (ready) {
+    const edges = extra?.next_edges || state.episode?.next_edges || [];
+    const pretend = !locked && edges.includes("D-N2");
+    ready.textContent = pretend
+      ? "next_edges 含 D-N2 且 locked=false — 不是已可下游出片，也不是 D-N3 开工。"
+      : `ready_for_n4=${sb?.ready_for_n4 ? "true" : "false"}（灰态）· locked=${locked}`;
+  }
+  applyEGate();
+}
+
+async function refreshScreenE() {
+  await refreshEpisodeChrome();
+  applyEGate();
+  if (!state.g1bLocked) {
+    paintEStatus();
+    renderShots();
+    return;
+  }
+  await refreshCast();
+  const sb = await refreshStoryboard();
+  paintEStatus(sb);
+  renderShots();
+  if (sb?.validate_warnings) renderIssues($("e-issues"), sb.validate_warnings);
+}
+
+async function refreshScreenF() {
+  await refreshEpisodeChrome();
+  await refreshCast();
+  const sb = await refreshStoryboard();
+  let issues = [];
+  try {
+    const val = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/validate`, {});
+    state.validate = val;
+    issues = val.issues || [];
+    renderIssues($("f-issues"), issues);
+    showCastHint(val);
+    dump("f-out", val);
+  } catch (err) {
+    dump("f-out", err.data || { error: String(err) });
+  }
+  const named = blockingNamedCast(issues);
+  const errors = hardErrors(issues);
+  const sbv = state.storyboard;
+  const sum = $("f-summary");
+  if (sum) {
+    sum.textContent = `镜数 ${sbv?.shot_count ?? 0} · Σdur ${(sbv?.rows || []).reduce((a, r) => a + (Number(r.duration_s) || 0), 0)}s · 硬错 ${errors.length} · named_cast 阻断 ${named.length} · locked=${isStoryboardLocked(sbv)}`;
+  }
+  applyG2PassGate(issues);
+}
+
+async function refreshScreenG() {
+  await refreshEpisodeChrome();
+  const sb = await refreshStoryboard();
+  const locked = isStoryboardLocked(state.storyboard);
+  const edges = sb?.next_edges || state.episode?.next_edges || [];
+  const sum = $("g-summary");
+  if (sum) {
+    sum.textContent = locked
+      ? `locked=true · confirmed_by=${state.storyboard.confirmed_by} · storyboard v${state.storyboard.version}`
+      : "尚未 G2 pass（看 locked/confirmed_by，不单靠 next_edges）。";
+  }
+  const next = $("g-next");
+  if (next) {
+    next.textContent = `next_edges: ${JSON.stringify(edges)} — D-N3 只是候选文案，不自动开卡。`;
+  }
+  dump("g-out", { storyboard: state.storyboard, episode: state.episode, next_edges: edges });
 }
 
 document.querySelectorAll(".tabs button").forEach((b) => {
@@ -176,9 +535,11 @@ $("btn-ep").onclick = async () => {
     title: "第一集",
   });
   state.sawConfirmed = false;
+  state.seenCastVersion = 0;
   hdr();
   dump("hub-out", data);
   await refreshIntent();
+  await refreshEpisodeChrome();
 };
 $("btn-seed").onclick = async () => {
   const id = $("seed-char").value;
@@ -206,6 +567,7 @@ $("btn-save-brief").onclick = async () => {
   setLane2(lane0());
   dump("a-out", data);
   await refreshIntent();
+  await refreshEpisodeChrome();
 };
 $("btn-goto-a2").onclick = () => {
   $("a2-title").value = $("title-intent").value;
@@ -307,6 +669,7 @@ $("btn-gen").onclick = async () => {
   $("body-md").value = data.outline.body_md;
   $("shot-cap").value = data.outline.shot_cap;
   dump("cast-out", data.cast);
+  renderSkillStrip("b-skill", "b-skill-body", data);
 };
 $("btn-save-outline").onclick = async () => {
   try {
@@ -335,6 +698,7 @@ async function confirm(decision) {
   });
   dump("c-out", data);
   dump("d-out", { locked: data.gate.locked, next_edges: data.next_edges, confirmed_by: data.outline?.confirmed_by });
+  state.g1bLocked = Boolean(data.gate?.locked && data.gate?.last_decision === "pass");
 }
 $("btn-pass").onclick = () => confirm("pass");
 $("btn-reject").onclick = () => confirm("reject");
@@ -346,6 +710,7 @@ $("btn-downstream").onclick = async () => {
     dump("dn-out", err.data || { error: String(err) });
   }
 };
+$("btn-goto-e").onclick = () => showScreen("e");
 document.querySelectorAll("input[name=lane2]").forEach((el) => {
   el.addEventListener("change", () => {
     const confirmBtn = $("btn-confirm-intent");
@@ -355,36 +720,115 @@ document.querySelectorAll("input[name=lane2]").forEach((el) => {
   });
 });
 applyIntent({ intent: { confirmed: false }, conflict: false });
+
 $("btn-sb-gen").onclick = async () => {
+  if (!state.g1bLocked) {
+    showBanner("上游门 G1b 未锁，不能生成空表。", false);
+    applyEGate();
+    return;
+  }
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/generate`, {
     provider: "fixture",
     actor: "yangzhou",
   });
+  state.storyboard = data.storyboard;
   showCastHint(data);
+  renderSkillStrip("e-skill", "e-skill-body", data);
   dump("e-out", data);
+  await refreshCast();
+  if (data.cast_changed) {
+    const { newV } = hintVersions(data);
+    if (newV != null) state.cast = { ...(state.cast || {}), version: Number(newV) };
+  }
+  paintEStatus(data);
+  renderShots();
+  if (data.validate_warnings) renderIssues($("e-issues"), data.validate_warnings);
 };
 $("btn-sb-val").onclick = async () => {
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/validate`, {});
+  state.validate = data;
   showCastHint(data);
   dump("e-out", data);
+  renderIssues($("e-issues"), data.issues || []);
+  applyG2PassGate(data.issues || []);
 };
 $("btn-sidecar").onclick = async () => {
+  const before = state.cast?.version ?? state.seenCastVersion;
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/cast/sidecar-add`, {
     name: $("side-name").value || "CODEX王子",
     one_line: $("side-line").value || undefined,
     actor: "yangzhou",
   });
-  showCastHint(data);
+  showCastHint({
+    ...data,
+    hints: (data.hints || []).map((h) => ({
+      ...h,
+      cast_version_old: h.cast_version_old ?? before,
+      cast_version_new: h.cast_version_new ?? data.cast?.version,
+    })),
+  });
   dump("e-out", data);
+  await refreshCast();
+  await refreshStoryboard();
+  paintEStatus(data);
+  renderShots();
 };
+$("btn-sb-save").onclick = async () => {
+  if (!state.storyboard?.rows?.length) {
+    showBanner("没有可保存的分镜行。", false);
+    return;
+  }
+  const data = await api("PUT", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard`, {
+    rows: state.storyboard.rows,
+    actor: "yangzhou",
+    unlock_edit: isStoryboardLocked(state.storyboard),
+  });
+  state.storyboard = data.storyboard;
+  dump("e-out", data);
+  paintEStatus(data);
+  renderShots();
+};
+$("btn-sb-up").onclick = () => moveSelected(-1);
+$("btn-sb-down").onclick = () => moveSelected(1);
+$("btn-open-g2").onclick = () => showScreen("f");
+$("btn-g2-back").onclick = () => showScreen("e");
+
+function moveSelected(delta) {
+  const rows = state.storyboard?.rows;
+  if (!rows || !state.selectedShot) return;
+  const idx = rows.findIndex((r) => r.shot_id === state.selectedShot);
+  const next = idx + delta;
+  if (idx < 0 || next < 0 || next >= rows.length) return;
+  const tmp = rows[idx];
+  rows[idx] = rows[next];
+  rows[next] = tmp;
+  rows.forEach((r, i) => { r.seq = i + 1; });
+  renderShots();
+}
+
 async function confirmG2(decision) {
+  if (decision === "pass") {
+    const issues = state.validate?.issues || [];
+    if (blockingNamedCast(issues).length) {
+      showBanner("客户端已禁用 G2 pass：存在阻断 named_cast_*。", false);
+      applyG2PassGate(issues);
+      return;
+    }
+  }
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/gates/g2/confirm`, {
     decision,
     actor: $("g2-actor").value,
     note: $("g2-note").value || undefined,
   });
   showCastHint(data);
+  dump("f-out", data);
   dump("e-out", data);
+  state.storyboard = data.storyboard;
+  if (decision === "pass") {
+    showScreen("g");
+  } else {
+    showScreen("e");
+  }
 }
 $("btn-g2-pass").onclick = () => confirmG2("pass");
 $("btn-g2-reject").onclick = () => confirmG2("reject");

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — BRIEF-AIV-018c workbench + episode projection (docs≠PASS)
+
+Workbench E–G MVP on the 018a + 017a stack. ForcePass=never. Does not merge to main. Does not substitute PRs #5–#9.
+
+- `.aiv/episode.json` writes nested `intent`, `versions`, `gates.g1b/g2`, `storyboard_meta.shot_cap` (no `shot_budget` write), optional `skill_paths`, `projection_dirty`.
+- Screen E: min storyboard columns, cast chips `id · name`, refresh after sidecar.
+- FE-D1 banner `v{old} → v{new}`; FE-D3 client-disable G2 pass on blocking `named_cast_*` (looks at `locked`/`confirmed_by`).
+- Screen F/G: validate issues + G2 confirm state + locked summary. No auto-nav to D-N3.
+- Optional 018b FE debt: foldable read-only「本次 Skill」from generate envelopes.
+- A2 intent confirm stays on the 018a track.
+
 ## 0.2.1 — BRIEF-AIV-017a named-cast (O1/O2/O5, docs≠PASS)
 
 Frozen FREEZE O1=A / O2 / O5 on drama D-N2 only. ForcePass=never. Does not change O9 coerce.

@@ -16,6 +16,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 .tabs button { background: transparent; color: var(--muted); border: 0; padding: 8px 10px; cursor: pointer; }
 .tabs button.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
 .screen { padding: 20px 24px 48px; max-width: 880px; }
+.screen.wide { max-width: 1280px; }
 label, fieldset { display: block; margin: 12px 0; color: var(--muted); }
 input, textarea { width: 100%; margin-top: 4px; padding: 8px; background: var(--card); color: var(--ink); border: 1px solid #333; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -38,3 +39,16 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 .badge.ok { background: #1d3a28; color: var(--ok); }
 .badge.warn { background: #3a2a14; color: #e6c27a; }
+.table-wrap { overflow: auto; margin: 12px 0; border: 1px solid #333; }
+table.shots { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.shots th, table.shots td { border-bottom: 1px solid #2a2e36; padding: 6px 8px; vertical-align: top; text-align: left; }
+table.shots tr.selected { background: #2a2414; }
+.chip { display: inline-block; margin: 0 4px 4px 0; padding: 2px 8px; border-radius: 999px; background: #2a2e36; color: var(--ink); }
+.chars select { min-width: 120px; margin-top: 4px; }
+.skill-strip { margin: 12px 0; padding: 8px 12px; background: var(--card); border-radius: 8px; color: var(--muted); }
+.skill-body { font-size: 13px; }
+.skill-body ul { margin: 6px 0; padding-left: 18px; }
+.issues ul { margin: 8px 0; padding-left: 18px; }
+.issues .hard { color: var(--danger); }
+.issues .soft { color: #e6c27a; }
+#cast-hint { cursor: pointer; }

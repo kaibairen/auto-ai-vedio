@@ -231,14 +231,20 @@ class DramaService(DramaN2Ops):
                 },
                 "stale_downstream": list(stale_nodes),
                 "locks": deepcopy(rec["episode"]["locks"]),
+                "projection_dirty": False,
             }
             if sb:
+                skill_paths = [p for p in (sb.get("skill_paths") or []) if p and p != "none"]
+                src = rec.get("source_storyboard_skill")
+                if src and src not in skill_paths:
+                    skill_paths.append(src)
                 meta["storyboard_meta"] = {
                     "storyboard_skill": sb.get("storyboard_skill"),
                     "shot_cap": sb.get("shot_cap"),
-                    "shot_budget": sb.get("shot_cap"),
                     "upstream_outline_version": sb.get("upstream_outline_version"),
                     "upstream_cast_version": sb.get("upstream_cast_version"),
+                    "skill_paths": skill_paths,
+                    "tool_profile": sb.get("tool_profile"),
                 }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)
@@ -246,7 +252,7 @@ class DramaService(DramaN2Ops):
         except Exception:  # noqa: BLE001
             rec["projection_dirty"] = True
             self._save()
-            raise
+            return
         self._save()
 
     def _commit(self, rec: dict[str, Any] | None = None) -> None:
@@ -279,7 +285,9 @@ class DramaService(DramaN2Ops):
             "ok": True,
             "episode": episode,
             "intent": intent,
+            "lane_preference": (rec.get("brief") or {}).get("lane_preference", "unset"),
             "next_edges": list(rec["episode"].get("next_edges") or []),
+            "projection_dirty": bool(rec.get("projection_dirty")),
         }
 
     def brief_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
@@ -306,9 +314,12 @@ class DramaService(DramaN2Ops):
             "outline": deepcopy(rec["outline"]),
             "cast": deepcopy(rec["cast"]) if rec.get("cast") else None,
             "next_edges": list(rec["episode"].get("next_edges") or []),
+            "skill_paths": list(rec.get("source_skills") or []),
         }
         if warnings:
             env["warnings"] = list(warnings)
+        if rec.get("projection_dirty"):
+            env["projection_dirty"] = True
         return env
 
     def _set_cast_change_hint(
@@ -317,12 +328,21 @@ class DramaService(DramaN2Ops):
         *,
         added: list[dict[str, Any]],
         source: str,
+        cast_version_old: int | None = None,
     ) -> None:
+        new_ver = (rec.get("cast") or {}).get("version") or 0
+        old_ver = new_ver - 1 if cast_version_old is None else cast_version_old
+        if old_ver < 0:
+            old_ver = 0
         rec["cast_change_hint"] = {
             **CAST_CHANGED_HINT,
             "added": added,
             "source": source,
-            "cast_version": (rec.get("cast") or {}).get("version") or 0,
+            "cast_version": new_ver,
+            "cast_version_old": old_ver,
+            "cast_version_new": new_ver,
+            "g1b_still_locked": True,
+            "outline_unchanged": True,
         }
 
     def _clear_cast_change_hint(self, rec: dict[str, Any]) -> None:
@@ -1358,6 +1378,7 @@ class DramaService(DramaN2Ops):
         )
         if not existing:
             ident = self._alloc_char(rec)
+            old_ver = rec["cast"].get("version") or 0
             rec["cast"]["characters"].append(
                 {
                     "id": ident,
@@ -1366,9 +1387,14 @@ class DramaService(DramaN2Ops):
                     "library_ref": None,
                 }
             )
-            rec["cast"]["version"] = (rec["cast"].get("version") or 0) + 1
+            rec["cast"]["version"] = old_ver + 1
             rec["cast"]["updated_at"] = now_iso()
-            self._set_cast_change_hint(rec, added=[{"id": ident, "name": name}], source="sidecar")
+            self._set_cast_change_hint(
+                rec,
+                added=[{"id": ident, "name": name}],
+                source="sidecar",
+                cast_version_old=old_ver,
+            )
         # O2: do not unlock/un-confirm G1b; do not mutate outline body.
         self._touch_episode(rec)
         self._commit(rec)

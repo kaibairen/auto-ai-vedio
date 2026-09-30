@@ -16,8 +16,17 @@ def _setup_locked(client):
     )
     client.put(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/brief",
-        json={"title_intent": "被流放的庶女在边关翻盘", "lane_preference": "female"},
+        json={
+            "title_intent": "被流放的庶女在边关翻盘",
+            "lane_preference": "female",
+            "hero_one_line": "重生女主",
+        },
     )
+    confirm = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/intent/confirm",
+        json={"actor": "eng-018a"},
+    )
+    assert confirm.status_code == 200, confirm.text
     client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/outline",
         json={"lane": "female", "provider": "fixture"},

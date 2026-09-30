@@ -13,6 +13,9 @@
       <span class="badge">D-N0 / A2 / D-N1 / D-N2</span>
       <span class="badge muted" id="hdr-intent">intent:draft</span>
       <span class="badge muted">017a named-cast · 018c · docs≠PASS</span>
+      <span class="badge muted" id="hdr-lane">lane:unset</span>
+      <span class="badge muted" id="hdr-cast">cast v–</span>
+      <span class="badge muted" id="hdr-profile">profile:–</span>
     </div>
     <div class="meta" id="hdr-meta">未建集</div>
   </header>
@@ -23,14 +26,17 @@
     <button data-screen="b">B · D-N1 Outline</button>
     <button data-screen="c">C · 门 G1b</button>
     <button data-screen="d">D · Locked</button>
-    <button data-screen="e">E · D-N2 / G2</button>
+    <button data-screen="e">E · D-N2 分镜</button>
+    <button data-screen="f">F · 门 G2</button>
+    <button data-screen="g">G · D-N2 Locked</button>
   </nav>
   <p class="banner" id="banner" hidden></p>
   <p class="banner warn" id="cast-hint" hidden></p>
 
   <section id="screen-hub" class="screen">
     <h1>Episode Hub</h1>
-    <p>本批薄 UI 只服务 drama 轨。不复用 koubo-N1 壳；无 force_pass。</p>
+    <p>本批工作台只服务 <code>pipeline_profile=drama</code>。不复用 koubo-N1 壳；无 force_pass。投影 <code>.aiv/episode.json</code> ≠ 产品 PASS。</p>
+    <p class="meta" id="hub-ep">EP / lane / profile 将在建集后回显。</p>
     <label>项目名 <input id="proj-name" value="短剧狗粮-01" /></label>
     <button id="btn-proj">创建项目</button>
     <label>集 ID <input id="ep-id" value="EP01" /></label>
@@ -128,6 +134,10 @@
       <label><input type="radio" name="lane1" value="male" /> 男频</label>
     </fieldset>
     <button id="btn-gen" disabled>生成大纲初稿（fixture）</button>
+    <details id="b-skill" class="skill-strip" hidden>
+      <summary>本次 Skill</summary>
+      <div id="b-skill-body" class="skill-body"></div>
+    </details>
     <label>大纲 body_md <textarea id="body-md" rows="14"></textarea></label>
     <label>shot_cap <input id="shot-cap" type="number" value="12" min="1" max="12" /></label>
     <div class="row">
@@ -155,28 +165,90 @@
     <p>next_edges 仅候选，<strong>不</strong>自动开 D-N2。</p>
     <pre id="d-out" class="out"></pre>
     <button id="btn-downstream">读下游定稿（未锁 → 409）</button>
+    <button id="btn-goto-e" type="button">进入 D-N2 分镜</button>
     <pre id="dn-out" class="out"></pre>
   </section>
 
-  <section id="screen-e" class="screen" hidden>
-    <h1>D-N2 分镜 · 具名配角</h1>
-    <p>O1 生成后自动入表；O2 侧车加角<strong>不拆 G1b</strong>、不改大纲正文；O5 默认 warn，G2 pass 遇 <code>named_cast_*</code> 产品门阻断。芯片只映 char_ids，不从台词自动加角。</p>
+  <section id="screen-e" class="screen wide" hidden>
+    <h1>D-N2 分镜表</h1>
+    <p class="meta" id="e-status">draft · cast v– · G1b?</p>
+    <p class="banner warn" id="e-gate" hidden>上游门 G1b 未锁，不能生成空表。请先完成 Outline → 门 G1b pass。</p>
+    <p>O1 生成后自动入表；O2 侧车加角<strong>不拆 G1b</strong>、不改大纲正文。芯片展示 <code>id · name</code>。G1b pass <strong>不</strong>自动切到本页。</p>
+    <p class="meta" id="e-upstream">上游只读摘要将在刷新后出现。</p>
     <div class="row">
-      <button id="btn-sb-gen">生成分镜（fixture）</button>
-      <button id="btn-sb-val">validate</button>
+      <span class="badge muted" id="e-skill-badge">skill:–</span>
+      <span class="badge muted" id="e-shot-count">镜数 0/12</span>
+    </div>
+    <div class="row">
+      <button id="btn-sb-gen">生成分镜</button>
+      <button id="btn-sb-val">校验</button>
+      <button id="btn-sb-save">保存 PUT</button>
+      <button id="btn-sb-up">上移</button>
+      <button id="btn-sb-down">下移</button>
     </div>
     <div class="row">
       <input id="side-name" placeholder="CODEX王子" />
       <input id="side-line" placeholder="具名配角·侧车挂表" />
       <button id="btn-sidecar">侧车加角</button>
     </div>
+    <details id="e-skill" class="skill-strip" hidden>
+      <summary>本次 Skill</summary>
+      <div id="e-skill-body" class="skill-body"></div>
+    </details>
+    <div class="table-wrap">
+      <table id="e-table" class="shots">
+        <thead>
+          <tr>
+            <th></th>
+            <th>seq</th>
+            <th>镜号</th>
+            <th>bridge</th>
+            <th>时长</th>
+            <th>景别</th>
+            <th>运镜</th>
+            <th>画面</th>
+            <th>人物</th>
+            <th>场景</th>
+            <th>台词</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody id="e-tbody"></tbody>
+      </table>
+    </div>
+    <p class="meta" id="e-ready">ready_for_n4 灰态 · next_edges 含 D-N2 且未锁 ≠ 已可下游出片</p>
+    <div id="e-issues" class="issues"></div>
+    <div class="row">
+      <button id="btn-open-g2" type="button">打开门 G2</button>
+    </div>
+    <details>
+      <summary>e-out JSON dump</summary>
+      <pre id="e-out" class="out"></pre>
+    </details>
+  </section>
+
+  <section id="screen-f" class="screen" hidden>
+    <h1>门 G2 · 分镜确认</h1>
+    <p class="meta" id="f-summary">摘要将在打开本页后刷新。</p>
+    <div id="f-issues" class="issues"></div>
+    <p class="hint" id="f-block" hidden>还有未入表的具名角色，无法通过分镜门审。</p>
     <label>actor <input id="g2-actor" value="yangzhou" /></label>
     <label>note <input id="g2-note" placeholder="G2 备注" /></label>
     <div class="row">
-      <button id="btn-g2-reject">G2 驳回</button>
-      <button id="btn-g2-pass" class="primary">G2 通过</button>
+      <button id="btn-g2-back" type="button">退回改表</button>
+      <button id="btn-g2-reject">驳回 reject</button>
+      <button id="btn-g2-pass" class="primary">通过 pass</button>
     </div>
-    <pre id="e-out" class="out"></pre>
+    <p class="meta">valid=true ≠ 产品 PASS。无 force / skip。通过后<strong>不</strong>自动进入 D-N3。</p>
+    <pre id="f-out" class="out"></pre>
+  </section>
+
+  <section id="screen-g" class="screen" hidden>
+    <h1>D-N2 已锁定</h1>
+    <p class="meta" id="g-summary">locked 摘要将在刷新后出现。</p>
+    <p id="g-next">next_edges 文案占位</p>
+    <p class="meta">D-N3 只读提示，<strong>无一键开卡</strong>，不自动导航。</p>
+    <pre id="g-out" class="out"></pre>
   </section>
 
   <script src="/workbench/static/drama.js"></script>

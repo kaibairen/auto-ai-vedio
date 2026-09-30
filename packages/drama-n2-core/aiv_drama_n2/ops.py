@@ -198,6 +198,12 @@ class DramaN2Ops:
             env["projection_dirty"] = True
         if warnings:
             env["validate_warnings"] = warnings
+        skill_paths = [p for p in (sb.get("skill_paths") or []) if p and p != "none"]
+        src = rec.get("source_storyboard_skill")
+        if src and src not in skill_paths:
+            skill_paths.append(src)
+        env["skill_paths"] = skill_paths
+        env["storyboard_skill"] = sb.get("storyboard_skill")
         hint_fn = getattr(self, "_hint_fields", None)
         if callable(hint_fn):
             env.update(hint_fn(rec))
@@ -359,6 +365,7 @@ class DramaN2Ops:
         sb["shot_count"] = len(rows)
         sb["tool_profile"] = req.tool_profile
         sb["storyboard_skill"] = skill
+        sb["skill_paths"] = [STORYBOARD_SKILL_PATH] if skill == "borrowed_dongman" else []
         sb["locked"] = False
         sb["confirmed_by"] = None
         sb["job_id"] = None

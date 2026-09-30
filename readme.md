@@ -8,7 +8,7 @@ KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）** and **D-N2 
 - `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` — OpenAPI **0.1.0** copies
 - `docs/drama-n0n1.md` · `docs/drama-n2.md` — humans + bots; koubo-N1 isolation
 
-docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. Thin FE for D-N2 is **debt** (API+CLI only).
+docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. 018c workbench ships Screen E/F/G (min table + G2 button state); not a product PASS.
 
 ## Drama D-N0 / D-N1
 
