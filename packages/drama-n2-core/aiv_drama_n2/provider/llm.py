@@ -9,6 +9,7 @@ import httpx
 from aiv_drama.config import SKILL_ENTRY_EXCERPT_LIMIT, SKILL_REFERENCE_EXCERPT_LIMIT, Settings
 from aiv_drama.errors import AppError
 from aiv_drama.provider.llm import _parse_llm_json
+from aiv_drama.skill_trace import load_whitelist, sanitize_export_path
 from aiv_drama_n2.validate import (
     CAMERAS,
     SEEDANCE_SKILL_PATH,
@@ -192,18 +193,21 @@ class LlmStoryboardProvider:
 def _excerpt_borrowed_dongman(settings: Settings) -> tuple[str, list[str]]:
     chunks: list[str] = []
     used: list[str] = []
+    whitelist = load_whitelist(settings.repo_root)
     entry = settings.repo_root / STORYBOARD_SKILL_PATH
     if entry.is_file():
         text = entry.read_text(encoding="utf-8")[:SKILL_ENTRY_EXCERPT_LIMIT]
-        if text.strip():
-            chunks.append(f"### {STORYBOARD_SKILL_PATH}\n{text}")
-            used.append(STORYBOARD_SKILL_PATH)
+        safe = sanitize_export_path(STORYBOARD_SKILL_PATH, repo_root=settings.repo_root, whitelist=whitelist)
+        if text.strip() and safe:
+            chunks.append(f"### {safe}\n{text}")
+            used.append(safe)
     guide = settings.repo_root / STORYBOARD_GUIDE_PATH
     if guide.is_file():
         text = guide.read_text(encoding="utf-8")[:SKILL_REFERENCE_EXCERPT_LIMIT]
-        if text.strip():
-            chunks.append(f"### {STORYBOARD_GUIDE_PATH}\n{text}")
-            used.append(STORYBOARD_GUIDE_PATH)
+        safe = sanitize_export_path(STORYBOARD_GUIDE_PATH, repo_root=settings.repo_root, whitelist=whitelist)
+        if text.strip() and safe:
+            chunks.append(f"### {safe}\n{text}")
+            used.append(safe)
     return "\n\n".join(chunks), used
 
 

@@ -76,6 +76,7 @@ class LlmProvider:
             "rules": rules,
             "skill_excerpt": skill_excerpt,
             "skill_references_excerpt": refs_excerpt,
+            "skill_paths": entry_paths + ref_paths,
         }
         try:
             resp = httpx.post(

@@ -5,6 +5,9 @@ import io
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from aiv_drama.skill_trace import excerpt_projection
 from aiv_drama.store import atomic_write_text
 from aiv_schema.models import NODE_DN2
 
@@ -84,13 +87,29 @@ def write_storyboard_md(episode_dir: Path, ep: str, storyboard: dict[str, Any]) 
         f"ready_for_n4: {str(bool(storyboard.get('ready_for_n4'))).lower()}",
         f"upstream_outline_version: {storyboard.get('upstream_outline_version')}",
         f"upstream_cast_version: {storyboard.get('upstream_cast_version')}",
-        "---",
-        "",
-        f"# {ep} 分镜",
-        "",
-        "机读权威在 API/DB；本文件为人读投影。景别/运镜为 CAM 英文短码（O7）。",
-        "",
     ]
+    skill_block = yaml.safe_dump(
+        {
+            "skill_paths": list(storyboard.get("skill_paths") or []),
+            "skill_trace": storyboard.get("skill_trace") or "none",
+            "skill_trace_reason": storyboard.get("skill_trace_reason"),
+            "excerpts": excerpt_projection(storyboard.get("excerpts") or [], include_text=False),
+        },
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    ).rstrip()
+    fm.extend(skill_block.splitlines())
+    fm.extend(
+        [
+            "---",
+            "",
+            f"# {ep} 分镜",
+            "",
+            "机读权威在 API/DB；本文件为人读投影。景别/运镜为 CAM 英文短码（O7）。",
+            "",
+        ]
+    )
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         grouped.setdefault(row.get("bridge_id") or "?", []).append(row)

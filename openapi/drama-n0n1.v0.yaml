@@ -292,6 +292,9 @@ paths:
         `locked=true` 且未先 unlock-edit → 409 `locked`。
         禁止大纲含提示词/宫格/出片参数 → 422 `outline_contains_prompts`。
         `shot_cap` 默认 12；硬超上限 → 422 `shot_cap_exceeded`（PRD：硬/软待 SYNC，本契约狗粮按硬）。
+        018b：成功响应 `outline` 带回 `skill_paths` + `skill_trace`（`recorded|none`）+ `excerpts`
+        （短摘录 + sha256；单 path `text` ≤2000）。空注入须 `skill_trace=none` + `skill_trace_reason`，
+        与字段缺失（漏记）可区分。禁止未授权本机绝对路径。
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -879,6 +882,22 @@ components:
         next_edges:
           type: array
           items: { type: string }
+    SkillExcerpt:
+      type: object
+      required: [path, chars, hash]
+      description: >
+        018b 可观测摘录。hash = 可读全文 UTF-8 的 sha256 hex，否则为摘录字节 sha256。
+        优先短 text + hash；体积极限可 text=null 仅保留 hash+chars+start/end。
+        单 path text ≤2000 Unicode 字符。
+      properties:
+        path:
+          type: string
+          description: 仓内相对路径或 mirror:<name>/…；禁止未授权绝对家目录路径
+        chars: { type: integer, minimum: 0, description: 全文 Unicode 长度 }
+        hash: { type: string, description: sha256 hex（全文优先） }
+        start: { type: integer, nullable: true }
+        end: { type: integer, nullable: true }
+        text: { type: string, nullable: true, description: 短摘录；单 path ≤2000 }
     OutlineDraft:
       type: object
       required: [body_md, lane, shot_cap, version, locked]
@@ -899,6 +918,29 @@ components:
         confirmed_by: { type: string, nullable: true }
         updated_at: { type: string, format: date-time }
         job_id: { type: string, nullable: true }
+        source_skills:
+          type: array
+          items: { type: string }
+          description: 与 skill_paths 同义或超集；018b 起 JSON 回显
+        skill_paths:
+          type: array
+          items: { type: string }
+          description: 本次注入的仓内相对路径；空注入为 [] 且 skill_trace=none
+        skill_trace:
+          type: string
+          enum: [recorded, none]
+          description: recorded=有可复核注入；none=显式未注入（须 reason）
+        skill_trace_reason:
+          type: string
+          nullable: true
+          description: skill_trace=none 时必填，如 fixture_no_skill | reset | not_generated
+        skill_excerpt:
+          type: string
+          nullable: true
+          description: 各 excerpt.text 用 \\n---\\n 拼接后再截断
+        excerpts:
+          type: array
+          items: { $ref: '#/components/schemas/SkillExcerpt' }
     OutlineGenerateRequest:
       type: object
       properties:

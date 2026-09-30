@@ -5,6 +5,7 @@ from typing import Any
 
 import yaml
 
+from aiv_drama.skill_trace import excerpt_projection
 from aiv_drama.store import atomic_write_text
 from aiv_schema.models import NODE_DN1
 
@@ -35,6 +36,7 @@ def write_outline(
     source_skills: list[str] | None = None,
 ) -> Path:
     path = episode_dir / f"{ep}-大纲.md"
+    skills = source_skills or outline.get("source_skills") or outline.get("skill_paths") or []
     fm = {
         "node": NODE_DN1,
         "lane": outline.get("lane"),
@@ -42,7 +44,11 @@ def write_outline(
         "version": outline.get("version"),
         "confirmed_by": outline.get("confirmed_by"),
         "shot_cap": outline.get("shot_cap"),
-        "source_skills": source_skills or outline.get("source_skills") or [],
+        "source_skills": skills,
+        "skill_paths": outline.get("skill_paths") or skills,
+        "skill_trace": outline.get("skill_trace") or ("recorded" if skills else "none"),
+        "skill_trace_reason": outline.get("skill_trace_reason"),
+        "excerpts": excerpt_projection(outline.get("excerpts") or [], include_text=False),
     }
     body = _strip_frontmatter(outline.get("body_md") or "")
     text = "---\n" + _dump_yaml(fm) + "---\n" + body

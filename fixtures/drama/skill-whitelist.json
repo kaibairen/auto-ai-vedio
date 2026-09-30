@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "repo_relative_allow": [
+    ".skill/writing/女频短剧编剧/",
+    ".skill/writing/男频短剧编剧/",
+    ".skill/writing/动态漫-转分镜/"
+  ],
+  "authorized_mirrors": [
+    {
+      "name": "local-learn",
+      "relative_export_prefix": "mirror:local-learn/"
+    }
+  ],
+  "deny_absolute_prefixes": ["/Users/", "/home/"],
+  "inject_blacklist": [
+    ".skill/generation/Seedance2.0-分镜/"
+  ]
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — skill-trace on outline + storyboard generate (docs≠PASS)
+
+Observability for formal **D-N1 outline** and **D-N2 storyboard** generate (018b). OpenAPI stays **0.1.0**.
+
+- Response/projection: `skill_paths[]`, `skill_trace` (`recorded` | `none`), `skill_trace_reason`, `excerpts[{path,chars,hash,start,end,text}]`, optional flat `skill_excerpt`.
+- Empty injection is explicit `skill_trace=none` + reason + `skill_paths=[]` — distinguishable from missing fields (漏记).
+- Short excerpt + sha256 of full file UTF-8; per-path `text` ≤2000. No unauthorized host absolute paths.
+- Existing flags kept (`source_skills`, `storyboard_skill=borrowed_dongman`). Nonempty paths ⇒ flag used; used flag ⇒ paths or explicit none.
+
 ## 0.2.0 — drama D-N2 storyboard + gate G2 (docs≠PASS)
 
 Implements `pipeline_profile=drama` **D-N2** (storyboard) + gate **G2** against OpenAPI **0.1.0**.

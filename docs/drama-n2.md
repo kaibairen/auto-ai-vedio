@@ -69,6 +69,19 @@ aiv drama storyboard get --project proj_01 --ep EP01
 
 `provider` 分支：`fixture` / `skill` → `FixtureStoryboardProvider`；`llm`（及 `openai` / `openai_compat`）→ `LlmStoryboardProvider`。llm 注入锁态大纲+cast + 只读借用 `.skill/writing/动态漫-转分镜` 摘录，**不**注入 Seedance 出片 Skill。
 
+### Skill 可观测（018b）
+
+正式 `generateStoryboard` / GET 的 `storyboard` 与 `EP##-分镜.md` / `.aiv/episode.json` `storyboard_meta` 带回：
+
+| 字段 | 口径 |
+|------|------|
+| `skill_paths[]` | 转分镜 KEEP（通常 2）；禁止 Seedance 出片路径与未授权绝对路径 |
+| `skill_trace` | `recorded` 或显式 `none` + `skill_trace_reason` |
+| `excerpts[]` | 短摘录 + 全文 sha256（`chars`/`start`/`end`） |
+| `storyboard_skill` | 保留；`borrowed_dongman` 且 paths 空须显式 none（禁双空） |
+
+未生成空表：`skill_trace=none` · `skill_trace_reason=not_generated`。可观测 ≠ G2 / 质量 PASS。
+
 ---
 
 ## LLM 环境（与 D-N1 相同）

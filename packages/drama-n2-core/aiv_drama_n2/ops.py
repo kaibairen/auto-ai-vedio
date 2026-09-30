@@ -4,6 +4,12 @@ from copy import deepcopy
 from typing import Any
 
 from aiv_drama.errors import AppError
+from aiv_drama.skill_trace import (
+    STORYBOARD_KEEP_PATHS,
+    merge_skill_trace,
+    none_skill_trace,
+    record_skill_paths,
+)
 from aiv_drama.validate import check_if_match, now_iso
 from aiv_drama_n2.models import (
     StoryboardGenerateRequest,
@@ -98,6 +104,7 @@ class DramaN2Ops:
             "shot_count": 0,
             "tool_profile": None,
             "storyboard_skill": "borrowed_dongman",
+            **none_skill_trace("not_generated"),
             "upstream_outline_version": outline.get("version") or 0,
             "upstream_cast_version": cast.get("version") or 0,
             "stale": False,
@@ -113,7 +120,13 @@ class DramaN2Ops:
 
     def _storyboard_view(self, rec: dict[str, Any]) -> dict[str, Any]:
         if rec.get("storyboard"):
-            return deepcopy(rec["storyboard"])
+            sb = deepcopy(rec["storyboard"])
+            if not sb.get("skill_trace"):
+                if sb.get("storyboard_skill") == "borrowed_dongman" and (sb.get("rows") or []):
+                    merge_skill_trace(sb, none_skill_trace("manual_write"))
+                else:
+                    merge_skill_trace(sb, none_skill_trace("not_generated"))
+            return sb
         return self._empty_storyboard(rec)
 
     def _pin_upstream(self, rec: dict[str, Any], sb: dict[str, Any]) -> None:
@@ -247,6 +260,10 @@ class DramaN2Ops:
             sb["tool_profile"] = body.tool_profile
         if body.storyboard_skill:
             sb["storyboard_skill"] = body.storyboard_skill
+        if body.storyboard_skill == "custom":
+            merge_skill_trace(sb, none_skill_trace("custom_no_skill_injection"))
+        elif not sb.get("skill_trace") or sb.get("skill_trace_reason") == "not_generated":
+            merge_skill_trace(sb, none_skill_trace("manual_write"))
         sb["shot_cap"] = cap
         sb["rows"] = rows
         sb["shot_count"] = len(rows)
@@ -326,6 +343,17 @@ class DramaN2Ops:
         sb["locked"] = False
         sb["confirmed_by"] = None
         sb["job_id"] = None
+        if skill == "borrowed_dongman":
+            merge_skill_trace(
+                sb,
+                record_skill_paths(
+                    list(STORYBOARD_KEEP_PATHS),
+                    repo_root=self.settings.repo_root,
+                    empty_reason="whitelist_empty",
+                ),
+            )
+        else:
+            merge_skill_trace(sb, none_skill_trace("custom_no_skill_injection"))
         rec["source_storyboard_skill"] = STORYBOARD_SKILL_PATH if skill == "borrowed_dongman" else None
         self._pin_upstream(rec, sb)
         self._finish_storyboard(rec, sb, actor=req.actor)
@@ -450,6 +478,7 @@ class DramaN2Ops:
         sb["confirmed_by"] = None
         sb["ready_for_n4"] = False
         sb["job_id"] = None
+        merge_skill_trace(sb, none_skill_trace("reset"))
         self._pin_upstream(rec, sb)
         self._finish_storyboard(rec, sb, actor=req.actor)
         rec["gate_g2"]["state"] = "idle"

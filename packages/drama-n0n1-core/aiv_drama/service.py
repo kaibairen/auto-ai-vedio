@@ -32,6 +32,13 @@ from aiv_drama.projection import (
     write_library_character,
     write_outline,
 )
+from aiv_drama.skill_trace import (
+    assert_no_host_abs_paths,
+    excerpt_projection,
+    merge_skill_trace,
+    none_skill_trace,
+    record_skill_paths,
+)
 from aiv_drama.provider import get_provider
 from aiv_drama.store import JsonStore
 from aiv_drama.validate import (
@@ -178,7 +185,12 @@ class DramaService(DramaN2Ops):
             if rec.get("brief"):
                 write_brief(episode_dir, ep, rec["brief"])
             if rec.get("outline"):
-                write_outline(episode_dir, ep, rec["outline"], rec.get("source_skills"))
+                write_outline(
+                    episode_dir,
+                    ep,
+                    rec["outline"],
+                    rec.get("source_skills") or rec["outline"].get("source_skills"),
+                )
             if rec.get("cast"):
                 write_cast(episode_dir, ep, rec["cast"])
             sb = rec.get("storyboard")
@@ -223,6 +235,15 @@ class DramaService(DramaN2Ops):
                 "stale_downstream": list(stale_nodes),
                 "locks": deepcopy(rec["episode"]["locks"]),
             }
+            outline = rec.get("outline") or {}
+            if outline:
+                meta["outline_meta"] = {
+                    "source_skills": list(rec.get("source_skills") or outline.get("source_skills") or []),
+                    "skill_paths": list(outline.get("skill_paths") or []),
+                    "skill_trace": outline.get("skill_trace"),
+                    "skill_trace_reason": outline.get("skill_trace_reason"),
+                    "excerpts": excerpt_projection(outline.get("excerpts") or []),
+                }
             if sb:
                 meta["storyboard_meta"] = {
                     "storyboard_skill": sb.get("storyboard_skill"),
@@ -230,9 +251,14 @@ class DramaService(DramaN2Ops):
                     "shot_budget": sb.get("shot_cap"),
                     "upstream_outline_version": sb.get("upstream_outline_version"),
                     "upstream_cast_version": sb.get("upstream_cast_version"),
+                    "skill_paths": list(sb.get("skill_paths") or []),
+                    "skill_trace": sb.get("skill_trace"),
+                    "skill_trace_reason": sb.get("skill_trace_reason"),
+                    "excerpts": excerpt_projection(sb.get("excerpts") or []),
                 }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)
+            assert_no_host_abs_paths(episode_dir)
             rec["projection_dirty"] = False
         except Exception:  # noqa: BLE001
             rec["projection_dirty"] = True
@@ -284,12 +310,24 @@ class DramaService(DramaN2Ops):
     def outline_envelope(self, rec: dict[str, Any], *, warnings: list[str] | None = None) -> dict[str, Any]:
         if not rec.get("outline"):
             raise AppError(404, "not_found", "outline not found", node=NODE_DN1)
+        outline = deepcopy(rec["outline"])
+        if not outline.get("skill_trace"):
+            skills = list(rec.get("source_skills") or outline.get("source_skills") or [])
+            if skills:
+                merge_skill_trace(
+                    outline,
+                    record_skill_paths(skills, repo_root=self.settings.repo_root, empty_reason="whitelist_empty"),
+                )
+                outline["source_skills"] = list(outline.get("skill_paths") or [])
+            else:
+                merge_skill_trace(outline, none_skill_trace("not_generated"))
+                outline["source_skills"] = []
         env: dict[str, Any] = {
             "ok": True,
             "project_id": rec["episode"]["project_id"],
             "episode_id": rec["episode"]["episode_id"],
             "node": NODE_DN1,
-            "outline": deepcopy(rec["outline"]),
+            "outline": outline,
             "cast": deepcopy(rec["cast"]) if rec.get("cast") else None,
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
@@ -849,7 +887,12 @@ class DramaService(DramaN2Ops):
         )
         reject_outline_prompts(draft.body_md)
         require_shot_cap(draft.shot_cap)
-        rec["source_skills"] = list(draft.source_skills)
+        trace = record_skill_paths(
+            list(draft.source_skills),
+            repo_root=self.settings.repo_root,
+            empty_reason="fixture_no_skill" if not draft.source_skills else "whitelist_empty",
+        )
+        rec["source_skills"] = list(trace["skill_paths"])
         prev_outline_ver = (rec.get("outline") or {}).get("version") or 0
         rec["outline"] = {
             "body_md": draft.body_md,
@@ -860,7 +903,9 @@ class DramaService(DramaN2Ops):
             "confirmed_by": None,
             "updated_at": now_iso(),
             "job_id": None,
+            "source_skills": list(trace["skill_paths"]),
         }
+        merge_skill_trace(rec["outline"], trace)
         rec["cast"] = self._merge_generated_cast(rec, draft, project_id, warnings=warnings)
         rec["gate"]["state"] = "ready"
         rec["gate"]["locked"] = False
@@ -931,6 +976,9 @@ class DramaService(DramaN2Ops):
         rec["outline"]["locked"] = False
         rec["outline"]["confirmed_by"] = None
         rec["outline"]["job_id"] = None
+        merge_skill_trace(rec["outline"], none_skill_trace("reset"))
+        rec["outline"]["source_skills"] = []
+        rec["source_skills"] = []
         if req.clear_cast and rec.get("cast"):
             rec["cast"]["characters"] = []
             rec["cast"]["scenes"] = []

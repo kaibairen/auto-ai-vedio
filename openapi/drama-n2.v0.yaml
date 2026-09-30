@@ -172,6 +172,8 @@ paths:
       description: |
         前置 G1b locked；否则 409。已锁分镜须 unlock_edit。
         Skill 只读借用动态漫-转分镜（O2）；不注入 Seedance 出片 Skill；无独立剧本资源（O1）。
+        018b：成功响应 `storyboard` 带回 `skill_paths` + `skill_trace`（`recorded|none`）+ `excerpts`
+        （短摘录 + sha256）。`borrowed_dongman` 须 paths 非空或显式 none+reason；禁止 Seedance 出片路径与未授权绝对路径。
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -635,6 +637,37 @@ components:
         updated_at: { type: string, format: date-time }
         updated_by: { type: string, nullable: true }
         job_id: { type: string, nullable: true }
+        skill_paths:
+          type: array
+          items: { type: string }
+          description: 本次注入的仓内相对路径（转分镜 KEEP）；禁止 Seedance / 未授权绝对路径
+        skill_trace:
+          type: string
+          enum: [recorded, none]
+          description: recorded=有可复核注入；none=显式未注入（须 reason）
+        skill_trace_reason:
+          type: string
+          nullable: true
+        skill_excerpt:
+          type: string
+          nullable: true
+        excerpts:
+          type: array
+          items: { $ref: '#/components/schemas/SkillExcerpt' }
+
+    SkillExcerpt:
+      type: object
+      required: [path, chars, hash]
+      description: >
+        018b 可观测摘录。hash = 可读全文 UTF-8 的 sha256 hex，否则为摘录字节 sha256。
+        优先短 text + hash；单 path text ≤2000 Unicode 字符。
+      properties:
+        path: { type: string }
+        chars: { type: integer, minimum: 0 }
+        hash: { type: string }
+        start: { type: integer, nullable: true }
+        end: { type: integer, nullable: true }
+        text: { type: string, nullable: true }
 
     StoryboardRowWrite:
       type: object

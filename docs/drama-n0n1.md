@@ -83,6 +83,19 @@ LLM：`provider=llm` 且设置 `AIV_OPENAI_API_KEY`。无密钥时请用 fixture
 
 不改教材正文。
 
+### Skill 可观测（018b）
+
+正式 `generateOutline` / GET 的 `outline` 带回：
+
+| 字段 | 口径 |
+|------|------|
+| `skill_paths[]` | 仓内相对路径（女/男频 KEEP）；禁止 `$HOME` / `/Users/` / `/home/` |
+| `skill_trace` | `recorded`（paths 非空）或显式 `none`（`skill_paths=[]` + `skill_trace_reason`） |
+| `excerpts[]` | `{path, chars, hash, start, end, text?}` — 短摘录 + 全文 sha256；单 path text ≤2000 |
+| `source_skills` | 与 `skill_paths` 同义回显（015 债） |
+
+空注入与漏记可区分：缺 `skill_trace` ≠ `none`。可观测 ≠ 质量 PASS。
+
 ---
 
 ## 盘投影（API 为源）

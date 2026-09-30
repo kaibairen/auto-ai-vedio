@@ -6,3 +6,4 @@
 
 - `outline-female.md` — 女频对照
 - `outline-male.md` — 男频对照
+- `skill-whitelist.json` — 018b LEARN KEEP 注入白名单（BE/ENG 加载；可被 `AIV_SKILL_WHITELIST_FILE` 覆盖）
