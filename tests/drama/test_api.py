@@ -35,11 +35,13 @@ def _confirm(client, pid):
 def test_health(client):
     data = client.get("/health").json()
     assert data["ok"] is True
-    assert data["nodes"] == ["D-N0", "D-N1", "D-N2"]
+    assert data["nodes"] == ["D-N0", "D-N1", "D-N2", "D-N3"]
     assert data["gate"] == "g1b"
-    assert data["gates"] == ["g1b", "g2"]
+    assert data["gates"] == ["g1b", "g2", "g3"]
     assert data["koubo_n1"] is False
     assert data["docs_pass"] is False
+    assert data["auto_open_dn3"] is False
+    assert data["auto_open_dn4"] is False
 
 
 def test_openapi_copy_served(client):

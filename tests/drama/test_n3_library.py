@@ -38,7 +38,7 @@ def test_library_schema_characters_and_scene_stub(svc, data_dir):
     pol = svc.get_library_policy(pid)
     assert pol["project_scope"] == "project"
     assert pol["project_scope_capability"]["chosen"] is None
-    assert pol["project_scope_capability"]["pending_hanging"] is True
+    assert pol["project_scope_capability"]["status"] == "pending_hanging"
     bundle = hanging_bundle()
     assert bundle["d13_promote"]["auto_promote"] is False
     assert bundle["d13_promote"]["chosen"] is None
