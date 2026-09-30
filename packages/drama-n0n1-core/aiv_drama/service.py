@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 from aiv_drama.config import SHOT_CAP_HARD, Settings
+from aiv_drama.copy_contract import catalog_public, evaluate
 from aiv_drama.errors import AppError
 from aiv_drama.ids import next_id, require_known_or_omit
 from aiv_drama.intent import (
@@ -1547,3 +1548,13 @@ class DramaService(DramaN2Ops):
             "cast": deepcopy(rec["cast"]),
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
+
+    def evaluate_copy_contract(self, project_id: str, ep: str, raw: dict[str, Any] | None) -> dict[str, Any]:
+        """018d GAP-COPY overlay. Does not rewrite generate / adsorb / G2."""
+        incoming = raw if isinstance(raw, dict) else {}
+        reject_force_keys(incoming)
+        rec = self._rec(project_id, validate_ep(ep))
+        return evaluate(incoming, rec=rec)
+
+    def error_catalog(self) -> dict[str, Any]:
+        return catalog_public()

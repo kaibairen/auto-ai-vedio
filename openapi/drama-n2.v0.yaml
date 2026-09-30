@@ -30,6 +30,8 @@ info:
     - G2 pass → locked；`next_edges:["D-N3"]`；**不自动开 D-N3**
     - 锁后 unlock_edit → version++、清 locked、stale D-N3+
     - 禁完整出片提示词字段 → **422 `prompt_forbidden`**
+    - 018d 诚实增量：ErrorCode 补 `named_cast_gate` / `named_cast_missing` / `ready_for_n4_requires_tool_profile`；
+      `POST .../drama/copy-contract/evaluate` 出片横幅机检。**version 仍 0.1.0**，不另起 0.2.0。
   contact:
     name: AI视频-后端
   x-assign: AIV-DN2-BE-001
@@ -402,6 +404,65 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /projects/{project_id}/episodes/{ep}/drama/copy-contract/evaluate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [StoryboardDraft]
+      operationId: evaluateCopyContractN2
+      summary: GAP-COPY 出片档 / ready_for_n4 机检
+      description: |
+        薄 overlay，不改 generate / adsorb / G2。未选工具且未请求 ready → 200 + `tool_profile_unset` 中文 warn。
+        已选 + 错档 → 422 `duration_bucket_mismatch`。
+        强行 ready 未选工具 → 422 `ready_for_n4_requires_tool_profile`。
+        G2 pass 仍有阻断具名 issue → 422 `named_cast_gate`。docs≠PASS。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                tool_profile: { $ref: '#/components/schemas/ToolProfile', nullable: true }
+                rows:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+                ready_for_n4: { type: boolean }
+                g2_pass: { type: boolean }
+                named_cast_issues:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+                named_cast_check: { type: string, enum: [off, warn, error] }
+      responses:
+        '200':
+          description: warn-only（未选工具不挡 G2）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, docs_pass, chip]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  node: { type: string, enum: [D-N2] }
+                  copy_contract: { type: string }
+                  docs_pass: { type: boolean, enum: [false] }
+                  warnings:
+                    type: array
+                    items: { $ref: '#/components/schemas/ValidateIssue' }
+                  issues:
+                    type: array
+                    items: { $ref: '#/components/schemas/ValidateIssue' }
+                  chip: { type: string }
+                  ready_for_n4: { type: boolean }
+                  g2_pass_blocked: { type: boolean }
+                  hints: { type: object, additionalProperties: true }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -494,7 +555,31 @@ components:
             duration_bucket_mismatch:
               value:
                 ok: false
-                error: { code: duration_bucket_mismatch, message: duration_s not in tool_duration_bucket, details: { duration_s: 7, tool_duration_bucket: 'seedance:5' } }
+                error:
+                  code: duration_bucket_mismatch
+                  message: 还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。
+                  messages:
+                    zh: 还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。
+                    en: One or more shot durations do not match the selected tool duration buckets.
+                  details: { duration_s: 7, tool_duration_bucket: 'seedance:5' }
+            named_cast_gate:
+              value:
+                ok: false
+                error:
+                  code: named_cast_gate
+                  message: 还有未入表的具名角色，无法通过分镜门审。
+                  messages:
+                    zh: 还有未入表的具名角色，无法通过分镜门审。
+                    en: Named-cast issues remain; gate G2 cannot pass.
+            ready_for_n4_requires_tool_profile:
+              value:
+                ok: false
+                error:
+                  code: ready_for_n4_requires_tool_profile
+                  message: 请先选择出片工具。未选工具时不能进入出片准备。
+                  messages:
+                    zh: 请先选择出片工具。未选工具时不能进入出片准备。
+                    en: Select a tool profile before marking ready for n4.
             cast_id_unknown:
               value:
                 ok: false
@@ -525,12 +610,32 @@ components:
         - provider
         - projection_dirty
         - wrong_profile
+        - named_cast_gate
+        - named_cast_missing
+        - ready_for_n4_requires_tool_profile
+    ValidateIssueCode:
+      type: string
+      description: |
+        用户可见 issue / warn（不全部抬 HTTP ErrorCode）。
+        `tool_profile_unset` 为 O9 warn：不挡 G2，挡 ready_for_n4。
+      enum:
+        - tool_profile_unset
+        - named_cast_unreferenced
+        - named_cast_row_gap
+        - named_cast_auto_merged
     ErrorBody:
       type: object
       required: [code, message]
       properties:
         code: { $ref: '#/components/schemas/ErrorCode' }
-        message: { type: string }
+        message:
+          type: string
+          description: 用户通道（中文优先；#12 已有中文 raise 保持原句）
+        messages:
+          type: object
+          properties:
+            zh: { type: string }
+            en: { type: string }
         details: { type: object, additionalProperties: true }
     ErrorEnvelope:
       type: object

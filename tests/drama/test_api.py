@@ -47,6 +47,11 @@ def test_openapi_copy_served(client):
     assert res.status_code == 200
     assert "0.1.0" in res.text
     assert "D-N0" in res.text
+    n2 = client.get("/openapi/drama-n2.v0.yaml")
+    assert n2.status_code == 200
+    assert "named_cast_gate" in n2.text
+    assert "duration_bucket_mismatch" in n2.text
+    assert "ready_for_n4_requires_tool_profile" in n2.text
 
 
 def test_force_pass_on_http_confirm(client):

@@ -310,6 +310,23 @@ async def confirm_gate(
     return _svc(request).confirm_gate(project_id, ep, raw, idempotency_key=idempotency_key)
 
 
+@router.get("/drama/error-catalog")
+def error_catalog(request: Request) -> dict[str, Any]:
+    """018d bilingual ErrorCode / GAP-COPY catalog. docs≠PASS."""
+    return _svc(request).error_catalog()
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/copy-contract/evaluate")
+async def evaluate_copy_contract(
+    project_id: str,
+    ep: str,
+    request: Request,
+) -> dict[str, Any]:
+    """018d GAP-COPY overlay: tool_profile / duration chips / ready_for_n4."""
+    raw = await _raw(request)
+    return _svc(request).evaluate_copy_contract(project_id, ep, raw)
+
+
 @router.get("/projects/{project_id}/episodes/{ep}/drama/downstream")
 def get_downstream(project_id: str, ep: str, request: Request) -> dict[str, Any]:
     """D-N2 consumer read. 409 upstream_unlocked if G1b not locked. Does not start D-N2."""

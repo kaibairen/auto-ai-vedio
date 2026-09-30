@@ -156,9 +156,12 @@ G1b pass 的 `next_edges: ["D-N2"]` 与 G2 pass 的 `["D-N3"]` 都只是导航�
 | `prompt_forbidden` | 422 | 完整出片提示词入表 / 禁列 |
 | `cast_id_unknown` | 422 | 具名 CHAR/SCENE ∉ cast |
 | `named_cast_gate` | 422 | G2 pass 时仍有 `named_cast_*`（017a O5 产品门） |
+| `named_cast_missing` | 422 | `named_cast_check=error` 时具名未入表抬 HTTP |
 | `bridge_id_missing` | 422 | 缺 bridge_id |
 | `cam_enum_invalid` | 422 | shot_size/camera 非 CAM 英文闭集 |
 | `duration_bucket_mismatch` | 422 | 已选 tool_profile 且 duration↔bucket 不一致 |
+| `ready_for_n4_requires_tool_profile` | 422 | 未选工具却标记可出片（evaluate overlay） |
+| `tool_profile_unset` | warn | 未选工具；不挡 G2，挡 ready_for_n4 |
 | `wrong_profile` | 422 | pipeline_profile≠drama |
 
 景别跳变 J1–J2：**warn**，不硬拒。

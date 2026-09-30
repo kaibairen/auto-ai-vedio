@@ -151,4 +151,8 @@ libraries/characters/CHAR-01/v1/character.yaml   # 不在 episodes/** 下
 | `cast_incomplete` | 422 | pass 时缺人/缺场 |
 | `shot_cap_exceeded` | 422 | 超 12 |
 
+018d 中英目录：`GET /api/v0/drama/error-catalog`。出片档机检：`POST .../drama/copy-contract/evaluate`（不改 generate）。
+OpenAPI 仍标 **0.1.0**（诚实增量，非 0.2.0）。契约 CI：`tests/contract/test_error_codes_sync.py`。
+docs≠PASS；ForcePass=never。
+
 CONTRACT-BE §8 测试矩阵见 `tests/drama/test_contract_matrix.py`。

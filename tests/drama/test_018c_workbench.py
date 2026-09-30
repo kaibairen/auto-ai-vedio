@@ -41,6 +41,14 @@ def test_workbench_html_has_e_f_g_and_a2():
     assert "force_pass" not in js
     assert "无 force_pass" in html
     assert "无一键开卡" in html
+    assert 'id="export-chip"' in html
+    assert "出片：未选工具" in html
+    assert 'id="tool-profile"' in html
+    assert "COPY_BANNERS" in js
+    assert "尚未选择出片工具" in js
+    assert "对不上当前工具档" in js
+    assert "请先选择出片工具" in js
+    assert "ready_for_n4" in html
 
 
 def test_workbench_served(client):
