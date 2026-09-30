@@ -45,7 +45,17 @@ class DramaBriefWrite(BaseModel):
     setting_notes: str | None = None
     lane_preference: Literal["female", "male", "unset"] | None = None
     preattached_character_ids: list[str] | None = None
+    hero_one_line: str | None = None
     confirm_stale_outline: bool = False
+    actor: str | None = None
+
+
+class ConfirmDramaIntentRequest(BaseModel):
+    actor: str | None = None
+    expected_fingerprint: str | None = None
+
+
+class ClearDramaIntentRequest(BaseModel):
     actor: str | None = None
 
 
@@ -74,6 +84,7 @@ class CastRowIn(BaseModel):
     name: str
     one_line: str
     library_ref: LibraryRef | None = None
+    is_hero: bool | None = None
 
 
 class CastWrite(BaseModel):

@@ -10,7 +10,7 @@ EP_RE = re.compile(r"^EP\d{2,}$")
 CHAR_NUM_RE = re.compile(r"^CHAR-(\d+)$")
 SCENE_NUM_RE = re.compile(r"^SCENE-(\d+)$")
 
-FORCE_KEYS = ("force_pass", "force", "skip_gate")
+FORCE_KEYS = ("force_pass", "force", "skip_gate", "skip_intent")
 
 PROMPT_MARKERS = (
     "宫格",

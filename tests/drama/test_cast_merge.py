@@ -13,7 +13,7 @@ from aiv_drama.models import (
 )
 from aiv_drama.service import DramaService
 
-from tests.drama.helpers import generate_ready, seed_project_episode
+from tests.drama.helpers import generate_ready, persist_and_confirm_intent, seed_project_episode
 
 
 def _draft(
@@ -45,7 +45,11 @@ def _seed_programmer_doubao(svc: DramaService, *, lane: str = "female") -> str:
     svc.put_brief(
         pid,
         "EP01",
-        DramaBriefWrite(title_intent="程序员与两王子和豆包", lane_preference=lane),  # type: ignore[arg-type]
+        DramaBriefWrite(
+            title_intent="程序员与两王子和豆包",
+            lane_preference=lane,  # type: ignore[arg-type]
+            hero_one_line="程序员·男",
+        ),
     )
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=1))
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-02", version=1))
@@ -159,6 +163,7 @@ def test_generate_attach_programmer_doubao_cast_is_clean(svc):
 
 def test_lane_l1_warning_not_422(svc):
     pid = _seed_programmer_doubao(svc, lane="female")
+    persist_and_confirm_intent(svc, pid, follow_precast=True)
     env = svc.generate_outline(
         pid,
         "EP01",

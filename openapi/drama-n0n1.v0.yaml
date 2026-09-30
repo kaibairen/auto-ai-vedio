@@ -18,6 +18,7 @@ tags:
   - name: Projects
   - name: Episodes
   - name: DramaBrief
+  - name: DramaIntent
   - name: OutlineDraft
   - name: CastDraft
   - name: Gates
@@ -264,6 +265,132 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}/drama/intent:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [DramaIntent]
+      operationId: getDramaIntent
+      summary: 读集级意图确认态 + 当前 MUST 指纹 / 冲突预览
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DramaIntentEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{project_id}/episodes/{ep}/drama/intent/check:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [DramaIntent]
+      operationId: checkDramaIntent
+      summary: 预览确认门槛（不改态）
+      description: |
+        赛道 B 助手。不写 `intent.confirmed`。`conflict=true` 时给出 `suggested_lane`（跟预挂改 lane）。
+        确认路径无摄影/定妆硬门槛。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DramaIntentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{project_id}/episodes/{ep}/drama/intent/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [DramaIntent]
+      operationId: confirmDramaIntent
+      summary: 确认意图（生成大纲前硬门）
+      description: |
+        方案 A：MUST 齐且 lane×预挂同向后写入集级 `intent.confirmed` + `intent.fingerprint`。
+        **不**写 OutlineDraft，**不**自动 generate。
+        `hero_one_line` 仅会话草稿不可确认——须先薄写 brief/cast 权威字段。
+        lane unset → 422 `lane_required`；title+pin 双空 → 422 `brief_incomplete`；
+        lane×预挂冲突 → 422 `intent_lane_conflict`；`expected_fingerprint` 不符 → 422 `intent_stale`。
+        请求含 force/skip_intent → 400 `force_pass_forbidden`。
+        无摄影/定妆/九宫硬门槛。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmDramaIntentRequest'
+            example:
+              actor: eng-018a
+      responses:
+        '200':
+          description: 已确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DramaIntentEnvelope'
+              example:
+                ok: true
+                node: D-N0
+                intent:
+                  confirmed: true
+                  fingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                  confirmed_at: '2026-09-30T14:00:00Z'
+                  confirmed_by: eng-018a
+                conflict: false
+                can_confirm: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{project_id}/episodes/{ep}/drama/intent/clear:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [DramaIntent]
+      operationId: clearDramaIntent
+      summary: 清确认（MUST 脏清也可隐式调用同一内部函数）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearDramaIntentRequest'
+      responses:
+        '200':
+          description: 已清确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DramaIntentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /projects/{project_id}/episodes/{ep}/drama/outline:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -286,12 +413,14 @@ paths:
       operationId: generateOutline
       summary: 生成大纲（D-N1）
       description: |
+        **018a 意图硬门（方案 A）**：未确认 → **422 `intent_unconfirmed`**；已确认但 MUST 指纹漂移 → **422 `intent_stale`**。
         **D3 provisional（PRD §6 写死）**：生成前请求体 `lane` 或 `brief.lane_preference` 必须为 `female` 或 `male`。
         二者皆为 `unset` / 缺失 → **422 `lane_required`**（禁用生成）。
         brief 须已通过进 D-N1 校验，否则 422 `brief_incomplete`。
         `locked=true` 且未先 unlock-edit → 409 `locked`。
         禁止大纲含提示词/宫格/出片参数 → 422 `outline_contains_prompts`。
         `shot_cap` 默认 12；硬超上限 → 422 `shot_cap_exceeded`（PRD：硬/软待 SYNC，本契约狗粮按硬）。
+        不上 `lane_cast_mismatch`（赛道 B：冲突挡在 confirm）。
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -691,6 +820,27 @@ components:
               value:
                 ok: false
                 error: { code: brief_incomplete, message: title_intent and pin both empty, details: {} }
+            intent_unconfirmed:
+              value:
+                ok: false
+                error:
+                  code: intent_unconfirmed
+                  message: 请先完成意图确认，再生成大纲。
+                  details: { node: D-N0 }
+            intent_stale:
+              value:
+                ok: false
+                error:
+                  code: intent_stale
+                  message: 意图字段已变更，请重新确认后再生成大纲。
+                  details: { node: D-N0 }
+            intent_lane_conflict:
+              value:
+                ok: false
+                error:
+                  code: intent_lane_conflict
+                  message: 赛道与预挂频向冲突，请先一键跟预挂改 lane。
+                  details: { current_lane: female, suggested_lane: male }
             cast_incomplete:
               value:
                 ok: false
@@ -711,6 +861,9 @@ components:
         - outline_contains_prompts
         - shot_cap_exceeded
         - brief_incomplete
+        - intent_unconfirmed
+        - intent_stale
+        - intent_lane_conflict
         - cast_incomplete
         - episode_abandoned
         - force_pass_forbidden
@@ -785,6 +938,7 @@ components:
         aspect_ratio: { type: string, nullable: true, example: '9:16' }
         target_duration_sec: { type: integer, nullable: true }
         locks: { $ref: '#/components/schemas/EpisodeLocks' }
+        intent: { $ref: '#/components/schemas/DramaIntent' }
         versions: { $ref: '#/components/schemas/EpisodeVersions' }
         stale_downstream:
           type: array
@@ -813,6 +967,7 @@ components:
       properties:
         ok: { type: boolean, enum: [true] }
         episode: { $ref: '#/components/schemas/Episode' }
+        intent: { $ref: '#/components/schemas/DramaIntent' }
         next_edges:
           type: array
           items: { type: string }
@@ -847,6 +1002,10 @@ components:
         preattached_character_ids:
           type: array
           items: { type: string }
+        hero_one_line:
+          type: string
+          nullable: true
+          description: 主角身份一句（权威）；确认前须已落 brief 或 cast，不可仅会话草稿
         version: { type: integer, minimum: 1 }
         updated_at: { type: string, format: date-time }
         updated_by: { type: string, nullable: true }
@@ -862,6 +1021,9 @@ components:
         preattached_character_ids:
           type: array
           items: { type: string }
+        hero_one_line:
+          type: string
+          nullable: true
         confirm_stale_outline:
           type: boolean
           default: false
@@ -876,9 +1038,52 @@ components:
         episode_id: { type: string }
         node: { type: string, enum: [D-N0] }
         brief: { $ref: '#/components/schemas/DramaBrief' }
+        intent: { $ref: '#/components/schemas/DramaIntent' }
         next_edges:
           type: array
           items: { type: string }
+    DramaIntent:
+      type: object
+      required: [confirmed]
+      properties:
+        confirmed: { type: boolean, default: false }
+        fingerprint:
+          type: string
+          nullable: true
+          description: sha256 hex of canonical MUST JSON
+        confirmed_at: { type: string, format: date-time, nullable: true }
+        confirmed_by: { type: string, nullable: true }
+    ConfirmDramaIntentRequest:
+      type: object
+      properties:
+        actor: { type: string, nullable: true }
+        expected_fingerprint:
+          type: string
+          nullable: true
+          description: 可选乐观校验；与服务端重算不符 → 422 intent_stale
+      description: 禁止 force / skip_intent / 以会话草稿 hero_one_line 确认
+    ClearDramaIntentRequest:
+      type: object
+      properties:
+        actor: { type: string, nullable: true }
+    DramaIntentEnvelope:
+      type: object
+      required: [ok, intent]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N0] }
+        intent: { $ref: '#/components/schemas/DramaIntent' }
+        conflict: { type: boolean }
+        suggested_lane: { type: string, enum: [female, male], nullable: true }
+        current_lane: { type: string, enum: [female, male, unset] }
+        preattach_lanes:
+          type: array
+          items: { type: string, enum: [female, male] }
+        can_confirm: { type: boolean }
+        fingerprint_current: { type: string }
+        hero_one_line: { type: string }
     OutlineDraft:
       type: object
       required: [body_md, lane, shot_cap, version, locked]

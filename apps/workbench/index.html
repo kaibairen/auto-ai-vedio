@@ -10,14 +10,15 @@
   <header class="top">
     <div>
       <strong>短剧 · pipeline_profile=drama</strong>
-      <span class="badge">D-N0 / D-N1</span>
-      <span class="badge muted">provisional · 待挂起面 D3</span>
+      <span class="badge">D-N0 / A2 / D-N1</span>
+      <span class="badge muted" id="hdr-intent">intent:draft</span>
     </div>
     <div class="meta" id="hdr-meta">未建集</div>
   </header>
   <nav class="tabs">
     <button data-screen="hub" class="on">Hub</button>
     <button data-screen="a">A · D-N0 Brief</button>
+    <button data-screen="a2">A2 · 意图确认</button>
     <button data-screen="b">B · D-N1 Outline</button>
     <button data-screen="c">C · 门 G1b</button>
     <button data-screen="d">D · Locked</button>
@@ -55,6 +56,7 @@
       <label><input type="radio" name="lane0" value="male" /> 男频</label>
     </fieldset>
     <button id="btn-save-brief">保存 Brief</button>
+    <button id="btn-goto-a2" type="button">进入意图确认</button>
     <div class="row">
       <input id="att-id" placeholder="CHAR-01" />
       <input id="att-ver" type="number" value="1" />
@@ -64,15 +66,65 @@
     <pre id="a-out" class="out"></pre>
   </section>
 
+  <section id="screen-a2" class="screen" hidden>
+    <h1>意图确认</h1>
+    <p class="meta">确认的是够写大纲的身份锚，不是定妆。主按钮禁止写成「生成大纲」。库角 look 只读提示，不挡确认。</p>
+    <p><span class="badge muted" id="intent-badge">intent:draft</span></p>
+    <label>题材/冲突 title_intent *
+      <textarea id="a2-title">被流放的庶女在边关翻盘</textarea>
+    </label>
+    <label>PIN（可选） <textarea id="a2-pin" placeholder='{"logline":"..."} 或一句 PIN'></textarea></label>
+    <fieldset>
+      <legend>赛道 * lane</legend>
+      <label><input type="radio" name="lane2" value="unset" /> 未选</label>
+      <label><input type="radio" name="lane2" value="female" checked /> 女频</label>
+      <label><input type="radio" name="lane2" value="male" /> 男频</label>
+    </fieldset>
+    <div class="conflict" id="conflict-bar" hidden>
+      <p id="conflict-text">赛道与预挂频向冲突</p>
+      <button id="btn-follow-b" type="button">一键跟预挂改 lane</button>
+    </div>
+    <label>主角身份一句 *（称呼 + 职司/关系位，不是外形）
+      <textarea id="a2-hero">重生女主</textarea>
+    </label>
+    <p class="meta" id="preattach-empty">无预挂：确认后将新开主角槽。</p>
+    <pre id="a2-preattach" class="out"></pre>
+    <div class="row">
+      <input id="a2-att-id" placeholder="KnownId CHAR-01" />
+      <input id="a2-att-ver" type="number" value="1" />
+      <button id="btn-a2-attach" type="button">改身份 I1 · attach</button>
+      <button id="btn-a2-detach" type="button">detach</button>
+    </div>
+    <details>
+      <summary>I3 · 编辑初始化角色卡（姓名 / one_line / library_ref · 不定妆）</summary>
+      <label>薄卡姓名 <input id="thin-name" value="林晚" /></label>
+      <label>薄卡 one_line <input id="thin-line" value="重生女主" /></label>
+      <label>library_ref id@version
+        <input id="thin-id" value="CHAR-01" />
+        <input id="thin-ver" type="number" value="1" />
+      </label>
+      <button id="btn-thin-save" type="button">保存薄卡身份字段</button>
+    </details>
+    <p class="meta">定妆图 / 九宫 / 服化 / 出图提示不在本页，也不作为确认门槛。</p>
+    <div class="row">
+      <button id="btn-a2-back" type="button">← Brief</button>
+      <button id="btn-reorg" type="button">重新整理确认信息 I2</button>
+      <button id="btn-save-a2" type="button">保存确认草稿</button>
+      <button id="btn-confirm-intent" class="primary" type="button">确认意图</button>
+    </div>
+    <pre id="a2-out" class="out"></pre>
+  </section>
+
   <section id="screen-b" class="screen" hidden>
     <h1>D-N1 编剧扩场</h1>
+    <p class="hint" id="gen-hint">请先完成意图确认</p>
     <fieldset>
       <legend>生成赛道 〔未选则禁用生成 · 无 dual Skill〕</legend>
       <label><input type="radio" name="lane1" value="" /> 未选</label>
       <label><input type="radio" name="lane1" value="female" checked /> 女频</label>
       <label><input type="radio" name="lane1" value="male" /> 男频</label>
     </fieldset>
-    <button id="btn-gen">生成大纲初稿（fixture）</button>
+    <button id="btn-gen" disabled>生成大纲初稿（fixture）</button>
     <label>大纲 body_md <textarea id="body-md" rows="14"></textarea></label>
     <label>shot_cap <input id="shot-cap" type="number" value="12" min="1" max="12" /></label>
     <div class="row">

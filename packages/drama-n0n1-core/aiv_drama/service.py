@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import unicodedata
 from copy import deepcopy
 from typing import Any
@@ -9,9 +8,31 @@ from typing import Any
 from aiv_drama.config import SHOT_CAP_HARD, Settings
 from aiv_drama.errors import AppError
 from aiv_drama.ids import next_id, require_known_or_omit
+from aiv_drama.intent import (
+    INTENT_LANE_CONFLICT,
+    INTENT_STALE,
+    INTENT_UNCONFIRMED,
+    MSG_LANE_CONFLICT,
+    MSG_STALE,
+    MSG_UNCONFIRMED,
+    NODE_INTENT,
+    PLACEHOLDER_ONE_LINES,
+    analyze_lane_conflict,
+    can_confirm,
+    compute_intent_fingerprint,
+    ensure_intent,
+    infer_card_lane,
+    is_protagonist_row,
+    maybe_clear_intent_on_must_change,
+    photography_keys_present,
+    reject_confirm_draft_hero,
+    resolve_hero_one_line,
+)
 from aiv_drama.models import (
     AttachRequest,
     CastWrite,
+    ClearDramaIntentRequest,
+    ConfirmDramaIntentRequest,
     DetachRequest,
     DramaBriefWrite,
     EpisodeCreate,
@@ -50,11 +71,6 @@ from aiv_schema.models import GATE_G1B, NODE_DN0, NODE_DN1, NODE_DN2, PIPELINE_D
 
 logger = logging.getLogger(__name__)
 
-_PROTAG_MARKERS = ("主角", "女主", "男主", "主人公")
-_MALE_IDENTITY_RE = re.compile(r"(男主|男主角|男性|男生|·男|／男|/男)")
-_FEMALE_IDENTITY_RE = re.compile(r"(女主|女主角|女性|女生|·女|／女|/女)")
-_PLACEHOLDER_ONE_LINES = frozenset({"", "待补一句话", "预挂角色"})
-
 
 def _key(project_id: str, ep: str) -> str:
     return f"{project_id}/{ep}"
@@ -65,28 +81,18 @@ def normalize_cast_name(name: str) -> str:
     return " ".join(text.split())
 
 
-def is_protagonist_row(row: dict[str, Any]) -> bool:
-    text = f"{row.get('name') or ''}{row.get('one_line') or ''}"
-    return any(marker in text for marker in _PROTAG_MARKERS)
-
-
 def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
-    """L1: warn when preattach gender/identity clashes with lane. Never 422."""
+    """L1: warn when preattach gender/identity clashes with lane. Never 422 on generate."""
     warnings: list[str] = []
     if lane not in {"female", "male"}:
         return warnings
     for card in cards:
-        text = f"{card.get('name') or ''} {card.get('one_line') or ''}"
-        cid = card.get("id") or "?"
-        name = card.get("name") or cid
-        if lane == "female" and _MALE_IDENTITY_RE.search(text):
+        inferred = infer_card_lane(card)
+        if inferred and inferred != lane:
+            cid = card.get("id") or "?"
+            name = card.get("name") or cid
             warnings.append(
-                f"lane female may clash with preattached {cid} ({name}); "
-                "outline kept the preattach — G1b may FAIL; not a 422"
-            )
-        elif lane == "male" and _FEMALE_IDENTITY_RE.search(text):
-            warnings.append(
-                f"lane male may clash with preattached {cid} ({name}); "
+                f"lane {lane} may clash with preattached {cid} ({name}); "
                 "outline kept the preattach — G1b may FAIL; not a 422"
             )
     return warnings
@@ -196,6 +202,7 @@ class DramaService:
                 },
                 "next_edges": list(rec["episode"].get("next_edges") or []),
                 "lane_preference": (rec.get("brief") or {}).get("lane_preference", "unset"),
+                "intent": self._intent_view(rec),
                 "stale": {"d_n2": NODE_DN2 in (rec["episode"].get("stale_downstream") or [])},
                 "stale_downstream": list(rec["episode"].get("stale_downstream") or []),
                 "locks": deepcopy(rec["episode"]["locks"]),
@@ -232,9 +239,13 @@ class DramaService:
 
     def episode_envelope(self, project_id: str, ep: str) -> dict[str, Any]:
         rec = self._rec(project_id, ep)
+        episode = deepcopy(rec["episode"])
+        intent = self._intent_view(rec)
+        episode["intent"] = intent
         return {
             "ok": True,
-            "episode": deepcopy(rec["episode"]),
+            "episode": episode,
+            "intent": intent,
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
 
@@ -247,6 +258,7 @@ class DramaService:
             "episode_id": rec["episode"]["episode_id"],
             "node": NODE_DN0,
             "brief": deepcopy(rec["brief"]),
+            "intent": self._intent_view(rec),
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
 
@@ -290,6 +302,61 @@ class DramaService:
             "cast": deepcopy(rec["cast"]) if rec.get("cast") else None,
             "next_edges": edges,
         }
+
+    def _intent_view(self, rec: dict[str, Any]) -> dict[str, Any]:
+        return deepcopy(ensure_intent(rec))
+
+    def _fingerprint_cards(self, rec: dict[str, Any]) -> list[dict[str, Any]]:
+        return self._resolve_preattached_characters(rec["episode"]["project_id"], rec)
+
+    def _compute_fingerprint(self, rec: dict[str, Any]) -> str:
+        return compute_intent_fingerprint(rec.get("brief") or {}, self._fingerprint_cards(rec))
+
+    def _maybe_clear_intent(self, rec: dict[str, Any], before_fp: str | None) -> bool:
+        after_fp = self._compute_fingerprint(rec)
+        return maybe_clear_intent_on_must_change(rec, before_fp, after_fp)
+
+    def _intent_preview(self, rec: dict[str, Any]) -> dict[str, Any]:
+        brief = rec.get("brief") or {}
+        cards = self._fingerprint_cards(rec)
+        lane = brief.get("lane_preference") or "unset"
+        conflict = analyze_lane_conflict(lane, cards)
+        title_ok = brief_ready(brief.get("title_intent"), brief.get("pin"))
+        fingerprint_current = compute_intent_fingerprint(brief, cards)
+        return {
+            **conflict,
+            "can_confirm": can_confirm(lane=lane, brief=brief, cards=cards, title_ok=title_ok),
+            "fingerprint_current": fingerprint_current,
+            "hero_one_line": resolve_hero_one_line(brief, cards),
+        }
+
+    def intent_envelope(self, rec: dict[str, Any], *, preview: bool = True) -> dict[str, Any]:
+        env: dict[str, Any] = {
+            "ok": True,
+            "project_id": rec["episode"]["project_id"],
+            "episode_id": rec["episode"]["episode_id"],
+            "node": NODE_INTENT,
+            "intent": self._intent_view(rec),
+        }
+        if preview:
+            env.update(self._intent_preview(rec))
+        return env
+
+    def _require_intent_for_generate(self, rec: dict[str, Any]) -> None:
+        intent = ensure_intent(rec)
+        if intent.get("confirmed") is not True:
+            raise AppError(422, INTENT_UNCONFIRMED, MSG_UNCONFIRMED, node=NODE_INTENT)
+        current = self._compute_fingerprint(rec)
+        stored = intent.get("fingerprint")
+        if not stored or current != stored:
+            raise AppError(
+                422,
+                INTENT_STALE,
+                MSG_STALE,
+                node=NODE_INTENT,
+                stored=stored,
+                current=current,
+            )
 
     # ----- projects / episodes ------------------------------------------------------
 
@@ -398,6 +465,12 @@ class DramaService:
             "scene_counter": 0,
             "source_skills": [],
             "d_n2_jobs": [],
+            "intent": {
+                "confirmed": False,
+                "fingerprint": None,
+                "confirmed_at": None,
+                "confirmed_by": None,
+            },
             "projection_dirty": False,
         }
         self.store.state["episodes"][key] = rec
@@ -516,10 +589,15 @@ class DramaService:
                 "outline locked; set confirm_stale_outline to write brief",
                 node=NODE_DN1,
             )
+        before_fp = self._compute_fingerprint(rec) if current else None
         lane = body.lane_preference or (current or {}).get("lane_preference") or "unset"
         ids = body.preattached_character_ids
         if ids is None:
             ids = list((current or {}).get("preattached_character_ids") or [])
+        if "hero_one_line" in body.model_fields_set:
+            hero_one_line = body.hero_one_line
+        else:
+            hero_one_line = (current or {}).get("hero_one_line")
         version = ((current or {}).get("version") or 0) + 1
         rec["brief"] = {
             "episode_id": rec["episode"]["episode_id"],
@@ -529,6 +607,7 @@ class DramaService:
             "setting_notes": body.setting_notes,
             "lane_preference": lane,
             "preattached_character_ids": ids,
+            "hero_one_line": hero_one_line,
             "version": version,
             "updated_at": now_iso(),
             "updated_by": body.actor,
@@ -537,9 +616,127 @@ class DramaService:
             self._add_stale(rec, NODE_DN2)
         if rec["episode"]["status"] == "draft":
             rec["episode"]["status"] = "in_progress"
+        self._maybe_clear_intent(rec, before_fp)
         self._touch_episode(rec)
         self._commit(rec)
         return self._idem_put(idempotency_key, f"put_brief:{project_id}:{ep}", self.brief_envelope(rec))
+
+    def get_intent(self, project_id: str, ep: str) -> dict[str, Any]:
+        rec = self._rec(project_id, validate_ep(ep))
+        return self.intent_envelope(rec)
+
+    def check_intent(
+        self,
+        project_id: str,
+        ep: str,
+        *,
+        raw: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        reject_force_keys(raw)
+        rec = self._rec(project_id, validate_ep(ep))
+        return self.intent_envelope(rec)
+
+    def confirm_intent(
+        self,
+        project_id: str,
+        ep: str,
+        body: ConfirmDramaIntentRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        incoming = raw if isinstance(raw, dict) else {}
+        reject_force_keys(incoming)
+        reject_confirm_draft_hero(incoming)
+        photography_keys_present(incoming)  # ignored; never a confirm hard gate
+        cached = self._idem_get(idempotency_key, f"intent_confirm:{project_id}:{ep}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        brief = rec.get("brief")
+        if not brief:
+            raise AppError(422, "brief_incomplete", "title_intent and pin both empty", node=NODE_DN0)
+        require_brief_ready(brief.get("title_intent"), brief.get("pin"))
+        lane = brief.get("lane_preference")
+        if lane not in {"female", "male"}:
+            raise AppError(
+                422,
+                "lane_required",
+                "select female|male before confirm",
+                provisional="D3",
+                node=NODE_INTENT,
+            )
+        cards = self._fingerprint_cards(rec)
+        if not resolve_hero_one_line(brief, cards):
+            raise AppError(
+                422,
+                "validation",
+                "hero_one_line must be persisted on brief or cast before confirm",
+                node=NODE_INTENT,
+                field="hero_one_line",
+            )
+        conflict = analyze_lane_conflict(lane, cards)
+        if conflict["conflict"]:
+            raise AppError(
+                422,
+                INTENT_LANE_CONFLICT,
+                MSG_LANE_CONFLICT,
+                node=NODE_INTENT,
+                suggested_lane=conflict["suggested_lane"],
+                current_lane=conflict["current_lane"],
+                preattach_lanes=conflict["preattach_lanes"],
+            )
+        fingerprint = self._compute_fingerprint(rec)
+        req = body or ConfirmDramaIntentRequest()
+        expected = req.expected_fingerprint or incoming.get("expected_fingerprint")
+        if expected and expected != fingerprint:
+            raise AppError(
+                422,
+                INTENT_STALE,
+                MSG_STALE,
+                node=NODE_INTENT,
+                stored=expected,
+                current=fingerprint,
+            )
+        actor = (req.actor or incoming.get("actor") or "").strip() or None
+        rec["intent"] = {
+            "confirmed": True,
+            "fingerprint": fingerprint,
+            "confirmed_at": now_iso(),
+            "confirmed_by": actor,
+        }
+        self._touch_episode(rec)
+        self._commit(rec)
+        env = self.intent_envelope(rec)
+        return self._idem_put(idempotency_key, f"intent_confirm:{project_id}:{ep}", env)
+
+    def clear_intent(
+        self,
+        project_id: str,
+        ep: str,
+        body: ClearDramaIntentRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        incoming = raw if isinstance(raw, dict) else {}
+        reject_force_keys(incoming)
+        cached = self._idem_get(idempotency_key, f"intent_clear:{project_id}:{ep}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        rec["intent"] = {
+            "confirmed": False,
+            "fingerprint": None,
+            "confirmed_at": None,
+            "confirmed_by": None,
+        }
+        self._touch_episode(rec)
+        self._commit(rec)
+        env = self.intent_envelope(rec)
+        return self._idem_put(idempotency_key, f"intent_clear:{project_id}:{ep}", env)
 
     # ----- outline / cast D-N1 ------------------------------------------------------
 
@@ -622,6 +819,8 @@ class DramaService:
             card: dict[str, Any] = {"id": cid, "name": name, "one_line": one_line}
             if ref is not None:
                 card["library_ref"] = ref
+            if ex and ex.get("is_hero") is not None:
+                card["is_hero"] = ex["is_hero"]
             cards.append(card)
         return cards
 
@@ -642,7 +841,7 @@ class DramaService:
             if lib:
                 if not (row.get("name") or "").strip() or row.get("name") == cid:
                     row["name"] = lib["name"]
-                if (row.get("one_line") or "").strip() in _PLACEHOLDER_ONE_LINES:
+                if (row.get("one_line") or "").strip() in PLACEHOLDER_ONE_LINES:
                     row["one_line"] = lib["one_line"]
             return row
         if lib:
@@ -711,7 +910,7 @@ class DramaService:
             key = normalize_cast_name(name)
             if key and key in used_names:
                 target = used_names[key]
-                if (target.get("one_line") or "").strip() in _PLACEHOLDER_ONE_LINES:
+                if (target.get("one_line") or "").strip() in PLACEHOLDER_ONE_LINES:
                     target["one_line"] = one_line
                 # never overwrite library_ref
                 msg = f"folded generated name {name!r} onto {target['id']}"
@@ -783,6 +982,7 @@ class DramaService:
             return cached
         rec = self._rec(project_id, validate_ep(ep))
         self._require_unlock(rec, unlock_edit=False)
+        self._require_intent_for_generate(rec)
         brief = rec.get("brief")
         if not brief:
             raise AppError(422, "brief_incomplete", "title_intent and pin both empty", node=NODE_DN0)
@@ -922,7 +1122,10 @@ class DramaService:
             if row.library_ref is not None:
                 lib = self._resolve_library(rec["episode"]["project_id"], row.library_ref.id, row.library_ref.version)
                 ref = {"id": lib["id"], "version": lib["version"]}
-            out.append({"id": ident, "name": row.name, "one_line": row.one_line, "library_ref": ref})
+            item: dict[str, Any] = {"id": ident, "name": row.name, "one_line": row.one_line, "library_ref": ref}
+            if row.is_hero is not None:
+                item["is_hero"] = row.is_hero
+            out.append(item)
         return out
 
     def put_cast(
@@ -944,6 +1147,7 @@ class DramaService:
             rec["cast"] = self._empty_cast(rec, body.lane)
         check_if_match(if_match, rec["cast"]["version"], "cast")
         self._require_unlock(rec, body.unlock_edit)
+        before_fp = self._compute_fingerprint(rec)
         rec["cast"]["characters"] = self._rows_from_write(rec, body.characters, "CHAR")
         rec["cast"]["scenes"] = self._rows_from_write(rec, body.scenes, "SCENE")
         if body.lane:
@@ -955,6 +1159,7 @@ class DramaService:
             rec["gate"]["state"] = "ready"
             rec["episode"]["status"] = "awaiting_g1b"
         rec["episode"]["next_edges"] = []
+        self._maybe_clear_intent(rec, before_fp)
         self._touch_episode(rec)
         self._commit(rec)
         return self._idem_put(idempotency_key, f"put_cast:{project_id}:{ep}", self.cast_envelope(rec))
@@ -977,6 +1182,7 @@ class DramaService:
         if not rec.get("cast"):
             rec["cast"] = self._empty_cast(rec, (rec.get("brief") or {}).get("lane_preference") if (rec.get("brief") or {}).get("lane_preference") in {"female", "male"} else None)
         self._require_unlock(rec, body.unlock_edit)
+        before_fp = self._compute_fingerprint(rec)
         self._register_char(rec, body.character_id)
         chars = rec["cast"]["characters"]
         existing = next((c for c in chars if c["id"] == body.character_id or (c.get("library_ref") or {}).get("id") == body.character_id), None)
@@ -1004,6 +1210,7 @@ class DramaService:
         rec["cast"]["updated_at"] = now_iso()
         rec["cast"]["locked"] = False
         rec["episode"]["next_edges"] = []
+        self._maybe_clear_intent(rec, before_fp)
         self._touch_episode(rec)
         self._commit(rec)
         return self._idem_put(
@@ -1029,6 +1236,7 @@ class DramaService:
         if not rec.get("cast"):
             raise AppError(404, "not_found", "cast not found", node=NODE_DN1)
         self._require_unlock(rec, body.unlock_edit)
+        before_fp = self._compute_fingerprint(rec)
         found = False
         for row in rec["cast"]["characters"]:
             ref = row.get("library_ref") or {}
@@ -1043,6 +1251,7 @@ class DramaService:
         rec["cast"]["version"] += 1
         rec["cast"]["updated_at"] = now_iso()
         rec["episode"]["next_edges"] = []
+        self._maybe_clear_intent(rec, before_fp)
         self._touch_episode(rec)
         self._commit(rec)
         return self._idem_put(idempotency_key, f"detach:{project_id}:{ep}:{body.character_id}", self.cast_envelope(rec))

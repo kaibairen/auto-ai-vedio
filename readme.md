@@ -21,7 +21,7 @@ pytest
 aiv serve
 ```
 
-Sole lock: `POST /api/v0/projects/{id}/episodes/{ep}/gates/g1b/confirm`. After pass, `next_edges: ["D-N2"]` are candidates only — D-N2 is not started. Downstream `GET .../drama/downstream` is **409** `upstream_unlocked` until locked.
+Intent confirm (before generate): `POST /api/v0/projects/{id}/episodes/{ep}/drama/intent/confirm`. Unconfirmed generate → **422 `intent_unconfirmed`**. Sole G1b lock: `POST .../gates/g1b/confirm`. After pass, `next_edges: ["D-N2"]` are candidates only — D-N2 is not started. Downstream `GET .../drama/downstream` is **409** `upstream_unlocked` until locked.
 
 **provisional:** D3 generate requires female\|male · D12 project-scoped library (no list/search) · D13–D15 no promote/fork · shot_cap hard 12.
 

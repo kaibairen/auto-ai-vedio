@@ -15,6 +15,7 @@ from aiv_drama.models import (
     OutlineGenerateRequest,
     ProjectCreate,
 )
+from tests.drama.helpers import persist_and_confirm_intent
 from aiv_drama.provider.llm import LlmProvider
 
 
@@ -177,10 +178,11 @@ def test_generate_outline_passes_preattached_into_provider(svc, monkeypatch):
     svc.put_brief(
         pid,
         "EP01",
-        DramaBriefWrite(title_intent="程序员与豆包", lane_preference="female"),
+        DramaBriefWrite(title_intent="程序员与豆包", lane_preference="female", hero_one_line="程序员·男"),
     )
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=1))
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-02", version=1))
+    persist_and_confirm_intent(svc, pid, follow_precast=True)
 
     seen: dict = {}
 

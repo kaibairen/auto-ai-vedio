@@ -15,7 +15,7 @@ from aiv_drama.models import (
 )
 from aiv_drama.validate import outline_has_beats
 
-from tests.drama.helpers import generate_ready, seed_project_episode
+from tests.drama.helpers import generate_ready, persist_and_confirm_intent, seed_project_episode
 
 
 def _err(fn):
@@ -52,7 +52,7 @@ def test_t_o1_unset_generate_lane_required(svc):
         lambda: svc.generate_outline(pid, "EP01", OutlineGenerateRequest(provider="fixture"), raw={"provider": "fixture"})
     )
     assert exc.status_code == 422
-    assert exc.code == "lane_required"
+    assert exc.code == "intent_unconfirmed"
 
 
 def test_t_o2_female_fixture(svc):
@@ -249,6 +249,7 @@ def test_t_l1_attach_character_from_other_library(svc):
 
 def test_t_i1_idempotent_generate(svc):
     pid = seed_project_episode(svc)
+    persist_and_confirm_intent(svc, pid)
     a = svc.generate_outline(
         pid,
         "EP01",

@@ -12,6 +12,8 @@ from aiv_drama.config import Settings
 from aiv_drama.errors import AppError
 from aiv_drama.models import (
     AttachRequest,
+    ClearDramaIntentRequest,
+    ConfirmDramaIntentRequest,
     DetachRequest,
     DramaBriefWrite,
     EpisodeCreate,
@@ -29,6 +31,7 @@ project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
 brief_app = typer.Typer(help="D-N0 brief")
+intent_app = typer.Typer(help="A2 intent confirm")
 outline_app = typer.Typer(help="D-N1 outline")
 cast_app = typer.Typer(help="D-N1 cast")
 gate_app = typer.Typer(help="Gate G1b")
@@ -39,6 +42,7 @@ drama.add_typer(project_app, name="project")
 drama.add_typer(episode_app, name="episode")
 drama.add_typer(library_app, name="library")
 drama.add_typer(brief_app, name="brief")
+drama.add_typer(intent_app, name="intent")
 drama.add_typer(outline_app, name="outline")
 drama.add_typer(cast_app, name="cast")
 drama.add_typer(gate_app, name="gate")
@@ -152,6 +156,7 @@ def brief_put(
     title_intent: Optional[str] = typer.Option(None, "--title-intent"),
     lane: str = typer.Option("unset", "--lane"),
     setting_notes: Optional[str] = typer.Option(None, "--setting-notes"),
+    hero_one_line: Optional[str] = typer.Option(None, "--hero-one-line"),
     actor: Optional[str] = typer.Option(None, "--actor"),
     confirm_stale_outline: bool = typer.Option(False, "--confirm-stale-outline"),
 ) -> None:
@@ -159,10 +164,48 @@ def brief_put(
         title_intent=title_intent,
         lane_preference=lane,  # type: ignore[arg-type]
         setting_notes=setting_notes,
+        hero_one_line=hero_one_line,
         actor=actor,
         confirm_stale_outline=confirm_stale_outline,
     )
     _print(_guard(lambda: _service().put_brief(project_id, ep, body, raw=body.model_dump())))
+
+
+@intent_app.command("get")
+def intent_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_intent(project_id, ep)))
+
+
+@intent_app.command("check")
+def intent_check(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().check_intent(project_id, ep)))
+
+
+@intent_app.command("confirm")
+def intent_confirm(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    expected_fingerprint: Optional[str] = typer.Option(None, "--expected-fingerprint"),
+) -> None:
+    body = ConfirmDramaIntentRequest(actor=actor, expected_fingerprint=expected_fingerprint)
+    _print(_guard(lambda: _service().confirm_intent(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@intent_app.command("clear")
+def intent_clear(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = ClearDramaIntentRequest(actor=actor)
+    _print(_guard(lambda: _service().clear_intent(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @outline_app.command("get")
@@ -286,7 +329,7 @@ def demo(
     lane: str = typer.Option("female", "--lane"),
     actor: str = typer.Option("yangzhou", "--actor"),
 ) -> None:
-    """Fixture happy path: project → brief (D-N0) → generate (D-N1) → G1b pass."""
+    """Fixture happy path: project → brief (D-N0) → intent confirm → generate (D-N1) → G1b pass."""
 
     def _run() -> dict:
         svc = _service()
@@ -301,9 +344,15 @@ def demo(
         svc.put_brief(
             pid,
             ep,
-            DramaBriefWrite(title_intent="被流放的庶女在边关翻盘", lane_preference=lane, actor=actor),  # type: ignore[arg-type]
+            DramaBriefWrite(
+                title_intent="被流放的庶女在边关翻盘",
+                lane_preference=lane,  # type: ignore[arg-type]
+                hero_one_line="重生女主",
+                actor=actor,
+            ),
         )
         svc.attach_character(pid, ep, AttachRequest(character_id="CHAR-01", version=1, actor=actor))
+        svc.confirm_intent(pid, ep, ConfirmDramaIntentRequest(actor=actor), raw={"actor": actor})
         outline = svc.generate_outline(
             pid, ep, OutlineGenerateRequest(lane=lane, provider="fixture"), raw={"lane": lane, "provider": "fixture"}  # type: ignore[arg-type]
         )

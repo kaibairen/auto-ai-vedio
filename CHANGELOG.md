@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 — drama D-N0 / D-N1 + intent confirm 018a (docs≠PASS)
+
+OpenAPI **version string remains 0.1.0**. Incremental honest contract: `intent_unconfirmed` / `intent_stale` / `intent_lane_conflict` plus `POST .../drama/intent/confirm|clear`.
+
+- Episode-level authoritative `intent.confirmed` + `intent.fingerprint` (API SoT, mirrored to `.aiv/episode.json`). Not a dogfood file.
+- generateOutline hard-gated: unconfirmed → 422 `intent_unconfirmed`; MUST drift → 422 `intent_stale`.
+- Confirm blocked on lane×preattach conflict → 422 `intent_lane_conflict` (track B: follow precast lane). No `lane_cast_mismatch`.
+- `hero_one_line` must be persisted on brief/cast before confirm.
+- Workbench A2 screen; Outline generate disabled + zero request when unconfirmed. No photography/look gate on confirm.
+- ForcePass=never (`skip_intent` rejected). Package boundary: drama-n0n1-core + apps/api + workbench. Not drama-n2-core.
+
 ## 0.1.0 — drama D-N0 / D-N1 runtime (docs≠PASS)
 
 Implements `pipeline_profile=drama` **D-N0** (brief) + **D-N1** (outline/cast · gate **G1b**) against OpenAPI **0.1.0**.

@@ -96,6 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         @app.get("/projects/{project_id}/episodes/{ep}/drama/brief")
         @app.get("/projects/{project_id}/episodes/{ep}/drama/outline")
+        @app.get("/projects/{project_id}/episodes/{ep}/drama/intent")
         def wizard_routes(project_id: str, ep: str) -> FileResponse:
             return FileResponse(wb / "index.html")
 

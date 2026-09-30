@@ -9,6 +9,8 @@ from aiv_drama.errors import AppError
 from aiv_drama.models import (
     AttachRequest,
     CastWrite,
+    ClearDramaIntentRequest,
+    ConfirmDramaIntentRequest,
     DetachRequest,
     DramaBriefWrite,
     EpisodeCreate,
@@ -132,6 +134,41 @@ async def put_brief(
     return _svc(request).put_brief(
         project_id, ep, body, raw=raw, if_match=if_match, idempotency_key=idempotency_key
     )
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/intent")
+def get_intent(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_intent(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/intent/check")
+async def check_intent(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    return _svc(request).check_intent(project_id, ep, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/intent/confirm")
+async def confirm_intent(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = ConfirmDramaIntentRequest.model_validate(raw) if raw else ConfirmDramaIntentRequest()
+    return _svc(request).confirm_intent(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/intent/clear")
+async def clear_intent(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = ClearDramaIntentRequest.model_validate(raw) if raw else ClearDramaIntentRequest()
+    return _svc(request).clear_intent(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 @router.get("/projects/{project_id}/episodes/{ep}/drama/outline")

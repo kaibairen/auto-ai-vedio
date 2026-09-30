@@ -14,9 +14,22 @@ def _setup(client):
     )
     client.put(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/brief",
-        json={"title_intent": "被流放的庶女在边关翻盘", "lane_preference": "female"},
+        json={
+            "title_intent": "被流放的庶女在边关翻盘",
+            "lane_preference": "female",
+            "hero_one_line": "重生女主",
+        },
     )
     return pid
+
+
+def _confirm(client, pid):
+    res = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/intent/confirm",
+        json={"actor": "eng-018a"},
+    )
+    assert res.status_code == 200, res.text
+    return res
 
 
 def test_health(client):
@@ -37,6 +50,7 @@ def test_openapi_copy_served(client):
 
 def test_force_pass_on_http_confirm(client):
     pid = _setup(client)
+    _confirm(client, pid)
     client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/outline", json={"lane": "female", "provider": "fixture"})
     res = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/gates/g1b/confirm",
@@ -76,11 +90,12 @@ def test_lane_required_http(client):
     )
     res = client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/outline", json={})
     assert res.status_code == 422
-    assert res.json()["error"]["code"] == "lane_required"
+    assert res.json()["error"]["code"] == "intent_unconfirmed"
 
 
 def test_http_happy_pass_and_downstream(client):
     pid = _setup(client)
+    _confirm(client, pid)
     gen = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/outline",
         json={"lane": "female", "provider": "fixture"},
@@ -133,6 +148,7 @@ def test_koubo_paths_404(client):
 
 def test_shot_cap_exceeded_http(client):
     pid = _setup(client)
+    _confirm(client, pid)
     res = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/outline",
         json={"lane": "female", "shot_cap": 13},
@@ -144,6 +160,7 @@ def test_shot_cap_exceeded_http(client):
 
 def test_idempotency_key_generate_http(client):
     pid = _setup(client)
+    _confirm(client, pid)
     headers = {"Idempotency-Key": "abc"}
     a = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/outline",

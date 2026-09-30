@@ -15,6 +15,15 @@
       "type": "object",
       "properties": { "g1b": { "type": "boolean" } }
     },
+    "intent": {
+      "type": "object",
+      "properties": {
+        "confirmed": { "type": "boolean" },
+        "fingerprint": { "type": ["string", "null"] },
+        "confirmed_at": { "type": ["string", "null"] },
+        "confirmed_by": { "type": ["string", "null"] }
+      }
+    },
     "stale_downstream": {
       "type": "array",
       "items": { "type": "string" }

@@ -26,3 +26,14 @@ button.primary { background: var(--accent); color: #1a1406; }
 .banner { margin: 0; padding: 8px 20px; background: #3a2020; color: #ffd4d4; }
 .inline { display: inline-flex; align-items: center; gap: 6px; width: auto; }
 .meta { color: var(--muted); font-size: 13px; }
+.hint { color: var(--danger); font-size: 13px; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.conflict {
+  border: 1px solid var(--danger);
+  background: #2a1618;
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.badge.ok { background: #1d3a28; color: var(--ok); }
+.badge.warn { background: #3a2a14; color: #e6c27a; }
