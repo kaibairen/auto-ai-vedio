@@ -13,6 +13,42 @@ const state = {
   selectedShot: null,
 };
 
+/** 018d GAP-COPY · code → 中文横幅（intent/named_cast 文案与 #12 同句，不另起） */
+const COPY_BANNERS = {
+  tool_profile_unset: {
+    zh: "尚未选择出片工具。分镜门审仍可进行，但不能标记「可进下一出片节点」。请在需要出片前选择工具；系统会按工具允许的时长档校正各镜秒数。",
+    level: "warn",
+  },
+  duration_bucket_mismatch: {
+    zh: "还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。",
+    level: "error",
+  },
+  ready_for_n4_requires_tool_profile: {
+    zh: "请先选择出片工具。未选工具时不能进入出片准备。",
+    level: "error",
+  },
+  named_cast_gate: {
+    zh: "还有未入表的具名角色，无法通过分镜门审。",
+    level: "error",
+  },
+  named_cast_missing: {
+    zh: "分镜中出现未入表的具名角色，请入表或弱化具名。",
+    level: "warn",
+  },
+  intent_unconfirmed: {
+    zh: "请先完成意图确认，再生成大纲。",
+    level: "error",
+  },
+  intent_stale: {
+    zh: "意图已过期 · 请回 A2 重确认",
+    level: "error",
+  },
+  intent_lane_conflict: {
+    zh: "预挂与当前赛道不一致。[一键跟预挂改 lane]",
+    level: "error",
+  },
+};
+
 const SHOT_SIZE_ZH = { ELS: "远景", LS: "全景", MS: "中景", CU: "近景", ECU: "特写" };
 const CAMERA_ZH = {
   STATIC: "固定", PUSH: "推", PULL: "拉", PAN_H: "横摇", PAN_V: "垂直摇",
@@ -36,11 +72,62 @@ function setLane2(value) {
     el.checked = el.value === value;
   });
 }
-function showBanner(msg, ok) {
+function bannerText(code, fallback) {
+  const row = COPY_BANNERS[code];
+  return (row && row.zh) || fallback || code;
+}
+function userErrorMessage(data, code) {
+  return data?.error?.messages?.zh || data?.error?.message || bannerText(code, "");
+}
+function showBanner(msg, ok, level) {
   const el = $("banner");
   el.hidden = !msg;
   el.textContent = msg || "";
-  el.style.background = ok ? "#1d3a28" : "#3a2020";
+  el.classList.remove("warn", "error", "info", "ok");
+  if (!msg) {
+    el.style.background = "";
+    return;
+  }
+  if (ok) {
+    el.classList.add("ok");
+    el.style.background = "#1d3a28";
+    return;
+  }
+  const kind = level === "warn" ? "warn" : (level === "info" ? "info" : "error");
+  el.classList.add(kind);
+  el.style.background = kind === "warn" ? "#3a3418" : (kind === "info" ? "#1d2a3a" : "#3a2020");
+}
+function toolProfile() {
+  return $("tool-profile")?.value || "";
+}
+function setExportChip(text, kind) {
+  const el = $("export-chip");
+  if (!el) return;
+  el.textContent = text || "出片：未选工具";
+  el.className = `chip ${kind || ""}`;
+}
+function paintExportChip(issues, profile) {
+  const chosen = profile || toolProfile();
+  if (!chosen) {
+    setExportChip("出片：未选工具", "warn");
+    return;
+  }
+  const mismatch = (issues || []).some((i) => i.code === "duration_bucket_mismatch");
+  if (mismatch) setExportChip("出片：时长未对齐", "error");
+  else setExportChip(`出片：时长已对齐 · ${chosen}`, "ok");
+}
+function applyGapCopyIssues(issues, profile) {
+  const list = issues || [];
+  paintExportChip(list, profile);
+  const mismatch = list.find((i) => i.code === "duration_bucket_mismatch");
+  if (mismatch) {
+    showBanner(mismatch.messages?.zh || mismatch.message || COPY_BANNERS.duration_bucket_mismatch.zh, false, "error");
+    return;
+  }
+  const unset = list.find((i) => i.code === "tool_profile_unset");
+  if (unset) {
+    showBanner(unset.messages?.zh || unset.message || COPY_BANNERS.tool_profile_unset.zh, false, "warn");
+  }
 }
 function isStoryboardLocked(sb) {
   if (!sb) return false;
@@ -211,6 +298,12 @@ async function api(method, path, body, headers) {
     } else if (code === "named_cast_gate") {
       showBanner(`422 named_cast_gate: ${data?.error?.message || "还有未入表的具名角色，无法通过分镜门审。"}`, false);
       applyG2PassGate(data?.error?.details?.issues || [{ code: "named_cast_gate" }]);
+    } else if (code === "duration_bucket_mismatch") {
+      showBanner(`422 duration_bucket_mismatch: ${userErrorMessage(data, code)}`, false, "error");
+      setExportChip("出片：时长未对齐", "error");
+    } else if (code === "ready_for_n4_requires_tool_profile") {
+      showBanner(`422 ready_for_n4_requires_tool_profile: ${userErrorMessage(data, code)}`, false, "error");
+      setExportChip("出片：未选工具", "warn");
     } else if (code === "upstream_unlocked") {
       showBanner("409 upstream_unlocked: 上游门 G1b 未锁，不能进 D-N2。", false);
       state.g1bLocked = false;
@@ -315,7 +408,7 @@ function renderShots() {
       <td>${row.seq ?? ""}</td>
       <td>${escapeHtml(row.shot_id || "")}</td>
       <td>${escapeHtml(row.bridge_id || "")}</td>
-      <td>${row.duration_s ?? ""}</td>
+      <td><input type="number" min="1" class="dur-edit" data-shot="${escapeHtml(row.shot_id)}" value="${row.duration_s ?? ""}" ${locked ? "disabled" : ""} /></td>
       <td>${escapeHtml(SHOT_SIZE_ZH[row.shot_size] || "")} <code>${escapeHtml(row.shot_size || "")}</code></td>
       <td>${escapeHtml(CAMERA_ZH[row.camera] || "")} <code>${escapeHtml(row.camera || "")}</code></td>
       <td>${escapeHtml(row.action || "")}</td>
@@ -334,6 +427,13 @@ function renderShots() {
       const row = (state.storyboard?.rows || []).find((r) => r.shot_id === shot);
       if (row) row.char_ids = [...el.selectedOptions].map((o) => o.value);
       renderShots();
+    });
+  });
+  tbody.querySelectorAll("input.dur-edit").forEach((el) => {
+    el.addEventListener("change", () => {
+      const shot = el.getAttribute("data-shot");
+      const row = (state.storyboard?.rows || []).find((r) => r.shot_id === shot);
+      if (row) row.duration_s = Number(el.value);
     });
   });
 }
@@ -423,6 +523,11 @@ function paintEStatus(extra) {
       ? "next_edges 含 D-N2 且 locked=false — 不是已可下游出片，也不是 D-N3 开工。"
       : `ready_for_n4=${sb?.ready_for_n4 ? "true" : "false"}（灰态）· locked=${locked}`;
   }
+  const sel = $("tool-profile");
+  if (sel && document.activeElement !== sel) {
+    sel.value = sb?.tool_profile || "";
+  }
+  paintExportChip(extra?.issues || extra?.validate_warnings || state.validate?.issues, sb?.tool_profile);
   applyEGate();
 }
 
@@ -438,7 +543,10 @@ async function refreshScreenE() {
   const sb = await refreshStoryboard();
   paintEStatus(sb);
   renderShots();
-  if (sb?.validate_warnings) renderIssues($("e-issues"), sb.validate_warnings);
+  if (sb?.validate_warnings) {
+    renderIssues($("e-issues"), sb.validate_warnings);
+    applyGapCopyIssues(sb.validate_warnings, sb?.storyboard?.tool_profile || state.storyboard?.tool_profile);
+  }
 }
 
 async function refreshScreenF() {
@@ -452,6 +560,7 @@ async function refreshScreenF() {
     issues = val.issues || [];
     renderIssues($("f-issues"), issues);
     showCastHint(val);
+    applyGapCopyIssues(issues, state.storyboard?.tool_profile);
     dump("f-out", val);
   } catch (err) {
     dump("f-out", err.data || { error: String(err) });
@@ -730,6 +839,7 @@ $("btn-sb-gen").onclick = async () => {
   }
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/generate`, {
     provider: "fixture",
+    tool_profile: toolProfile() || null,
     actor: "yangzhou",
   });
   state.storyboard = data.storyboard;
@@ -743,7 +853,10 @@ $("btn-sb-gen").onclick = async () => {
   }
   paintEStatus(data);
   renderShots();
-  if (data.validate_warnings) renderIssues($("e-issues"), data.validate_warnings);
+  if (data.validate_warnings) {
+    renderIssues($("e-issues"), data.validate_warnings);
+    applyGapCopyIssues(data.validate_warnings, data.storyboard?.tool_profile);
+  }
 };
 $("btn-sb-val").onclick = async () => {
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/validate`, {});
@@ -752,6 +865,7 @@ $("btn-sb-val").onclick = async () => {
   dump("e-out", data);
   renderIssues($("e-issues"), data.issues || []);
   applyG2PassGate(data.issues || []);
+  applyGapCopyIssues(data.issues || [], data.storyboard?.tool_profile || state.storyboard?.tool_profile);
 };
 $("btn-sidecar").onclick = async () => {
   const before = state.cast?.version ?? state.seenCastVersion;
@@ -781,6 +895,7 @@ $("btn-sb-save").onclick = async () => {
   }
   const data = await api("PUT", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard`, {
     rows: state.storyboard.rows,
+    tool_profile: toolProfile() || null,
     actor: "yangzhou",
     unlock_edit: isStoryboardLocked(state.storyboard),
   });
@@ -833,4 +948,53 @@ async function confirmG2(decision) {
 }
 $("btn-g2-pass").onclick = () => confirmG2("pass");
 $("btn-g2-reject").onclick = () => confirmG2("reject");
+
+async function evaluateCopy(extra) {
+  if (!state.projectId) {
+    showBanner("请先在 Hub 建集", false, "warn");
+    return null;
+  }
+  const body = {
+    tool_profile: toolProfile() || null,
+    rows: state.storyboard?.rows || [],
+    ...(extra || {}),
+  };
+  try {
+    const data = await api(
+      "POST",
+      `/projects/${state.projectId}/episodes/${state.ep}/drama/copy-contract/evaluate`,
+      body,
+    );
+    applyGapCopyIssues(data.issues || data.warnings || [], toolProfile());
+    if (data.chip) {
+      const kind = !toolProfile() ? "warn" : (data.chip.includes("未对齐") ? "error" : "ok");
+      setExportChip(data.chip, kind);
+    }
+    dump("e-out", data);
+    return data;
+  } catch (err) {
+    dump("e-out", err.data || { error: String(err) });
+    return null;
+  }
+}
+if ($("btn-eval-copy")) {
+  $("btn-eval-copy").onclick = () => evaluateCopy({});
+}
+if ($("btn-ready-n4")) {
+  $("btn-ready-n4").onclick = () => evaluateCopy({ ready_for_n4: true });
+}
+if ($("tool-profile")) {
+  $("tool-profile").addEventListener("change", () => {
+    if (toolProfile()) {
+      showBanner("更换出片工具后，将按新工具的允许秒数整表重算时长档。请确认后再出片。", true, "info");
+      const el = $("banner");
+      if (el) {
+        el.classList.remove("ok");
+        el.classList.add("info");
+        el.style.background = "#1d2a3a";
+      }
+    }
+    evaluateCopy({}).catch(() => {});
+  });
+}
 hdr();

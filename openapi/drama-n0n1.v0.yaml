@@ -10,6 +10,7 @@ info:
     - Provisional：D3=生成前必选 female|male（unset→422）；D12=仅 project 内库；D13–D15=无 promote/fork。
     - 存储：API 为源 · 盘为投影（ENG）。
     - 门：统一 `POST .../gates/{gate_id}/confirm`；G1b pass 后 `next_edges: ["D-N2"]` 仅候选，不自动开 D-N2。
+    - 018d 诚实增量：`ErrorBody.messages.zh|en` + `GET /drama/error-catalog`。**version 仍 0.1.0**，不另起 0.2.0。
   contact:
     name: AI视频-后端
 servers:
@@ -773,6 +774,29 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /drama/error-catalog:
+    get:
+      tags: [DramaIntent]
+      operationId: getDramaErrorCatalog
+      summary: 018d 中英 ErrorCode / GAP-COPY 目录
+      description: |
+        诚实码表：n0n1 + n2 HTTP enum、issue 码、chips。docs_pass 恒 false。
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, version, docs_pass, http_error_codes, messages]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  version: { type: string, example: '0.1.0' }
+                  docs_pass: { type: boolean, enum: [false] }
+                  http_error_codes: { type: object, additionalProperties: true }
+                  issue_codes: { type: array, items: { type: string } }
+                  messages: { type: object, additionalProperties: true }
+                  chips: { type: object, additionalProperties: true }
 components:
   securitySchemes:
     bearerAuth:
@@ -911,7 +935,14 @@ components:
       required: [code, message]
       properties:
         code: { $ref: '#/components/schemas/ErrorCode' }
-        message: { type: string }
+        message:
+          type: string
+          description: 用户通道（已有中文 raise 保持原句；其余走 catalog zh）
+        messages:
+          type: object
+          properties:
+            zh: { type: string }
+            en: { type: string }
         details: { type: object, additionalProperties: true }
     ErrorEnvelope:
       type: object

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4 — 018d GAP-COPY 出片横幅 + ErrorCode sync (docs≠PASS)
+
+Port of closed PR #10 leftovers onto main tip after #12. ForcePass=never. OpenAPI stays **0.1.0**. Does not rewrite N0–N2 LLM body generation.
+
+- Workbench Screen E: `tool_profile` select, chips「出片：未选工具 / 时长未对齐 / 时长已对齐」, banners for `tool_profile_unset` / `duration_bucket_mismatch` / `ready_for_n4_requires_tool_profile`.
+- Intent / named_cast Chinese from #12 kept; not duplicated.
+- Honest ErrorCode: n2 enum adds `named_cast_gate` · `named_cast_missing` · `ready_for_n4_requires_tool_profile` (already raised or raised by evaluate).
+- `GET /api/v0/drama/error-catalog` + `POST .../drama/copy-contract/evaluate` overlay (uses live N2 duration tables).
+- CI: `tests/contract/test_error_codes_sync.py`. docs≠PASS.
+
 ## 0.2.3 — BRIEF-AIV-020 cast hygiene + duration buckets + skill excerpt (docs≠PASS)
 
 LOOP-CONTINUE R4 (eng-020r3 FIT-GAP Acc#3): reject sentence-level outline fragments (`豆包当众拆穿两个王子` / `包的开源权重反制两个闭源王子`) and quantity generics (`两侧王子`); fold those hits onto GPT/Opus A slots. Acc#1/#2 brand-fold and P0-B/C unchanged.

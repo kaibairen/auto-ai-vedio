@@ -12,7 +12,7 @@
       <strong>短剧 · pipeline_profile=drama</strong>
       <span class="badge">D-N0 / A2 / D-N1 / D-N2</span>
       <span class="badge muted" id="hdr-intent">intent:draft</span>
-      <span class="badge muted">017a named-cast · 018c · docs≠PASS</span>
+      <span class="badge muted">017a named-cast · 018c · 018d 出片档 · docs≠PASS</span>
       <span class="badge muted" id="hdr-lane">lane:unset</span>
       <span class="badge muted" id="hdr-cast">cast v–</span>
       <span class="badge muted" id="hdr-profile">profile:–</span>
@@ -178,10 +178,23 @@
     <div class="row">
       <span class="badge muted" id="e-skill-badge">skill:–</span>
       <span class="badge muted" id="e-shot-count">镜数 0/12</span>
+      <span id="export-chip" class="chip warn">出片：未选工具</span>
     </div>
+    <label>出片工具 tool_profile
+      <select id="tool-profile">
+        <option value="">（未选）</option>
+        <option value="seedance_2">Seedance 2（5 / 8 / 10）</option>
+        <option value="kling">Kling（5 / 10）</option>
+        <option value="hailuo">Hailuo（6 / 10）</option>
+        <option value="veo">Veo（8）</option>
+      </select>
+    </label>
+    <p class="meta">未选工具：门 G2 仍可进行；不能标记「可进下一出片节点」。选定后各镜秒数须落入该工具档。</p>
     <div class="row">
       <button id="btn-sb-gen">生成分镜</button>
       <button id="btn-sb-val">校验</button>
+      <button id="btn-eval-copy" type="button">校验时长档</button>
+      <button id="btn-ready-n4" type="button">标记可出片 / ready_for_n4</button>
       <button id="btn-sb-save">保存 PUT</button>
       <button id="btn-sb-up">上移</button>
       <button id="btn-sb-down">下移</button>
