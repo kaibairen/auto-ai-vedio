@@ -13,6 +13,7 @@ from aiv_drama_n2.validate import (
     CAMERAS,
     SEEDANCE_SKILL_PATH,
     STORYBOARD_SKILL_PATH,
+    TOOL_DURATION_BUCKETS,
     extract_bridge_ids,
     normalize_row,
     text_has_prompt,
@@ -253,10 +254,11 @@ def _normalize_llm_rows(
         payload["seq"] = i
         payload["shot_id"] = f"S{i:02d}"
         payload["duration_s"] = _coerce_duration(payload.get("duration_s"))
-        if tool_profile == "seedance_2" and not payload.get("tool_duration_bucket"):
-            dur = int(payload["duration_s"])
-            if dur in {5, 8, 10}:
-                payload["tool_duration_bucket"] = f"seedance:{dur}"
+        payload["tool_duration_bucket"] = _coerce_bucket(
+            payload.get("tool_duration_bucket"),
+            tool_profile=tool_profile,
+            duration_s=int(payload["duration_s"]),
+        )
         row = normalize_row(payload, index=i)
         out.append(row)
     return out
@@ -276,6 +278,17 @@ def _coerce_duration(raw: Any) -> int:
     except (TypeError, ValueError):
         return 5
     return value if value >= 1 else 5
+
+
+def _coerce_bucket(raw: Any, *, tool_profile: str | None, duration_s: int) -> str | None:
+    """O9: unset tool_profile → null bucket (fixture). Drop LLM junk like '3s'/'4s'."""
+    if not (tool_profile or "").strip():
+        return None
+    if raw in TOOL_DURATION_BUCKETS:
+        return raw
+    if not raw and tool_profile == "seedance_2" and duration_s in {5, 8, 10}:
+        return f"seedance:{duration_s}"
+    return raw if raw else None
 
 
 def _fold_char_ids(raw: Any, by_id: dict[str, Any], by_name: dict[str, str]) -> list[str]:

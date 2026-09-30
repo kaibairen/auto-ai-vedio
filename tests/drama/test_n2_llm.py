@@ -11,7 +11,7 @@ from aiv_drama_n2.models import StoryboardGenerateRequest
 from aiv_drama_n2.provider import generate_rows, get_storyboard_provider
 from aiv_drama_n2.provider.fixture import FixtureStoryboardProvider
 from aiv_drama_n2.provider.llm import LlmStoryboardProvider, STORYBOARD_GUIDE_PATH
-from aiv_drama_n2.validate import SEEDANCE_SKILL_PATH, STORYBOARD_SKILL_PATH
+from aiv_drama_n2.validate import SEEDANCE_SKILL_PATH, STORYBOARD_SKILL_PATH, collect_issues
 
 from tests.drama.helpers import lock_g1b, seed_project_episode
 
@@ -195,6 +195,47 @@ def test_llm_prompt_forbidden_from_model(tmp_path, monkeypatch):
     except AppError as exc:
         assert exc.status_code == 422
         assert exc.code == "prompt_forbidden"
+
+
+def test_llm_clears_invalid_bucket_when_tool_profile_unset(tmp_path, monkeypatch):
+    _write_dongman_skill(tmp_path)
+    _fake_ok(
+        monkeypatch,
+        rows=[
+            {
+                "bridge_id": "B1",
+                "seq": 1,
+                "duration_s": 4,
+                "shot_size": "MS",
+                "camera": "STATIC",
+                "action": "推门入室",
+                "char_ids": ["CHAR-01"],
+                "scene_id": "SCENE-01",
+                "tool_duration_bucket": "3s",
+            },
+            {
+                "bridge_id": "B2",
+                "seq": 2,
+                "duration_s": 4,
+                "shot_size": "CU",
+                "camera": "STATIC",
+                "action": "空镜群杂",
+                "char_ids": ["NONE"],
+                "scene_id": "SCENE-01",
+                "tool_duration_bucket": "4s",
+                "notes": "群杂背影",
+            },
+        ],
+    )
+    outline, cast = _sample_outline_cast()
+    rows = LlmStoryboardProvider(_settings(tmp_path)).generate(
+        episode_id="EP01", outline=outline, cast=cast, shot_cap=12, tool_profile=None
+    )
+    assert [r["tool_duration_bucket"] for r in rows] == [None, None]
+    issues = collect_issues(
+        rows, shot_cap=12, tool_profile=None, cast=cast, outline_body=outline["body_md"]
+    )
+    assert not any(i.get("code") == "duration_bucket_mismatch" for i in issues)
 
 
 def test_generate_storyboard_llm_uses_live_provider(svc, monkeypatch):
