@@ -31,4 +31,4 @@ def test_cli_lane_required(data_dir, monkeypatch):
         ["drama", "outline", "generate", "--project", "proj_01", "--ep", "EP01", "--provider", "fixture"],
     )
     assert result.exit_code == 2
-    assert "lane_required" in result.output
+    assert "intent_unconfirmed" in result.output

@@ -13,7 +13,7 @@ from aiv_drama.config import Settings
 from aiv_drama.errors import AppError
 from aiv_drama.service import DramaService
 from aiv_drama.validate import FORCE_KEYS
-from aiv_schema.models import GATE_G1B, NODE_DN0, NODE_DN1
+from aiv_schema.models import GATE_G1B, GATE_G2, NODE_DN0, NODE_DN1, NODE_DN2
 
 
 def _workbench_dir(settings: Settings) -> Path:
@@ -23,11 +23,11 @@ def _workbench_dir(settings: Settings) -> Path:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     app = FastAPI(
-        title="AI Video · Drama D-N0 / D-N1",
+        title="AI Video · Drama D-N0 / D-N1 / D-N2",
         version=__version__,
         description=(
-            "短剧 pipeline_profile=drama · D-N0 题材入口 + D-N1 编剧扩场 · 门 G1b。 "
-            "ForcePass=never. Isolated from koubo-N1. docs≠PASS."
+            "短剧 pipeline_profile=drama · D-N0 + D-N1（门 G1b）+ D-N2 分镜表（门 G2）。 "
+            "ForcePass=never. Isolated from koubo-N1. docs≠PASS. Does not auto-open D-N3."
         ),
     )
     app.state.settings = settings
@@ -43,6 +43,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 except json.JSONDecodeError:
                     data = None
                 if isinstance(data, dict):
+                    path = request.url.path
+                    if "/gates/g2" in path or "/drama/storyboard" in path:
+                        node, gate = NODE_DN2, GATE_G2
+                    else:
+                        node, gate = NODE_DN1, GATE_G1B
                     for key in FORCE_KEYS:
                         if key in data:
                             return JSONResponse(
@@ -52,7 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                     "error": {
                                         "code": "force_pass_forbidden",
                                         "message": "ForcePass=never",
-                                        "details": {"field": key, "node": NODE_DN1, "gate": GATE_G1B},
+                                        "details": {"field": key, "node": node, "gate": gate},
                                     },
                                 },
                             )
@@ -77,11 +82,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "ok": True,
             "pipeline_profile": "drama",
-            "nodes": [NODE_DN0, NODE_DN1],
+            "nodes": [NODE_DN0, NODE_DN1, NODE_DN2],
             "gate": GATE_G1B,
+            "gates": [GATE_G1B, GATE_G2],
             "version": __version__,
             "koubo_n1": False,
             "docs_pass": False,
+            "auto_open_dn3": False,
         }
 
     wb = _workbench_dir(settings)
@@ -96,14 +103,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         @app.get("/projects/{project_id}/episodes/{ep}/drama/brief")
         @app.get("/projects/{project_id}/episodes/{ep}/drama/outline")
+        @app.get("/projects/{project_id}/episodes/{ep}/drama/intent")
         def wizard_routes(project_id: str, ep: str) -> FileResponse:
             return FileResponse(wb / "index.html")
 
     openapi_copy = settings.repo_root / "openapi" / "drama-n0n1.v0.yaml"
+    openapi_n2 = settings.repo_root / "openapi" / "drama-n2.v0.yaml"
 
     @app.get("/openapi/drama-n0n1.v0.yaml")
     def openapi_file() -> FileResponse:
         return FileResponse(openapi_copy, media_type="application/yaml")
+
+    @app.get("/openapi/drama-n2.v0.yaml")
+    def openapi_n2_file() -> FileResponse:
+        return FileResponse(openapi_n2, media_type="application/yaml")
 
     app.include_router(router)
     return app

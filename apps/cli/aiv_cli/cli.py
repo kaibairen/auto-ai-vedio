@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -12,6 +13,8 @@ from aiv_drama.config import Settings
 from aiv_drama.errors import AppError
 from aiv_drama.models import (
     AttachRequest,
+    ClearDramaIntentRequest,
+    ConfirmDramaIntentRequest,
     DetachRequest,
     DramaBriefWrite,
     EpisodeCreate,
@@ -20,29 +23,42 @@ from aiv_drama.models import (
     OutlineResetRequest,
     OutlineWrite,
     ProjectCreate,
+    SidecarAddCharacterRequest,
 )
 from aiv_drama.service import DramaService
+from aiv_drama_n2.models import (
+    StoryboardGenerateRequest,
+    StoryboardReorderRequest,
+    StoryboardResetRequest,
+    StoryboardWrite,
+)
 
-app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
-drama = typer.Typer(help="短剧 D-N0 / D-N1")
+app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
+drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2")
 project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
 brief_app = typer.Typer(help="D-N0 brief")
+intent_app = typer.Typer(help="A2 intent confirm")
 outline_app = typer.Typer(help="D-N1 outline")
 cast_app = typer.Typer(help="D-N1 cast")
 gate_app = typer.Typer(help="Gate G1b")
 downstream_app = typer.Typer(help="D-N2 consumer read (does not start D-N2)")
+storyboard_app = typer.Typer(help="D-N2 storyboard")
+g2_app = typer.Typer(help="Gate G2")
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
 drama.add_typer(episode_app, name="episode")
 drama.add_typer(library_app, name="library")
 drama.add_typer(brief_app, name="brief")
+drama.add_typer(intent_app, name="intent")
 drama.add_typer(outline_app, name="outline")
 drama.add_typer(cast_app, name="cast")
 drama.add_typer(gate_app, name="gate")
 drama.add_typer(downstream_app, name="downstream")
+drama.add_typer(storyboard_app, name="storyboard")
+drama.add_typer(g2_app, name="g2")
 
 _PRETTY = False
 
@@ -152,6 +168,7 @@ def brief_put(
     title_intent: Optional[str] = typer.Option(None, "--title-intent"),
     lane: str = typer.Option("unset", "--lane"),
     setting_notes: Optional[str] = typer.Option(None, "--setting-notes"),
+    hero_one_line: Optional[str] = typer.Option(None, "--hero-one-line"),
     actor: Optional[str] = typer.Option(None, "--actor"),
     confirm_stale_outline: bool = typer.Option(False, "--confirm-stale-outline"),
 ) -> None:
@@ -159,10 +176,48 @@ def brief_put(
         title_intent=title_intent,
         lane_preference=lane,  # type: ignore[arg-type]
         setting_notes=setting_notes,
+        hero_one_line=hero_one_line,
         actor=actor,
         confirm_stale_outline=confirm_stale_outline,
     )
     _print(_guard(lambda: _service().put_brief(project_id, ep, body, raw=body.model_dump())))
+
+
+@intent_app.command("get")
+def intent_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_intent(project_id, ep)))
+
+
+@intent_app.command("check")
+def intent_check(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().check_intent(project_id, ep)))
+
+
+@intent_app.command("confirm")
+def intent_confirm(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    expected_fingerprint: Optional[str] = typer.Option(None, "--expected-fingerprint"),
+) -> None:
+    body = ConfirmDramaIntentRequest(actor=actor, expected_fingerprint=expected_fingerprint)
+    _print(_guard(lambda: _service().confirm_intent(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@intent_app.command("clear")
+def intent_clear(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = ClearDramaIntentRequest(actor=actor)
+    _print(_guard(lambda: _service().clear_intent(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @outline_app.command("get")
@@ -249,6 +304,19 @@ def cast_detach(
     _print(_guard(lambda: _service().detach_character(project_id, ep, body, raw=body.model_dump())))
 
 
+@cast_app.command("sidecar-add")
+def cast_sidecar_add(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    name: str = typer.Option(..., "--name"),
+    one_line: Optional[str] = typer.Option(None, "--one-line"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    """O2: add a named CHAR without unlocking G1b or rewriting outline body."""
+    body = SidecarAddCharacterRequest(name=name, one_line=one_line, actor=actor)
+    _print(_guard(lambda: _service().sidecar_add_character(project_id, ep, body, raw=body.model_dump())))
+
+
 @gate_app.command("get")
 def gate_get(
     project_id: str = typer.Option(..., "--project"),
@@ -279,6 +347,108 @@ def downstream_get(
     _print(_guard(lambda: _service().get_downstream(project_id, ep)))
 
 
+@storyboard_app.command("get")
+def storyboard_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_storyboard(project_id, ep)))
+
+
+@storyboard_app.command("generate")
+def storyboard_generate(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    provider: str = typer.Option("fixture", "--provider"),
+    tool_profile: Optional[str] = typer.Option(None, "--tool-profile"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = StoryboardGenerateRequest(
+        provider=provider,  # type: ignore[arg-type]
+        tool_profile=tool_profile,  # type: ignore[arg-type]
+        unlock_edit=unlock_edit,
+        actor=actor,
+    )
+    _print(
+        _guard(
+            lambda: _service().generate_storyboard(
+                project_id, ep, body, raw=body.model_dump(exclude_none=True)
+            )
+        )
+    )
+
+
+@storyboard_app.command("put")
+def storyboard_put(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    file: str = typer.Option(..., "--file", help="JSON object with rows[] (StoryboardWrite)"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    raw = json.loads(Path(file).read_text(encoding="utf-8"))
+    if unlock_edit:
+        raw["unlock_edit"] = True
+    if actor:
+        raw["actor"] = actor
+    body = StoryboardWrite.model_validate(raw)
+    _print(_guard(lambda: _service().put_storyboard(project_id, ep, body, raw=raw)))
+
+
+@storyboard_app.command("validate")
+def storyboard_validate(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().validate_storyboard(project_id, ep)))
+
+
+@storyboard_app.command("reorder")
+def storyboard_reorder(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    shot_ids: str = typer.Option(..., "--shot-ids", help="Comma-separated S01,S02,..."),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    ids = [s.strip() for s in shot_ids.split(",") if s.strip()]
+    body = StoryboardReorderRequest(shot_ids=ids, actor=actor)
+    _print(_guard(lambda: _service().reorder_storyboard(project_id, ep, body, raw=body.model_dump())))
+
+
+@storyboard_app.command("reset")
+def storyboard_reset(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = StoryboardResetRequest(unlock_edit=unlock_edit, actor=actor)
+    _print(_guard(lambda: _service().reset_storyboard(project_id, ep, body, raw=body.model_dump())))
+
+
+@g2_app.command("get")
+def g2_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_gate_g2(project_id, ep)))
+
+
+@g2_app.command("confirm")
+def g2_confirm(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    decision: str = typer.Option(..., "--decision"),
+    actor: str = typer.Option(..., "--actor"),
+    note: Optional[str] = typer.Option(None, "--note"),
+) -> None:
+    raw = {"decision": decision, "actor": actor}
+    if note is not None:
+        raw["note"] = note
+    _print(_guard(lambda: _service().confirm_gate_g2(project_id, ep, raw)))
+
+
 @drama.command("demo")
 def demo(
     name: str = typer.Option("短剧狗粮-01", "--name"),
@@ -286,7 +456,7 @@ def demo(
     lane: str = typer.Option("female", "--lane"),
     actor: str = typer.Option("yangzhou", "--actor"),
 ) -> None:
-    """Fixture happy path: project → brief (D-N0) → generate (D-N1) → G1b pass."""
+    """Fixture happy path: project → brief (D-N0) → intent confirm → generate (D-N1) → G1b pass."""
 
     def _run() -> dict:
         svc = _service()
@@ -301,9 +471,15 @@ def demo(
         svc.put_brief(
             pid,
             ep,
-            DramaBriefWrite(title_intent="被流放的庶女在边关翻盘", lane_preference=lane, actor=actor),  # type: ignore[arg-type]
+            DramaBriefWrite(
+                title_intent="被流放的庶女在边关翻盘",
+                lane_preference=lane,  # type: ignore[arg-type]
+                hero_one_line="重生女主",
+                actor=actor,
+            ),
         )
         svc.attach_character(pid, ep, AttachRequest(character_id="CHAR-01", version=1, actor=actor))
+        svc.confirm_intent(pid, ep, ConfirmDramaIntentRequest(actor=actor), raw={"actor": actor})
         outline = svc.generate_outline(
             pid, ep, OutlineGenerateRequest(lane=lane, provider="fixture"), raw={"lane": lane, "provider": "fixture"}  # type: ignore[arg-type]
         )

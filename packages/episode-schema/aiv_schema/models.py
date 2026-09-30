@@ -8,7 +8,9 @@ PIPELINE_DRAMA = "drama"
 NODE_DN0 = "D-N0"
 NODE_DN1 = "D-N1"
 NODE_DN2 = "D-N2"
+NODE_DN3 = "D-N3"
 GATE_G1B = "g1b"
+GATE_G2 = "g2"
 
 Lane = Literal["female", "male"]
 LanePreference = Literal["female", "male", "unset"]
@@ -32,12 +34,14 @@ class LibraryRef(BaseModel):
 
 class EpisodeLocks(BaseModel):
     g1b: bool = False
+    g2: bool = False
 
 
 class EpisodeVersions(BaseModel):
     brief: int = 0
     outline: int = 0
     cast: int = 0
+    storyboard: int = 0
     episode: int = 1
 
 

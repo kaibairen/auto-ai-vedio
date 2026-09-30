@@ -9,6 +9,8 @@ from aiv_drama.errors import AppError
 from aiv_drama.models import (
     AttachRequest,
     CastWrite,
+    ClearDramaIntentRequest,
+    ConfirmDramaIntentRequest,
     DetachRequest,
     DramaBriefWrite,
     EpisodeCreate,
@@ -19,9 +21,17 @@ from aiv_drama.models import (
     OutlineWrite,
     ProjectCreate,
     ProjectPatch,
+    SidecarAddCharacterRequest,
 )
 from aiv_drama.service import DramaService
 from aiv_drama.validate import reject_dual_skill, reject_force_keys
+from aiv_drama_n2.models import (
+    StoryboardGenerateRequest,
+    StoryboardReorderRequest,
+    StoryboardResetRequest,
+    StoryboardWrite,
+)
+from aiv_drama_n2.validate import reject_force_keys_n2, reject_prompt_fields
 
 router = APIRouter(prefix="/api/v0")
 
@@ -38,6 +48,18 @@ async def _raw(request: Request) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys(data)
+    return data
+
+
+async def _raw_n2(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_n2(data)
+    reject_prompt_fields(data)
     return data
 
 
@@ -134,6 +156,41 @@ async def put_brief(
     )
 
 
+@router.get("/projects/{project_id}/episodes/{ep}/drama/intent")
+def get_intent(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_intent(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/intent/check")
+async def check_intent(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    return _svc(request).check_intent(project_id, ep, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/intent/confirm")
+async def confirm_intent(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = ConfirmDramaIntentRequest.model_validate(raw) if raw else ConfirmDramaIntentRequest()
+    return _svc(request).confirm_intent(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/intent/clear")
+async def clear_intent(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = ClearDramaIntentRequest.model_validate(raw) if raw else ClearDramaIntentRequest()
+    return _svc(request).clear_intent(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
 @router.get("/projects/{project_id}/episodes/{ep}/drama/outline")
 def get_outline(project_id: str, ep: str, request: Request) -> dict[str, Any]:
     return _svc(request).get_outline(project_id, ep)
@@ -221,6 +278,19 @@ async def detach_character(
     return _svc(request).detach_character(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
+@router.post("/projects/{project_id}/episodes/{ep}/drama/cast/sidecar-add")
+async def sidecar_add_character(
+    project_id: str,
+    ep: str,
+    body: SidecarAddCharacterRequest,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    """O2 sidecar: add CHAR without unlocking G1b or rewriting locked outline."""
+    raw = await _raw(request)
+    return _svc(request).sidecar_add_character(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
 @router.get("/projects/{project_id}/episodes/{ep}/gates/g1b")
 def get_gate(project_id: str, ep: str, request: Request) -> dict[str, Any]:
     return _svc(request).get_gate(project_id, ep)
@@ -246,6 +316,90 @@ def get_downstream(project_id: str, ep: str, request: Request) -> dict[str, Any]
     return _svc(request).get_downstream(project_id, ep)
 
 
+@router.get("/projects/{project_id}/episodes/{ep}/drama/storyboard")
+def get_storyboard(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_storyboard(project_id, ep)
+
+
+@router.put("/projects/{project_id}/episodes/{ep}/drama/storyboard")
+async def put_storyboard(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    if_match: str | None = Header(default=None, alias="If-Match"),
+) -> dict[str, Any]:
+    raw = await _raw_n2(request)
+    body = StoryboardWrite.model_validate(raw)
+    return _svc(request).put_storyboard(
+        project_id, ep, body, raw=raw, if_match=if_match, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/storyboard/generate")
+async def generate_storyboard(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n2(request)
+    body = StoryboardGenerateRequest.model_validate(raw) if raw else StoryboardGenerateRequest()
+    return _svc(request).generate_storyboard(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/storyboard/validate")
+async def validate_storyboard(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw_n2(request)
+    return _svc(request).validate_storyboard(project_id, ep, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/storyboard/reorder")
+async def reorder_storyboard(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    if_match: str | None = Header(default=None, alias="If-Match"),
+) -> dict[str, Any]:
+    raw = await _raw_n2(request)
+    body = StoryboardReorderRequest.model_validate(raw)
+    return _svc(request).reorder_storyboard(
+        project_id, ep, body, raw=raw, if_match=if_match, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/storyboard/reset")
+async def reset_storyboard(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n2(request)
+    body = StoryboardResetRequest.model_validate(raw) if raw else StoryboardResetRequest()
+    return _svc(request).reset_storyboard(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/gates/g2")
+def get_gate_g2(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_gate_g2(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/gates/g2/confirm")
+async def confirm_gate_g2(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_actor: str | None = Header(default=None, alias="X-Actor"),
+) -> dict[str, Any]:
+    raw = await _raw_n2(request)
+    if x_actor and not raw.get("actor"):
+        raw = {**raw, "actor": x_actor}
+    return _svc(request).confirm_gate_g2(project_id, ep, raw, idempotency_key=idempotency_key)
+
+
 def _koubo_isolated() -> JSONResponse:
     return JSONResponse(
         status_code=404,
@@ -268,3 +422,25 @@ def _koubo_isolated() -> JSONResponse:
 @router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n1", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def koubo_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
     return _koubo_isolated()
+
+
+def _bare_n2_isolated() -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={
+            "ok": False,
+            "error": {
+                "code": "not_found",
+                "message": "bare N2 / koubo n2 is not served; use D-N2 /drama/storyboard and gates/g2",
+                "details": {"pipeline_profile": "drama", "nodes": ["D-N2"], "gate": "g2"},
+            },
+        },
+    )
+
+
+@router.api_route("/projects/{project_id}/episodes/{ep}/n2/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n2/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/n2", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n2", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+def bare_n2_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
+    return _bare_n2_isolated()

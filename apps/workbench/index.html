@@ -3,30 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>短剧 D-N0 / D-N1 · 门 G1b</title>
+  <title>短剧 D-N0 / D-N1 / D-N2 · 门 G1b / G2</title>
   <link rel="stylesheet" href="/workbench/static/drama.css" />
 </head>
 <body>
   <header class="top">
     <div>
       <strong>短剧 · pipeline_profile=drama</strong>
-      <span class="badge">D-N0 / D-N1</span>
-      <span class="badge muted">provisional · 待挂起面 D3</span>
+      <span class="badge">D-N0 / A2 / D-N1 / D-N2</span>
+      <span class="badge muted" id="hdr-intent">intent:draft</span>
+      <span class="badge muted">017a named-cast · 018c · docs≠PASS</span>
+      <span class="badge muted" id="hdr-lane">lane:unset</span>
+      <span class="badge muted" id="hdr-cast">cast v–</span>
+      <span class="badge muted" id="hdr-profile">profile:–</span>
     </div>
     <div class="meta" id="hdr-meta">未建集</div>
   </header>
   <nav class="tabs">
     <button data-screen="hub" class="on">Hub</button>
     <button data-screen="a">A · D-N0 Brief</button>
+    <button data-screen="a2">A2 · 意图确认</button>
     <button data-screen="b">B · D-N1 Outline</button>
     <button data-screen="c">C · 门 G1b</button>
     <button data-screen="d">D · Locked</button>
+    <button data-screen="e">E · D-N2 分镜</button>
+    <button data-screen="f">F · 门 G2</button>
+    <button data-screen="g">G · D-N2 Locked</button>
   </nav>
   <p class="banner" id="banner" hidden></p>
+  <p class="banner warn" id="cast-hint" hidden></p>
 
   <section id="screen-hub" class="screen">
     <h1>Episode Hub</h1>
-    <p>本批薄 UI 只服务 drama 轨。不复用 koubo-N1 壳；无 force_pass。</p>
+    <p>本批工作台只服务 <code>pipeline_profile=drama</code>。不复用 koubo-N1 壳；无 force_pass。投影 <code>.aiv/episode.json</code> ≠ 产品 PASS。</p>
+    <p class="meta" id="hub-ep">EP / lane / profile 将在建集后回显。</p>
     <label>项目名 <input id="proj-name" value="短剧狗粮-01" /></label>
     <button id="btn-proj">创建项目</button>
     <label>集 ID <input id="ep-id" value="EP01" /></label>
@@ -55,6 +65,7 @@
       <label><input type="radio" name="lane0" value="male" /> 男频</label>
     </fieldset>
     <button id="btn-save-brief">保存 Brief</button>
+    <button id="btn-goto-a2" type="button">进入意图确认</button>
     <div class="row">
       <input id="att-id" placeholder="CHAR-01" />
       <input id="att-ver" type="number" value="1" />
@@ -64,15 +75,69 @@
     <pre id="a-out" class="out"></pre>
   </section>
 
+  <section id="screen-a2" class="screen" hidden>
+    <h1>意图确认</h1>
+    <p class="meta">确认的是够写大纲的身份锚，不是定妆。主按钮禁止写成「生成大纲」。库角 look 只读提示，不挡确认。</p>
+    <p><span class="badge muted" id="intent-badge">intent:draft</span></p>
+    <label>题材/冲突 title_intent *
+      <textarea id="a2-title">被流放的庶女在边关翻盘</textarea>
+    </label>
+    <label>PIN（可选） <textarea id="a2-pin" placeholder='{"logline":"..."} 或一句 PIN'></textarea></label>
+    <fieldset>
+      <legend>赛道 * lane</legend>
+      <label><input type="radio" name="lane2" value="unset" /> 未选</label>
+      <label><input type="radio" name="lane2" value="female" checked /> 女频</label>
+      <label><input type="radio" name="lane2" value="male" /> 男频</label>
+    </fieldset>
+    <div class="conflict" id="conflict-bar" hidden>
+      <p id="conflict-text">赛道与预挂频向冲突</p>
+      <button id="btn-follow-b" type="button">一键跟预挂改 lane</button>
+    </div>
+    <label>主角身份一句 *（称呼 + 职司/关系位，不是外形）
+      <textarea id="a2-hero">重生女主</textarea>
+    </label>
+    <p class="meta" id="preattach-empty">无预挂：确认后将新开主角槽。</p>
+    <pre id="a2-preattach" class="out"></pre>
+    <div class="row">
+      <input id="a2-att-id" placeholder="KnownId CHAR-01" />
+      <input id="a2-att-ver" type="number" value="1" />
+      <button id="btn-a2-attach" type="button">改身份 I1 · attach</button>
+      <button id="btn-a2-detach" type="button">detach</button>
+    </div>
+    <details>
+      <summary>I3 · 编辑初始化角色卡（姓名 / one_line / library_ref · 不定妆）</summary>
+      <label>薄卡姓名 <input id="thin-name" value="林晚" /></label>
+      <label>薄卡 one_line <input id="thin-line" value="重生女主" /></label>
+      <label>library_ref id@version
+        <input id="thin-id" value="CHAR-01" />
+        <input id="thin-ver" type="number" value="1" />
+      </label>
+      <button id="btn-thin-save" type="button">保存薄卡身份字段</button>
+    </details>
+    <p class="meta">定妆图 / 九宫 / 服化 / 出图提示不在本页，也不作为确认门槛。</p>
+    <div class="row">
+      <button id="btn-a2-back" type="button">← Brief</button>
+      <button id="btn-reorg" type="button">重新整理确认信息 I2</button>
+      <button id="btn-save-a2" type="button">保存确认草稿</button>
+      <button id="btn-confirm-intent" class="primary" type="button">确认意图</button>
+    </div>
+    <pre id="a2-out" class="out"></pre>
+  </section>
+
   <section id="screen-b" class="screen" hidden>
     <h1>D-N1 编剧扩场</h1>
+    <p class="hint" id="gen-hint">请先完成意图确认</p>
     <fieldset>
       <legend>生成赛道 〔未选则禁用生成 · 无 dual Skill〕</legend>
       <label><input type="radio" name="lane1" value="" /> 未选</label>
       <label><input type="radio" name="lane1" value="female" checked /> 女频</label>
       <label><input type="radio" name="lane1" value="male" /> 男频</label>
     </fieldset>
-    <button id="btn-gen">生成大纲初稿（fixture）</button>
+    <button id="btn-gen" disabled>生成大纲初稿（fixture）</button>
+    <details id="b-skill" class="skill-strip" hidden>
+      <summary>本次 Skill</summary>
+      <div id="b-skill-body" class="skill-body"></div>
+    </details>
     <label>大纲 body_md <textarea id="body-md" rows="14"></textarea></label>
     <label>shot_cap <input id="shot-cap" type="number" value="12" min="1" max="12" /></label>
     <div class="row">
@@ -100,7 +165,90 @@
     <p>next_edges 仅候选，<strong>不</strong>自动开 D-N2。</p>
     <pre id="d-out" class="out"></pre>
     <button id="btn-downstream">读下游定稿（未锁 → 409）</button>
+    <button id="btn-goto-e" type="button">进入 D-N2 分镜</button>
     <pre id="dn-out" class="out"></pre>
+  </section>
+
+  <section id="screen-e" class="screen wide" hidden>
+    <h1>D-N2 分镜表</h1>
+    <p class="meta" id="e-status">draft · cast v– · G1b?</p>
+    <p class="banner warn" id="e-gate" hidden>上游门 G1b 未锁，不能生成空表。请先完成 Outline → 门 G1b pass。</p>
+    <p>O1 生成后自动入表；O2 侧车加角<strong>不拆 G1b</strong>、不改大纲正文。芯片展示 <code>id · name</code>。G1b pass <strong>不</strong>自动切到本页。</p>
+    <p class="meta" id="e-upstream">上游只读摘要将在刷新后出现。</p>
+    <div class="row">
+      <span class="badge muted" id="e-skill-badge">skill:–</span>
+      <span class="badge muted" id="e-shot-count">镜数 0/12</span>
+    </div>
+    <div class="row">
+      <button id="btn-sb-gen">生成分镜</button>
+      <button id="btn-sb-val">校验</button>
+      <button id="btn-sb-save">保存 PUT</button>
+      <button id="btn-sb-up">上移</button>
+      <button id="btn-sb-down">下移</button>
+    </div>
+    <div class="row">
+      <input id="side-name" placeholder="CODEX王子" />
+      <input id="side-line" placeholder="具名配角·侧车挂表" />
+      <button id="btn-sidecar">侧车加角</button>
+    </div>
+    <details id="e-skill" class="skill-strip" hidden>
+      <summary>本次 Skill</summary>
+      <div id="e-skill-body" class="skill-body"></div>
+    </details>
+    <div class="table-wrap">
+      <table id="e-table" class="shots">
+        <thead>
+          <tr>
+            <th></th>
+            <th>seq</th>
+            <th>镜号</th>
+            <th>bridge</th>
+            <th>时长</th>
+            <th>景别</th>
+            <th>运镜</th>
+            <th>画面</th>
+            <th>人物</th>
+            <th>场景</th>
+            <th>台词</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody id="e-tbody"></tbody>
+      </table>
+    </div>
+    <p class="meta" id="e-ready">ready_for_n4 灰态 · next_edges 含 D-N2 且未锁 ≠ 已可下游出片</p>
+    <div id="e-issues" class="issues"></div>
+    <div class="row">
+      <button id="btn-open-g2" type="button">打开门 G2</button>
+    </div>
+    <details>
+      <summary>e-out JSON dump</summary>
+      <pre id="e-out" class="out"></pre>
+    </details>
+  </section>
+
+  <section id="screen-f" class="screen" hidden>
+    <h1>门 G2 · 分镜确认</h1>
+    <p class="meta" id="f-summary">摘要将在打开本页后刷新。</p>
+    <div id="f-issues" class="issues"></div>
+    <p class="hint" id="f-block" hidden>还有未入表的具名角色，无法通过分镜门审。</p>
+    <label>actor <input id="g2-actor" value="yangzhou" /></label>
+    <label>note <input id="g2-note" placeholder="G2 备注" /></label>
+    <div class="row">
+      <button id="btn-g2-back" type="button">退回改表</button>
+      <button id="btn-g2-reject">驳回 reject</button>
+      <button id="btn-g2-pass" class="primary">通过 pass</button>
+    </div>
+    <p class="meta">valid=true ≠ 产品 PASS。无 force / skip。通过后<strong>不</strong>自动进入 D-N3。</p>
+    <pre id="f-out" class="out"></pre>
+  </section>
+
+  <section id="screen-g" class="screen" hidden>
+    <h1>D-N2 已锁定</h1>
+    <p class="meta" id="g-summary">locked 摘要将在刷新后出现。</p>
+    <p id="g-next">next_edges 文案占位</p>
+    <p class="meta">D-N3 只读提示，<strong>无一键开卡</strong>，不自动导航。</p>
+    <pre id="g-out" class="out"></pre>
   </section>
 
   <script src="/workbench/static/drama.js"></script>
