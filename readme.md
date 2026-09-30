@@ -42,7 +42,7 @@ See [`docs/drama-n2.md`](docs/drama-n2.md). Frozen O1–O9: outline+cast→story
 
 ## Drama D-N3 / G3 (021a + 021c)
 
-After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally attach `CHAR@version` / `SCENE@version`, then confirm **gate G3**. Missing refs warn only (F1); `usable_for_n4` stays false without refs. Promote is an explicit stub and does not auto-pass G3. N3 uses `template_paths` / `prompt_paths` (F3). Screen H is a JSON dump — 021b FE is not claimed.
+After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally attach `CHAR@version` / `SCENE@version`, then confirm **gate G3**. Missing refs warn only (F1); `usable_for_n4` stays false without refs. Promote is an explicit stub and does not auto-pass G3. N3 uses `template_paths` / `prompt_paths` (F3). Screen H shows CHAR/SCENE rows + ref chips (021b minimal; docs≠PASS).
 
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou

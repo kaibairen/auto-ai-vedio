@@ -7,7 +7,7 @@
 | 门 | **G3**（唯一锁入口 `POST .../gates/g3/confirm`） |
 | 接口权威 | [`openapi/drama-n3.v0.yaml`](../openapi/drama-n3.v0.yaml) **0.1.0** |
 | 基线 | main **`2b6385ad`**（PR#13 GAP-COPY 已合；本包不重做 banners/catalog） |
-| 状态 | **docs≠PASS** · ForcePass=**never** · ≠产品/G2/G3 PASS · 021b FE 未宣称 |
+| 状态 | **docs≠PASS** · ForcePass=**never** · ≠产品/G2/G3 PASS · 021b Screen H 最小卡表（非产品 PASS） |
 
 本包停在 G3。`next_edges: ["D-N4"]` **只是候选**，**不**自动开 D-N4。
 
@@ -50,4 +50,4 @@ aiv drama n3 promote --project proj_01 --ep EP01 --id CHAR-01
 aiv drama g3 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 ```
 
-工作台 Screen H 仅为 JSON dump 狗粮钩子；**021b FE 未宣称 PASS**。
+工作台 Screen H：CHAR/SCENE 卡表（id / name / ref chip）+ 弱绑定 warn 横幅（不挡 G3）+ 分列 G3 locked / `usable_for_n4` 徽章。JSON dump 仅次要。**docs≠PASS**。

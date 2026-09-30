@@ -10,6 +10,8 @@ const state = {
   validate: null,
   episode: null,
   g1bLocked: false,
+  g2: null,
+  n3: null,
   selectedShot: null,
 };
 
@@ -306,9 +308,18 @@ async function api(method, path, body, headers) {
       showBanner(`422 ready_for_n4_requires_tool_profile: ${userErrorMessage(data, code)}`, false, "error");
       setExportChip("出片：未选工具", "warn");
     } else if (code === "upstream_unlocked") {
-      showBanner("409 upstream_unlocked: 上游门 G1b 未锁，不能进 D-N2。", false);
-      state.g1bLocked = false;
-      applyEGate();
+      const gate = data?.error?.details?.gate || "";
+      const node = data?.error?.details?.node || "";
+      if (gate === "g3" || node === "D-N3") {
+        showBanner("409 upstream_unlocked: 门 G3 未锁定；不可宣称可进 N4。", false);
+      } else if (gate === "g2" || node === "D-N2") {
+        showBanner("409 upstream_unlocked: 上游门 G2 未锁，不能进 D-N3。", false);
+        applyHWriteGate();
+      } else {
+        showBanner("409 upstream_unlocked: 上游门 G1b 未锁，不能进 D-N2。", false);
+        state.g1bLocked = false;
+        applyEGate();
+      }
     } else {
       showBanner(`${res.status} ${code}: ${data?.error?.message || ""}`, false);
     }
@@ -998,23 +1009,129 @@ if ($("tool-profile")) {
     evaluateCopy({}).catch(() => {});
   });
 }
+function isG2Ready() {
+  const sb = state.storyboard;
+  if (isStoryboardLocked(sb)) return true;
+  const g2 = state.g2;
+  const gateOk = Boolean(g2 && g2.locked === true && g2.last_decision === "pass");
+  const confirmed = Boolean(sb?.confirmed_by || g2?.actor);
+  return Boolean(gateOk && confirmed && sb && sb.locked === true);
+}
+function applyHWriteGate() {
+  const ready = isG2Ready();
+  const g3Locked = Boolean(state.n3?.gate?.locked);
+  const mat = $("btn-n3-mat");
+  if (mat) mat.disabled = !ready || g3Locked;
+  const hint = $("h-g2-hint");
+  if (hint) hint.hidden = ready;
+}
+function refChip(card) {
+  const lib = card?.library_ref;
+  const binding = String(card?.binding || "");
+  if (lib && (lib.version != null || lib.id)) {
+    const ver = lib.version != null ? lib.version : "?";
+    return { cls: "attached", text: `attached@${ver}` };
+  }
+  if (binding.includes("@")) {
+    return { cls: "attached", text: `attached@${binding.split("@").pop()}` };
+  }
+  if (binding === "local" || card?.origin === "local") {
+    return { cls: "local", text: "local" };
+  }
+  return { cls: "none", text: "none" };
+}
+function renderCardRows(tbodyId, cards) {
+  const tbody = $(tbodyId);
+  if (!tbody) return;
+  const rows = cards || [];
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="meta">无卡</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((c) => {
+    const chip = refChip(c);
+    return `<tr data-id="${escapeHtml(c.id || "")}">
+      <td><code>${escapeHtml(c.id || "")}</code></td>
+      <td>${escapeHtml(c.name || "")}</td>
+      <td><span class="chip ${chip.cls}">${escapeHtml(chip.text)}</span></td>
+    </tr>`;
+  }).join("");
+}
+function paintHBadges(data) {
+  const g3 = $("h-g3-badge");
+  const usable = $("h-usable-badge");
+  const locked = Boolean(data?.gate?.locked);
+  const ok = data?.usable_for_n4 === true;
+  if (g3) {
+    g3.textContent = locked ? "G3: locked" : "G3: 未锁定";
+    g3.className = `badge ${locked ? "ok" : "muted"}`;
+  }
+  if (usable) {
+    usable.textContent = `usable_for_n4: ${ok ? "true" : "false"}`;
+    usable.className = `badge ${ok ? "ok" : "muted"}`;
+  }
+}
+function paintHWeak(data) {
+  const el = $("h-weak");
+  if (!el) return;
+  const cards = [...(data?.cards?.characters || []), ...(data?.cards?.scenes || [])];
+  const weak = cards.some((c) => c.missing_ref || c.weak_binding);
+  el.hidden = !weak;
+  el.textContent = "视觉弱绑定 · 下游一致性自负";
+}
+function paintHFromEnvelope(data) {
+  state.n3 = data;
+  dump("h-out", data);
+  paintHBadges(data);
+  paintHWeak(data);
+  renderCardRows("h-char-tbody", data?.cards?.characters);
+  renderCardRows("h-scene-tbody", data?.cards?.scenes);
+  applyHWriteGate();
+}
+async function refreshG2State() {
+  if (!state.projectId) {
+    state.g2 = null;
+    return null;
+  }
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/gates/g2`);
+    state.g2 = data.gate || null;
+    if (data.storyboard) state.storyboard = data.storyboard;
+    return data;
+  } catch {
+    return null;
+  }
+}
 async function refreshScreenH() {
-  if (!state.projectId) return;
+  await refreshEpisodeChrome();
+  await refreshG2State();
+  applyHWriteGate();
+  if (!state.projectId) {
+    paintHFromEnvelope({ gate: { locked: false }, usable_for_n4: false, cards: { characters: [], scenes: [] } });
+    return;
+  }
+  if (!isG2Ready()) {
+    paintHFromEnvelope({ gate: { locked: false }, usable_for_n4: false, cards: { characters: [], scenes: [] } });
+    dump("h-out", { ok: false, reason: "g2_not_ready", note: "G2 须 locked 且 confirmed_by" });
+    return;
+  }
   try {
     const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/drama/n3`);
-    dump("h-out", data);
-    const el = $("h-usable");
-    if (el) el.textContent = `usable_for_n4=${data.usable_for_n4} · G3 locked=${data.gate?.locked} · 021b FE 未宣称`;
+    paintHFromEnvelope(data);
   } catch (err) {
     dump("h-out", err.data || { error: String(err) });
   }
 }
 if ($("btn-n3-mat")) {
   $("btn-n3-mat").onclick = async () => {
+    if (!isG2Ready()) {
+      applyHWriteGate();
+      return;
+    }
     const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/n3/cards/materialize`, {
       actor: "yangzhou",
     });
-    dump("h-out", data);
+    paintHFromEnvelope(data);
   };
 }
 if ($("btn-n3-get")) {
@@ -1025,8 +1142,9 @@ async function confirmG3(decision) {
     decision,
     actor: "yangzhou",
   });
-  dump("h-out", data);
+  paintHFromEnvelope(data);
 }
 if ($("btn-g3-pass")) $("btn-g3-pass").onclick = () => confirmG3("pass");
 if ($("btn-g3-reject")) $("btn-g3-reject").onclick = () => confirmG3("reject");
+applyHWriteGate();
 hdr();

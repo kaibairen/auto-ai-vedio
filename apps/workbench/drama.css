@@ -59,3 +59,11 @@ table.shots tr.selected { background: #2a2414; }
 .issues .hard { color: var(--danger); }
 .issues .soft { color: #e6c27a; }
 #cast-hint { cursor: pointer; }
+.h-sub { font-size: 15px; margin: 16px 0 8px; color: var(--ink); }
+.h-badges { margin: 8px 0 4px; }
+table.cards { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.cards th, table.cards td { border-bottom: 1px solid #2a2e36; padding: 6px 8px; text-align: left; }
+.chip.local { background: #2a2e36; color: var(--muted); }
+.chip.attached { background: #1d3a28; color: var(--ok); }
+.chip.none { background: #3a2a14; color: #e6c27a; }
+#h-weak, #h-g2-hint { margin: 8px 0; }

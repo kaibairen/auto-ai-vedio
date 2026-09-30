@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>短剧 D-N0 / D-N1 / D-N2 · 门 G1b / G2</title>
+  <title>短剧 D-N0 / D-N1 / D-N2 / D-N3 · 门 G1b / G2 / G3</title>
   <link rel="stylesheet" href="/workbench/static/drama.css" />
 </head>
 <body>
   <header class="top">
     <div>
       <strong>短剧 · pipeline_profile=drama</strong>
-      <span class="badge">D-N0 / A2 / D-N1 / D-N2</span>
+      <span class="badge">D-N0 / A2 / D-N1 / D-N2 / D-N3</span>
       <span class="badge muted" id="hdr-intent">intent:draft</span>
       <span class="badge muted">017a named-cast · 018c · 018d 出片档 · docs≠PASS</span>
       <span class="badge muted" id="hdr-lane">lane:unset</span>
@@ -29,7 +29,7 @@
     <button data-screen="e">E · D-N2 分镜</button>
     <button data-screen="f">F · 门 G2</button>
     <button data-screen="g">G · D-N2 Locked</button>
-    <button data-screen="h">H · D-N3 stub</button>
+    <button data-screen="h">H · D-N3</button>
   </nav>
   <p class="banner" id="banner" hidden></p>
   <p class="banner warn" id="cast-hint" hidden></p>
@@ -261,21 +261,47 @@
     <h1>D-N2 已锁定</h1>
     <p class="meta" id="g-summary">locked 摘要将在刷新后出现。</p>
     <p id="g-next">next_edges 文案占位</p>
-    <p class="meta">D-N3 只读提示，<strong>无一键开卡</strong>，不自动导航。JSON dump 见 H（021b FE 未宣称）。</p>
+    <p class="meta">D-N3 只读提示，<strong>无一键开卡</strong>，不自动导航。卡表见 H。</p>
     <pre id="g-out" class="out"></pre>
   </section>
 
   <section id="screen-h" class="screen" hidden>
-    <h1>D-N3 / G3 stub（JSON dump · 021b 未宣称）</h1>
-    <p class="meta">薄狗粮钩子：卡列表 + 引用态 + G3 确认/驳回。无图可薄确认。docs≠PASS。无一键开 N4。</p>
+    <h1>D-N3 单元卡 · 门 G3</h1>
+    <p class="meta">cast 工作副本。无图可薄确认。docs≠PASS。无一键开 N4。G3 pass ≠ usable_for_n4。</p>
+    <p class="banner warn" id="h-g2-hint" hidden>上游门 G2 未锁定（须 locked 且 confirmed_by），不能物化 / 写卡。</p>
+    <p class="banner warn" id="h-weak" hidden>视觉弱绑定 · 下游一致性自负</p>
+    <div class="row h-badges">
+      <span class="badge muted" id="h-g3-badge">G3: 未锁定</span>
+      <span class="badge muted" id="h-usable-badge">usable_for_n4: false</span>
+    </div>
     <div class="row">
-      <button id="btn-n3-mat">物化 cards</button>
-      <button id="btn-n3-get">刷新 dump</button>
+      <button id="btn-n3-mat" disabled>物化 cards</button>
+      <button id="btn-n3-get">刷新卡表</button>
       <button id="btn-g3-reject">G3 驳回</button>
       <button id="btn-g3-pass" class="primary">G3 确认</button>
     </div>
-    <p class="meta" id="h-usable">usable_for_n4=false · G3 pass ≠ 可进 N4</p>
-    <pre id="h-out" class="out"></pre>
+    <h2 class="h-sub">CHAR</h2>
+    <div class="table-wrap">
+      <table class="cards" id="h-char-table">
+        <thead>
+          <tr><th>id</th><th>name</th><th>ref</th></tr>
+        </thead>
+        <tbody id="h-char-tbody"></tbody>
+      </table>
+    </div>
+    <h2 class="h-sub">SCENE</h2>
+    <div class="table-wrap">
+      <table class="cards" id="h-scene-table">
+        <thead>
+          <tr><th>id</th><th>name</th><th>ref</th></tr>
+        </thead>
+        <tbody id="h-scene-tbody"></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>h-out JSON dump（次要）</summary>
+      <pre id="h-out" class="out"></pre>
+    </details>
   </section>
 
   <script src="/workbench/static/drama.js"></script>
