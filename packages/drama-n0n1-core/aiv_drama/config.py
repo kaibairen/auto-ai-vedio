@@ -66,6 +66,7 @@ class Settings:
     openai_api_key: str | None
     openai_base_url: str
     openai_model: str
+    named_cast_check: str = "warn"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -75,6 +76,9 @@ class Settings:
             provider = "llm"
         if provider not in {"fixture", "llm"}:
             provider = "fixture"
+        named_cast = (os.environ.get("AIV_NAMED_CAST_CHECK") or "warn").strip().lower()
+        if named_cast not in {"off", "warn", "error"}:
+            named_cast = "warn"
         return cls(
             data_dir=Path(data).resolve(),
             repo_root=find_repo_root(),
@@ -86,6 +90,7 @@ class Settings:
                 or "https://api.openai.com/v1"
             ).rstrip("/"),
             openai_model=os.environ.get("AIV_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
+            named_cast_check=named_cast,
         )
 
     def skill_relpath(self, lane: str) -> str:

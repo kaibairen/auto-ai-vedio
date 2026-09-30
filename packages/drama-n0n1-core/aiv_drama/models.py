@@ -108,6 +108,14 @@ class DetachRequest(BaseModel):
     actor: str | None = None
 
 
+class SidecarAddCharacterRequest(BaseModel):
+    """O2: add a named CHAR after G1b lock without unlocking the gate or rewriting outline."""
+
+    name: str = Field(min_length=1, max_length=64)
+    one_line: str | None = None
+    actor: str | None = None
+
+
 class LibraryCharacterWrite(BaseModel):
     """Dogfood seed (OpenAPI has no list/search). Not promote/fork."""
 

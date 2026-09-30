@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>短剧 D-N0 / D-N1 · 门 G1b</title>
+  <title>短剧 D-N0 / D-N1 / D-N2 · 门 G1b / G2</title>
   <link rel="stylesheet" href="/workbench/static/drama.css" />
 </head>
 <body>
   <header class="top">
     <div>
       <strong>短剧 · pipeline_profile=drama</strong>
-      <span class="badge">D-N0 / A2 / D-N1</span>
+      <span class="badge">D-N0 / A2 / D-N1 / D-N2</span>
       <span class="badge muted" id="hdr-intent">intent:draft</span>
+      <span class="badge muted">017a named-cast · 018c · docs≠PASS</span>
     </div>
     <div class="meta" id="hdr-meta">未建集</div>
   </header>
@@ -22,8 +23,10 @@
     <button data-screen="b">B · D-N1 Outline</button>
     <button data-screen="c">C · 门 G1b</button>
     <button data-screen="d">D · Locked</button>
+    <button data-screen="e">E · D-N2 / G2</button>
   </nav>
   <p class="banner" id="banner" hidden></p>
+  <p class="banner warn" id="cast-hint" hidden></p>
 
   <section id="screen-hub" class="screen">
     <h1>Episode Hub</h1>
@@ -153,6 +156,27 @@
     <pre id="d-out" class="out"></pre>
     <button id="btn-downstream">读下游定稿（未锁 → 409）</button>
     <pre id="dn-out" class="out"></pre>
+  </section>
+
+  <section id="screen-e" class="screen" hidden>
+    <h1>D-N2 分镜 · 具名配角</h1>
+    <p>O1 生成后自动入表；O2 侧车加角<strong>不拆 G1b</strong>、不改大纲正文；O5 默认 warn，G2 pass 遇 <code>named_cast_*</code> 产品门阻断。芯片只映 char_ids，不从台词自动加角。</p>
+    <div class="row">
+      <button id="btn-sb-gen">生成分镜（fixture）</button>
+      <button id="btn-sb-val">validate</button>
+    </div>
+    <div class="row">
+      <input id="side-name" placeholder="CODEX王子" />
+      <input id="side-line" placeholder="具名配角·侧车挂表" />
+      <button id="btn-sidecar">侧车加角</button>
+    </div>
+    <label>actor <input id="g2-actor" value="yangzhou" /></label>
+    <label>note <input id="g2-note" placeholder="G2 备注" /></label>
+    <div class="row">
+      <button id="btn-g2-reject">G2 驳回</button>
+      <button id="btn-g2-pass" class="primary">G2 通过</button>
+    </div>
+    <pre id="e-out" class="out"></pre>
   </section>
 
   <script src="/workbench/static/drama.js"></script>

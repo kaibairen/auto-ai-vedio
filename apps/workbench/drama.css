@@ -6,7 +6,7 @@
   --accent: #c9a227;
   --danger: #d4676a;
   --ok: #6fbf8a;
-  font-family: "Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", "Noto Sans SC", sans-serif;
+  font-family: "Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); }
@@ -24,6 +24,7 @@ button { background: #2c3340; color: var(--ink); border: 0; padding: 8px 14px; c
 button.primary { background: var(--accent); color: #1a1406; }
 .out { background: #0b0d10; padding: 12px; overflow: auto; max-height: 320px; font-size: 12px; }
 .banner { margin: 0; padding: 8px 20px; background: #3a2020; color: #ffd4d4; }
+.banner.warn { background: #3a3418; color: #f3e2a0; }
 .inline { display: inline-flex; align-items: center; gap: 6px; width: auto; }
 .meta { color: var(--muted); font-size: 13px; }
 .hint { color: var(--danger); font-size: 13px; }
