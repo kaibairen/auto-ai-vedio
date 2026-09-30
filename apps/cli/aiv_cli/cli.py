@@ -32,9 +32,15 @@ from aiv_drama_n2.models import (
     StoryboardResetRequest,
     StoryboardWrite,
 )
+from aiv_drama_n3.models import (
+    LibrarySceneWrite,
+    N3AttachRequest,
+    N3MaterializeRequest,
+    N3PromoteRequest,
+)
 
-app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
-drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2")
+app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
+drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3")
 project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
@@ -46,6 +52,8 @@ gate_app = typer.Typer(help="Gate G1b")
 downstream_app = typer.Typer(help="D-N2 consumer read (does not start D-N2)")
 storyboard_app = typer.Typer(help="D-N2 storyboard")
 g2_app = typer.Typer(help="Gate G2")
+n3_app = typer.Typer(help="D-N3 unit cards + crop")
+g3_app = typer.Typer(help="Gate G3")
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
@@ -59,6 +67,8 @@ drama.add_typer(gate_app, name="gate")
 drama.add_typer(downstream_app, name="downstream")
 drama.add_typer(storyboard_app, name="storyboard")
 drama.add_typer(g2_app, name="g2")
+drama.add_typer(n3_app, name="n3")
+drama.add_typer(g3_app, name="g3")
 
 _PRETTY = False
 
@@ -447,6 +457,97 @@ def g2_confirm(
     if note is not None:
         raw["note"] = note
     _print(_guard(lambda: _service().confirm_gate_g2(project_id, ep, raw)))
+
+
+@library_app.command("put-scene")
+def library_put_scene(
+    project_id: str = typer.Option(..., "--project"),
+    scene_id: str = typer.Option(..., "--scene-id"),
+    version: int = typer.Option(1, "--version"),
+    name: str = typer.Option(..., "--name"),
+    one_line: str = typer.Option(..., "--one-line"),
+) -> None:
+    body = LibrarySceneWrite(name=name, one_line=one_line, version=version)
+    _print(_guard(lambda: _service().put_library_scene(project_id, scene_id, body)))
+
+
+@library_app.command("policy")
+def library_policy(project_id: str = typer.Option(..., "--project")) -> None:
+    _print(_guard(lambda: _service().get_library_policy(project_id)))
+
+
+@n3_app.command("get")
+def n3_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n3(project_id, ep)))
+
+
+@n3_app.command("materialize")
+def n3_materialize(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+) -> None:
+    body = N3MaterializeRequest(actor=actor, unlock_edit=unlock_edit)
+    _print(_guard(lambda: _service().materialize_n3_cards(project_id, ep, body, raw=body.model_dump())))
+
+
+@n3_app.command("crop")
+def n3_crop(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n3_crop(project_id, ep)))
+
+
+@n3_app.command("attach")
+def n3_attach(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    ident: str = typer.Option(..., "--id"),
+    version: int = typer.Option(..., "--version"),
+    kind: Optional[str] = typer.Option(None, "--kind"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = N3AttachRequest(id=ident, version=version, kind=kind, actor=actor)  # type: ignore[arg-type]
+    _print(_guard(lambda: _service().attach_n3_card(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n3_app.command("promote")
+def n3_promote(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    ident: str = typer.Option(..., "--id"),
+    kind: Optional[str] = typer.Option(None, "--kind"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = N3PromoteRequest(id=ident, kind=kind, actor=actor)  # type: ignore[arg-type]
+    _print(_guard(lambda: _service().promote_n3_card(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@g3_app.command("get")
+def g3_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_gate_g3(project_id, ep)))
+
+
+@g3_app.command("confirm")
+def g3_confirm(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    decision: str = typer.Option(..., "--decision"),
+    actor: str = typer.Option(..., "--actor"),
+    note: Optional[str] = typer.Option(None, "--note"),
+) -> None:
+    raw = {"decision": decision, "actor": actor}
+    if note is not None:
+        raw["note"] = note
+    _print(_guard(lambda: _service().confirm_gate_g3(project_id, ep, raw)))
 
 
 @drama.command("demo")

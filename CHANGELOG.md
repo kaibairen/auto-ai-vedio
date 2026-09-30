@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.5 — AIV-021a/021c N3-unit cards + G3 thin + library stubs (docs≠PASS)
+
+Based on main tip `2b6385ad` (PR#13 GAP-COPY already merged; this PR does **not** re-port banners/catalog). ForcePass=never. Does not merge to main. Does not rewrite eng-015/019/020*. OpenAPI stays **0.1.x**.
+
+- **021a**: per-episode CHAR/SCENE working cards from cast only; N3 storyboard crop = read-only D-N2 column projection; G3 confirm/reject; G2 unlocked → 409; no auto-open D-N4.
+- **F1**: missing ref → weak-binding warn, does not block G3; `usable_for_n4` is the hard gate. G3 pass ≠ usable_for_n4.
+- **F2**: SCENE thin stub / one_line; no invented KEEP SCENE template paths.
+- **F3**: N3 observability `template_paths` / `prompt_paths` only; `.prompt` never written into D-N1/D-N2 `skill_paths`.
+- **021c**: `libraries/` schema (characters first; scenes stub) + attach/promote stubs. attach ≠ skip G3; promote ≠ auto-pass G3. `project_scope` capability; D12–D15 hanging defaults reversible; no silent auto-promote.
+- Workbench Screen H is a JSON dump stub only — **021b FE not claimed**.
+- docs≠PASS · ≠ product / G2 / G3 PASS.
+
 ## 0.2.4 — 018d GAP-COPY 出片横幅 + ErrorCode sync (docs≠PASS)
 
 Port of closed PR #10 leftovers onto main tip after #12. ForcePass=never. OpenAPI stays **0.1.0**. Does not rewrite N0–N2 LLM body generation.

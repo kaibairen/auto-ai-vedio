@@ -9,8 +9,46 @@ NODE_DN0 = "D-N0"
 NODE_DN1 = "D-N1"
 NODE_DN2 = "D-N2"
 NODE_DN3 = "D-N3"
+NODE_DN4 = "D-N4"
 GATE_G1B = "g1b"
 GATE_G2 = "g2"
+GATE_G3 = "g3"
+
+# D12–D15 hanging-surface defaults (reversible; chosen stays null — do not silent-pick).
+HANGING_D12 = {
+    "decision": "D12",
+    "status": "pending_hanging",
+    "reversible": True,
+    "default_assumption": "project",
+    "supported": ["project", "global"],
+    "chosen": None,
+    "silent_global_write": False,
+}
+HANGING_D13 = {
+    "decision": "D13",
+    "status": "pending_hanging",
+    "reversible": True,
+    "default_assumption": "manual_promote",
+    "supported": ["auto", "manual"],
+    "chosen": None,
+    "auto_promote": False,
+}
+HANGING_D14 = {
+    "decision": "D14",
+    "status": "pending_hanging",
+    "reversible": True,
+    "default_assumption": "follow_d9",
+    "supported": ["gitignore_object", "git_lfs", "d9_hybrid"],
+    "chosen": None,
+}
+HANGING_D15 = {
+    "decision": "D15",
+    "status": "pending_hanging",
+    "reversible": True,
+    "default_assumption": "new_version_old_episodes_stable",
+    "supported": ["same_char_versions", "new_char_id"],
+    "chosen": None,
+}
 
 Lane = Literal["female", "male"]
 LanePreference = Literal["female", "male", "unset"]
@@ -35,6 +73,7 @@ class LibraryRef(BaseModel):
 class EpisodeLocks(BaseModel):
     g1b: bool = False
     g2: bool = False
+    g3: bool = False
 
 
 class EpisodeVersions(BaseModel):
@@ -42,6 +81,7 @@ class EpisodeVersions(BaseModel):
     outline: int = 0
     cast: int = 0
     storyboard: int = 0
+    cards: int = 0
     episode: int = 1
 
 

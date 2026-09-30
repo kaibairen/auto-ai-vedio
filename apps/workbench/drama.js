@@ -241,6 +241,7 @@ function showScreen(name) {
   if (name === "e") refreshScreenE().catch(() => {});
   if (name === "f") refreshScreenF().catch(() => {});
   if (name === "g") refreshScreenG().catch(() => {});
+  if (name === "h") refreshScreenH().catch(() => {});
 }
 function isIntentConfirmed() {
   return state.intent && state.intent.confirmed === true;
@@ -997,4 +998,35 @@ if ($("tool-profile")) {
     evaluateCopy({}).catch(() => {});
   });
 }
+async function refreshScreenH() {
+  if (!state.projectId) return;
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/drama/n3`);
+    dump("h-out", data);
+    const el = $("h-usable");
+    if (el) el.textContent = `usable_for_n4=${data.usable_for_n4} · G3 locked=${data.gate?.locked} · 021b FE 未宣称`;
+  } catch (err) {
+    dump("h-out", err.data || { error: String(err) });
+  }
+}
+if ($("btn-n3-mat")) {
+  $("btn-n3-mat").onclick = async () => {
+    const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/n3/cards/materialize`, {
+      actor: "yangzhou",
+    });
+    dump("h-out", data);
+  };
+}
+if ($("btn-n3-get")) {
+  $("btn-n3-get").onclick = () => refreshScreenH();
+}
+async function confirmG3(decision) {
+  const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/gates/g3/confirm`, {
+    decision,
+    actor: "yangzhou",
+  });
+  dump("h-out", data);
+}
+if ($("btn-g3-pass")) $("btn-g3-pass").onclick = () => confirmG3("pass");
+if ($("btn-g3-reject")) $("btn-g3-reject").onclick = () => confirmG3("reject");
 hdr();

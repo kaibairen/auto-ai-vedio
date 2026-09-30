@@ -29,6 +29,7 @@
     <button data-screen="e">E · D-N2 分镜</button>
     <button data-screen="f">F · 门 G2</button>
     <button data-screen="g">G · D-N2 Locked</button>
+    <button data-screen="h">H · D-N3 stub</button>
   </nav>
   <p class="banner" id="banner" hidden></p>
   <p class="banner warn" id="cast-hint" hidden></p>
@@ -260,8 +261,21 @@
     <h1>D-N2 已锁定</h1>
     <p class="meta" id="g-summary">locked 摘要将在刷新后出现。</p>
     <p id="g-next">next_edges 文案占位</p>
-    <p class="meta">D-N3 只读提示，<strong>无一键开卡</strong>，不自动导航。</p>
+    <p class="meta">D-N3 只读提示，<strong>无一键开卡</strong>，不自动导航。JSON dump 见 H（021b FE 未宣称）。</p>
     <pre id="g-out" class="out"></pre>
+  </section>
+
+  <section id="screen-h" class="screen" hidden>
+    <h1>D-N3 / G3 stub（JSON dump · 021b 未宣称）</h1>
+    <p class="meta">薄狗粮钩子：卡列表 + 引用态 + G3 确认/驳回。无图可薄确认。docs≠PASS。无一键开 N4。</p>
+    <div class="row">
+      <button id="btn-n3-mat">物化 cards</button>
+      <button id="btn-n3-get">刷新 dump</button>
+      <button id="btn-g3-reject">G3 驳回</button>
+      <button id="btn-g3-pass" class="primary">G3 确认</button>
+    </div>
+    <p class="meta" id="h-usable">usable_for_n4=false · G3 pass ≠ 可进 N4</p>
+    <pre id="h-out" class="out"></pre>
   </section>
 
   <script src="/workbench/static/drama.js"></script>
