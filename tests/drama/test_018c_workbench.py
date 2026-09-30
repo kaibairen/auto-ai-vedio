@@ -38,9 +38,9 @@ def test_workbench_html_has_e_f_g_and_a2():
     assert "named_cast_auto_merged" in js
     assert "isStoryboardLocked" in js
     assert "confirmed_by" in js
-    assert "force_pass" not in html.lower()
     assert "force_pass" not in js
-    assert "一键开卡" not in html or "无一键开卡" in html
+    assert "无 force_pass" in html
+    assert "无一键开卡" in html
 
 
 def test_workbench_served(client):
