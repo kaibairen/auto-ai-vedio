@@ -138,7 +138,7 @@ class LlmStoryboardProvider:
                 "action/dialogue must not introduce named speakers or action agents absent from cast.characters[].name; weaken unknowns to UI/系统音 or use only given cast names",
                 "Group labels (王子们 / 两位王子) must expand to already-listed CHAR ids; do not invent a group CHAR",
                 "系统音 / 弹窗字 / 旁白 / 广播 without a character-name speaker prefix are OK and must NOT become CHAR names",
-                "Never invent CHAR from 【系统音】/半截广播台词/半截对白切片/动词短语/脏前缀 (leading /). Ban names like 你被双王子 / 而是两王子 / 王国王子 / AI王子. Collection 两王子/双王子/指出两王子 expand to GPT王子 + Opus5.5王子 or CODEX王子 + CURSOR(Opus5.5)王子 (or outline-equivalent proper names), never as their own CHAR",
+                "Never invent CHAR from 【系统音】/半截广播台词/半截对白切片/动词短语/脏前缀 (leading /). Ban names like 你被双王子 / 而是两王子 / 王国王子 / AI王子. Collection 两王子/双王子/指出两王子 expand to GPT王子 + Opus5.5王子 or CODEX王子 + CURSOR(Opus5.5)王子 (or outline-equivalent proper names), never as their own CHAR. Bare brands CURSOR/CODEX/GPT fold onto Opus5.5王子/GPT王子 (or CURSOR(Opus5.5)王子/CODEX王子) — never open a bare-brand CHAR. Parenthesis wraps like CURSOR（Opus5.5王子） are one entity, not two rows",
                 "duration_s must be one of 5, 8, or 10 (dogfood tool档). Prefer 5 dialogue CU, 8 action, 10 complex camera. Do not emit 2s/3s/4s",
                 "If tool_profile is set, duration_s must be in that profile's closed set and tool_duration_bucket must match the same seconds (no collision)",
                 "If tool_profile is empty, leave tool_duration_bucket null; still use duration_s ∈ {5,8,10}",

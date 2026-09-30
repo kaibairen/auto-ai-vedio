@@ -232,6 +232,35 @@ BRAND_TOKEN_RES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bGPT\b", re.I), "GPT王子"),
 )
 
+# Bare brands must fold onto a titled A slot — never open CHAR-CURSOR / CHAR-CODEX.
+BARE_BRANDS = frozenset({"cursor", "codex", "gpt", "opus5.5", "opus55", "opus"})
+BRAND_FAMILIES: tuple[frozenset[str], ...] = (
+    frozenset({"cursor", "cursoropus55", "opus55", "opus5.5", "opus"}),
+    frozenset({"codex", "gpt"}),
+)
+# Preferred titled slot when a family has no existing cast row.
+BARE_BRAND_CANONICAL = {
+    "cursor": "Opus5.5王子",
+    "opus": "Opus5.5王子",
+    "opus5.5": "Opus5.5王子",
+    "opus55": "Opus5.5王子",
+    "codex": "GPT王子",
+    "gpt": "GPT王子",
+}
+PAREN_WRAP_RE = re.compile(
+    r"([A-Za-z][A-Za-z0-9._-]*)\s*[\(（]\s*([^)）]{1,40})\s*[\)）]"
+    r"(?:(?P<title>王子|公主|女王|国王|将军|大人|小姐|少爷|殿下))?"
+)
+# ASCII-boundary (not \b) so CURSOR王国 / CURSOR（…） still match.
+LATIN_BRAND_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(CURSOR|CODEX|GPT|OPUS\s*5\.5|Opus\s*5\.5)(?![A-Za-z0-9])",
+    re.I,
+)
+SYSTEM_SPAN_RE = re.compile(
+    r"[/\\]?\s*[【\[]系统音[】\]][^。！？!?\n]*|系统音：[^\n。！？!?]*"
+)
+CONFRONTATION_MARKERS = ("对峙", "联猎", "退兵", "嘴炮", "现身", "并肩", "破屏")
+
 NONE_ID = "NONE"
 
 
@@ -370,9 +399,38 @@ def is_b_class(name: str) -> bool:
     return False
 
 
+def _brand_key(name: str) -> str:
+    text = strip_dirty_prefix(normalize_name(name)).casefold()
+    return re.sub(r"[.\s_-]", "", text)
+
+
+def is_bare_brand(name: str) -> bool:
+    """CODEX / CURSOR / GPT / Opus5.5 without a title — alias, not a CHAR slot."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key:
+        return False
+    if any(key.endswith(title) for title in TITLES):
+        return False
+    return _brand_key(key) in BARE_BRANDS
+
+
+def brand_family(name: str) -> frozenset[str] | None:
+    core = _title_core(name) or _brand_key(name)
+    if not core:
+        return None
+    for family in BRAND_FAMILIES:
+        if core in family:
+            return family
+        if any(len(item) >= 3 and (item in core or core in item) for item in family):
+            return family
+    return None
+
+
 def is_registerable_name(name: str) -> bool:
     key = strip_dirty_prefix(name)
     if not key or len(key) < 2:
+        return False
+    if is_bare_brand(key):
         return False
     if is_b_class(name) or is_b_class(key):
         return False
@@ -385,11 +443,122 @@ def is_registerable_name(name: str) -> bool:
     return True
 
 
+def fold_brand_to_canonical(name: str) -> str | None:
+    """Bare CURSOR/CODEX → titled A slot (Opus5.5王子 / GPT王子)."""
+    fam = brand_family(name)
+    if not fam:
+        return None
+    for token, canon in BARE_BRAND_CANONICAL.items():
+        if token in fam:
+            return canon
+    return None
+
+
+def prefer_paren_entity(outer: str, inner: str, trailing_title: str | None = None) -> str:
+    """One entity from CURSOR（Opus5.5王子） / CURSOR(Opus5.5)王子 — never two CHAR rows."""
+    outer_n = normalize_name(outer)
+    inner_n = normalize_name(inner)
+    title = trailing_title or ""
+    if title:
+        composed = f"{outer_n}({inner_n}){title}"
+        if is_registerable_name(composed):
+            return composed
+        inner_titled = inner_n if any(inner_n.endswith(t) for t in TITLES) else f"{inner_n}{title}"
+        if is_registerable_name(inner_titled):
+            return inner_titled
+    if is_registerable_name(inner_n):
+        return inner_n
+    if is_registerable_name(outer_n):
+        return outer_n
+    canon = fold_brand_to_canonical(inner_n) or fold_brand_to_canonical(outer_n)
+    if canon:
+        return canon
+    if title and outer_n:
+        return f"{outer_n}({inner_n}){title}"
+    return inner_n or outer_n
+
+
+def _is_brand_or_titled_wrap(outer: str, inner: str, trailing_title: str | None) -> bool:
+    if trailing_title:
+        return True
+    inner_n = normalize_name(inner)
+    outer_n = normalize_name(outer)
+    if is_registerable_name(inner_n) or is_registerable_name(outer_n):
+        return True
+    if is_bare_brand(outer_n) or is_bare_brand(inner_n):
+        return True
+    return bool(brand_family(outer_n) or brand_family(inner_n))
+
+
+def glue_paren_name(name: str) -> str:
+    """Speaker/hit `CURSOR（Opus5.5王子）` → one titled name."""
+    text = normalize_name(name)
+    if not text:
+        return text
+    match = PAREN_WRAP_RE.search(text)
+    if not match or match.start() != 0:
+        return text
+    if text[match.end() :].strip():
+        return text
+    if not _is_brand_or_titled_wrap(match.group(1), match.group(2), match.group("title")):
+        return text
+    return prefer_paren_entity(match.group(1), match.group(2), match.group("title")) or text
+
+
+def extract_paren_entities(text: str) -> list[str]:
+    hits: list[str] = []
+    seen: set[str] = set()
+    for match in PAREN_WRAP_RE.finditer(text or ""):
+        if not _is_brand_or_titled_wrap(match.group(1), match.group(2), match.group("title")):
+            continue
+        entity = prefer_paren_entity(match.group(1), match.group(2), match.group("title"))
+        if entity and entity not in seen:
+            seen.add(entity)
+            hits.append(entity)
+    return hits
+
+
+def strip_system_spans(text: str) -> str:
+    return SYSTEM_SPAN_RE.sub(" ", text or "")
+
+
+def extract_bare_brands(text: str) -> list[str]:
+    """CURSOR/CODEX/GPT tokens outside system-voice spans."""
+    cleaned = strip_system_spans(text or "")
+    hits: list[str] = []
+    seen: set[str] = set()
+    for match in LATIN_BRAND_TOKEN_RE.finditer(cleaned):
+        token = normalize_name(match.group(1))
+        if not is_bare_brand(token):
+            continue
+        if token not in seen:
+            seen.add(token)
+            hits.append(token)
+    return hits
+
+
+def fold_brand_to_pool(name: str, pool: Iterable[str]) -> str | None:
+    """Fold a brand/alias onto an existing titled family slot, else canonical A name."""
+    key = glue_paren_name(strip_dirty_prefix(normalize_name(name)))
+    ordered = [normalize_name(p) for p in pool if normalize_name(p)]
+    if key in ordered:
+        return key
+    fam = brand_family(key)
+    if not fam:
+        return None
+    for existing in ordered:
+        if brand_family(existing) == fam and is_registerable_name(existing):
+            return existing
+    if is_registerable_name(key):
+        return key
+    return fold_brand_to_canonical(key)
+
+
 def extract_speakers(text: str) -> list[str]:
     hits: list[str] = []
     seen: set[str] = set()
     for match in SPEAKER_RE.finditer(text or ""):
-        name = normalize_name(match.group(1))
+        name = glue_paren_name(normalize_name(match.group(1)))
         if name and name not in seen:
             seen.add(name)
             hits.append(name)
@@ -397,9 +566,27 @@ def extract_speakers(text: str) -> list[str]:
 
 
 def extract_proper_names(text: str) -> list[str]:
+    body = text or ""
     hits: list[str] = []
     seen: set[str] = set()
-    for match in PROPER_NAME_RE.finditer(text or ""):
+    covered: list[tuple[int, int]] = []
+
+    def _add(name: str) -> None:
+        key = glue_paren_name(normalize_name(name))
+        if key and key not in seen and is_registerable_name(key):
+            seen.add(key)
+            hits.append(key)
+
+    for match in PAREN_WRAP_RE.finditer(body):
+        if not _is_brand_or_titled_wrap(match.group(1), match.group(2), match.group("title")):
+            continue
+        covered.append((match.start(), match.end()))
+        _add(prefer_paren_entity(match.group(1), match.group(2), match.group("title")))
+
+    for match in PROPER_NAME_RE.finditer(body):
+        start, end = match.start(), match.end()
+        if any(start < e and end > s for s, e in covered):
+            continue
         name = normalize_name(match.group(0))
         if not name or name in seen:
             continue
@@ -485,12 +672,29 @@ def names_are_aliases(left: str, right: str) -> bool:
         return True
     if len(a) >= 3 and len(b) >= 3 and (a in b or b in a):
         return True
+    fam_a = brand_family(left)
+    fam_b = brand_family(right)
+    if fam_a and fam_b and fam_a == fam_b:
+        return True
     return False
 
 
 def prefer_name(left: str, right: str) -> str:
     a = normalize_name(left)
     b = normalize_name(right)
+    if is_bare_brand(a) and not is_bare_brand(b):
+        return b
+    if is_bare_brand(b) and not is_bare_brand(a):
+        return a
+    a_titled = any(a.endswith(t) for t in TITLES)
+    b_titled = any(b.endswith(t) for t in TITLES)
+    if a_titled and not b_titled:
+        return a
+    if b_titled and not a_titled:
+        return b
+    # First-seen titled slot wins so outline GPT/Opus names are not rewritten.
+    if a_titled and b_titled:
+        return a
     if ("(" in a or "（" in a) and "(" not in b and "（" not in b:
         return a
     if ("(" in b or "（" in b) and "(" not in a and "（" not in a:
@@ -516,15 +720,18 @@ def fold_needed(names: Iterable[str]) -> list[str]:
 
 
 def resolve_to_pool_name(name: str, pool: Iterable[str]) -> str | None:
-    key = normalize_name(name)
-    cleaned = strip_dirty_prefix(key)
+    key = glue_paren_name(normalize_name(name))
+    cleaned = glue_paren_name(strip_dirty_prefix(key))
     ordered = [normalize_name(p) for p in pool if normalize_name(p)]
     if key in ordered:
         return key
     if cleaned in ordered:
         return cleaned
-    if is_b_class(key) and not is_group_label(key):
+    if is_b_class(key) and not is_group_label(key) and not is_bare_brand(key) and not is_bare_brand(cleaned):
         return None
+    folded = fold_brand_to_pool(cleaned, ordered)
+    if folded:
+        return folded
     if not is_registerable_name(key) and cleaned not in ordered:
         for p in ordered:
             if names_are_aliases(cleaned, p) and is_registerable_name(p):
@@ -566,6 +773,10 @@ def infer_a_class_names(
             if rx.search(corpus):
                 recovered.append(canon)
         names = fold_needed([*names, *recovered])
+    for token in extract_bare_brands(corpus):
+        folded = fold_brand_to_pool(token, names)
+        if folded and is_registerable_name(folded):
+            names = fold_needed([*names, folded])
     return names
 
 
@@ -607,12 +818,20 @@ def collect_named_hits(
     for row in rows:
         action, dialogue, _ = _row_prose(row)
         for name in extract_speakers(dialogue) + extract_speakers(action):
-            if is_b_class(name):
+            if is_b_class(name) and not is_bare_brand(name):
                 continue
             if is_registerable_name(name):
                 pool.add(strip_dirty_prefix(name) or name)
+            else:
+                folded = fold_brand_to_pool(name, pool)
+                if folded:
+                    pool.add(folded)
         pool.update(extract_proper_names(action))
         pool.update(extract_proper_names(dialogue))
+        for token in extract_bare_brands(f"{action}\n{dialogue}"):
+            folded = fold_brand_to_pool(token, pool)
+            if folded:
+                pool.add(folded)
 
     hits: list[dict[str, Any]] = []
     for idx, row in enumerate(rows):
@@ -624,17 +843,17 @@ def collect_named_hits(
         for name in extract_speakers(dialogue):
             if is_system_speaker(name) or is_generic_ref(name):
                 continue
-            if is_b_class(name) and not is_group_label(name):
+            if is_b_class(name) and not is_group_label(name) and not is_bare_brand(name):
                 continue
-            cleaned = strip_dirty_prefix(name) or name
+            cleaned = glue_paren_name(strip_dirty_prefix(name) or name)
             names[cleaned] = "group" if is_group_label(cleaned) else "speaker"
             fields.add("dialogue")
         for name in extract_speakers(action):
             if is_system_speaker(name) or is_generic_ref(name):
                 continue
-            if is_b_class(name) and not is_group_label(name):
+            if is_b_class(name) and not is_group_label(name) and not is_bare_brand(name):
                 continue
-            cleaned = strip_dirty_prefix(name) or name
+            cleaned = glue_paren_name(strip_dirty_prefix(name) or name)
             names.setdefault(cleaned, "group" if is_group_label(cleaned) else "speaker")
             fields.add("action")
 
@@ -647,6 +866,13 @@ def collect_named_hits(
             if name in action:
                 fields.add("action")
             if name in dialogue:
+                fields.add("dialogue")
+
+        for token in extract_bare_brands(combined):
+            names.setdefault(token, "action")
+            if token in action:
+                fields.add("action")
+            if token in dialogue:
                 fields.add("dialogue")
 
         for name in extract_group_labels(combined):
@@ -671,13 +897,17 @@ def collect_named_hits(
 
 
 def resolve_hit_names(name: str, individual_pool: Iterable[str]) -> list[str]:
-    if is_group_label(name) or is_generic_title(name):
-        return expand_group(name, individual_pool)
-    target = resolve_to_pool_name(name, individual_pool)
+    glued = glue_paren_name(name)
+    if is_group_label(glued) or is_generic_title(glued):
+        return expand_group(glued, individual_pool)
+    target = resolve_to_pool_name(glued, individual_pool)
     if target:
         return [target]
-    if is_registerable_name(name):
-        return [strip_dirty_prefix(name) or normalize_name(name)]
+    if is_registerable_name(glued):
+        return [strip_dirty_prefix(glued) or normalize_name(glued)]
+    folded = fold_brand_to_pool(glued, individual_pool)
+    if folded:
+        return [folded]
     return []
 
 
@@ -854,6 +1084,7 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
         updated = dict(row)
         action, dialogue, combined = _row_prose(row)
         mentioned: set[str] = set()
+        cleaned = strip_system_spans(combined)
         for name in names_mentioned(combined, pool):
             target = resolve_to_pool_name(name, pool)
             if target:
@@ -862,13 +1093,17 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
             if is_group_label(name) or is_generic_title(name):
                 mentioned.update(expand_group(name, pool))
                 continue
-            if is_b_class(name):
+            if is_b_class(name) and not is_bare_brand(name):
                 continue
             target = resolve_to_pool_name(name, pool)
             if target:
                 mentioned.add(target)
         for name in extract_proper_names(combined):
             target = resolve_to_pool_name(name, pool)
+            if target:
+                mentioned.add(target)
+        for token in extract_bare_brands(cleaned):
+            target = resolve_to_pool_name(token, pool)
             if target:
                 mentioned.add(target)
         for label in extract_group_labels(combined):
@@ -894,7 +1129,68 @@ def _is_dirty_cast_name(name: str) -> bool:
         or is_group_label(name)
         or is_system_speaker(name)
         or is_verb_phrase(name)
+        or is_bare_brand(name)
     )
+
+
+def _is_a_class_prince(name: str) -> bool:
+    if not is_registerable_name(name) or is_bare_brand(name):
+        return False
+    key = normalize_name(name)
+    if "王子" in key:
+        return True
+    return brand_family(key) is not None
+
+
+def _shot_prince_signal(row: dict[str, Any]) -> bool:
+    """True when a shot mentions princes/brands after stripping system-voice spans."""
+    _action, _dialogue, combined = _row_prose(row)
+    cleaned = strip_system_spans(combined)
+    if not cleaned.strip():
+        return False
+    if extract_group_labels(cleaned):
+        return True
+    if "王子" in cleaned:
+        return True
+    if LATIN_BRAND_TOKEN_RE.search(cleaned):
+        return True
+    if any(marker in cleaned for marker in CONFRONTATION_MARKERS):
+        return True
+    for name in extract_speakers(cleaned):
+        if is_bare_brand(name) or brand_family(name):
+            return True
+    return False
+
+
+def hang_orphan_princes(
+    rows: list[dict[str, Any]],
+    cast: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """A-class prince rows in cast must appear on ≥1 prince-signal shot."""
+    by_name, _ = _cast_name_index(cast)
+    prince_ids = [cid for name, cid in by_name.items() if _is_a_class_prince(name)]
+    if not prince_ids:
+        return rows
+    appearance = {cid: 0 for cid in prince_ids}
+    for row in rows:
+        for cid in row.get("char_ids") or []:
+            ident = str(cid)
+            if ident in appearance:
+                appearance[ident] += 1
+    orphans = [cid for cid, count in appearance.items() if count == 0]
+    if not orphans:
+        return rows
+    signal_idxs = [idx for idx, row in enumerate(rows) if _shot_prince_signal(row)]
+    if not signal_idxs:
+        return rows
+    out = [dict(row) for row in rows]
+    for idx in signal_idxs:
+        current = [str(c) for c in (out[idx].get("char_ids") or []) if c and str(c) != NONE_ID]
+        for cid in orphans:
+            if cid not in current:
+                current.append(cid)
+        out[idx]["char_ids"] = current or [NONE_ID]
+    return out
 
 
 def prune_dirty_char_ids(rows: list[dict[str, Any]], cast: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -953,12 +1249,12 @@ def auto_merge_named_cast(
 
     needed: list[str] = []
     for name in a_class:
-        target = resolve_to_pool_name(name, individual_pool) or name
+        target = resolve_to_pool_name(name, individual_pool) or fold_brand_to_pool(name, individual_pool) or name
         if target not in by_name and target not in needed and is_registerable_name(target):
             needed.append(target)
     for hit in hits:
         for name in resolve_hit_names(hit["name"], individual_pool):
-            target = resolve_to_pool_name(name, individual_pool) or name
+            target = resolve_to_pool_name(name, individual_pool) or fold_brand_to_pool(name, individual_pool) or name
             if target not in by_name and target not in needed and is_registerable_name(target):
                 needed.append(target)
     needed = fold_needed(needed)
@@ -968,10 +1264,10 @@ def auto_merge_named_cast(
     for name in needed:
         core = _title_core(name) or name.casefold()
         if core in canon_existing:
-            existing = canon_existing[core]
-            if existing not in by_name:
-                continue
             # near-duplicate of an already-listed row — reuse, do not open CHAR
+            continue
+        fam = brand_family(name)
+        if fam and any(brand_family(existing) == fam for existing in by_name):
             continue
         filtered.append(name)
         canon_existing[core] = name
@@ -995,4 +1291,5 @@ def auto_merge_named_cast(
 
     wired = apply_char_id_wiring(rows, by_name)
     wired = prune_dirty_char_ids(wired, cast)
+    wired = hang_orphan_princes(wired, cast)
     return wired, added

@@ -2,6 +2,8 @@
 
 ## 0.2.3 — BRIEF-AIV-020 cast hygiene + duration buckets + skill excerpt (docs≠PASS)
 
+LOOP-CONTINUE R3 (eng-020r2 FIT-GAP): fold bare `CURSOR`/`CODEX` onto `Opus5.5王子`/`GPT王子` (never a bare-brand CHAR); glue `CURSOR（Opus5.5王子）` to one entity; hang A-class prince ids on dialogue/confrontation shots so clean slots are not orphans. A1 half-line/generic skip kept. P0-B/C unchanged.
+
 LOOP-CONTINUE (eng-020 FIT-GAP): skip dialogue half-slices `你被双王子` / `而是两王子` and generic titles `王国王子` / `AI王子`; full lines with `双王子` still map to GPT/Opus (or CODEX/CURSOR) A slots. P0-B/C unchanged.
 
 P0 engineering loop on tip `0d16e92` (PR#11 stack). ForcePass=never. Does not merge to main. Does not rewrite eng-015/019 dogfood artifacts.
