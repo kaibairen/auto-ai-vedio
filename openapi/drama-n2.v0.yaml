@@ -1,0 +1,777 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N2 Storyboard API
+  version: 0.1.0
+  description: |
+    短剧轨 `pipeline_profile=drama` 的 **D-N2（分镜表）** 与 **门 G2** 接口权威源 v0。
+
+    ## 权威
+    - 产品：`DRAMA-N2-PRD-v0.md`（已落盘 · 设计稿）
+    - 摄影词表：`DRAMA-N2-CAM-v0.md`（shot_size/camera/时长档闭集）
+    - 盘投影骨架：`DRAMA-N2-PACKAGE-ENG-v0.md`
+    - 表设计：`DRAMA-N2-DB-v0.md` · 契约说明：`DRAMA-N2-CONTRACT-BE-v0.md`
+    - docs≠PASS；ForcePass=never；ACCEPT≠实施。
+    - 命名：**D-N2 / 门 G2**；禁止裸「N2」；勿混 koubo-N*。
+
+    ## Provisional（O1–O9 挂起面排队 · 本骨架用 PRD 默认，不阻塞）
+    - O1 大纲直出分镜（无独立剧本硬门）
+    - O2 `storyboard_skill: borrowed_dongman`
+    - O3 列 = NODE-SPEC 最低 + `bridge_id` + CAM 摄影闭集；angle/speed → notes
+    - O4 产品要求 API 源 + 盘 csv/md 双投影；实现选型见 DB-v0（**DB 表**）
+    - O5 具名 CHAR 硬拒未知 id；空镜/背影/群杂允许 `NONE` + notes
+    - O6 shot_cap 继承 outline（≤12 狗粮硬）
+    - O7 存英文短码、UI 中文
+    - O8 angle/camera_speed 不加死列
+    - O9 tool_profile 默认示例 seedance_2；未选不挡 G2，挡 ready_for_n4
+
+    ## 硬规则
+    - G1b 未锁 → **409 `upstream_unlocked`**
+    - 单门锁：`POST .../gates/g2/confirm`；force_pass → **400 `force_pass_forbidden`**
+    - G2 pass → locked；`next_edges:["D-N3"]`；**不自动开 D-N3**
+    - 锁后 unlock_edit → version++、清 locked、stale D-N3+
+    - 禁完整出片提示词字段 → **422 `prompt_forbidden`**
+  contact:
+    name: AI视频-后端
+  x-assign: AIV-DN2-BE-001
+  x-date: '2026-09-30'
+  x-prd-ref: /workspace/aiv-learn/DRAMA-N2-PRD-v0.md
+  x-cam-ref: /workspace/aiv-learn/DRAMA-N2-CAM-v0.md
+  x-eng-ref: /workspace/aiv-learn/DRAMA-N2-PACKAGE-ENG-v0.md
+servers:
+  - url: /api/v0
+tags:
+  - name: StoryboardDraft
+  - name: Gates
+security:
+  - bearerAuth: []
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/storyboard:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [StoryboardDraft]
+      operationId: getStoryboard
+      summary: 读 D-N2 分镜表
+      description: |
+        以「下游身份」读锁态大纲/cast 输入或本表生成依赖上游时：
+        `gates.g1b.locked≠true` → **409 `upstream_unlocked`**。
+        空表（尚未生成）在上游已锁时可 200 + `rows:[]` + `version:0`。
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryboardEnvelope'
+              example:
+                ok: true
+                project_id: proj_01
+                episode_id: EP01
+                node: D-N2
+                storyboard:
+                  episode_id: EP01
+                  pipeline_profile: drama
+                  lane: female
+                  shot_cap: 12
+                  shot_count: 2
+                  tool_profile: seedance_2
+                  storyboard_skill: borrowed_dongman
+                  upstream_outline_version: 3
+                  upstream_cast_version: 3
+                  stale: false
+                  ready_for_n4: false
+                  rows:
+                    - shot_id: S01
+                      bridge_id: B1
+                      seq: 1
+                      duration_s: 5
+                      shot_size: MS
+                      camera: PUSH
+                      action: 推门入室环顾
+                      char_ids: [CHAR-01]
+                      scene_id: SCENE-01
+                      dialogue: null
+                      transition: cut
+                      dynamic_level: 基础
+                      tool_duration_bucket: 'seedance:5'
+                      grid_strict: false
+                      notes: 'angle:eye'
+                    - shot_id: S02
+                      bridge_id: B1
+                      seq: 2
+                      duration_s: 5
+                      shot_size: CU
+                      camera: STATIC
+                      action: 眼神一凛
+                      char_ids: [CHAR-01]
+                      scene_id: SCENE-01
+                      dialogue: 你终于来了
+                      transition: cut
+                      dynamic_level: 基础
+                      tool_duration_bucket: 'seedance:5'
+                      grid_strict: true
+                      notes: 'subtitle:yes'
+                  version: 1
+                  locked: false
+                  confirmed_by: null
+                  updated_at: '2026-09-30T02:30:00+08:00'
+                  updated_by: yangzhou
+                next_edges: []
+                stale_downstream: []
+                validate_warnings: []
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    put:
+      tags: [StoryboardDraft]
+      operationId: putStoryboard
+      summary: 整表改稿（锁前；锁后须 unlock_edit）
+      description: |
+        - G1b 未锁 → 409 `upstream_unlocked`
+        - locked=false → 整表替换；version++；投影 csv/md
+        - locked=true 且 unlock_edit≠true → 409 `locked`
+        - unlock_edit=true → version++、清 locked/confirmed_by、stale_downstream 含 D-N3；不自动开 D-N3
+        - rows.length 不在 [1,shot_cap]（空表仅 reset 允许）或 >shot_cap → 422 `shot_cap_exceeded`
+        - 非法 CAM 枚举 / duration↔bucket / 提示词 / 未知 CHAR → 422
+        - J1–J2 景别跳变 → warnings，不硬拒
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoryboardWrite'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryboardEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/storyboard/generate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [StoryboardDraft]
+      operationId: generateStoryboard
+      summary: 自锁定大纲+cast 生成分镜表
+      description: |
+        前置 G1b locked；否则 409。已锁分镜须 unlock_edit。
+        Skill 只读借用动态漫-转分镜（O2）；不注入 Seedance 出片 Skill；无独立剧本资源（O1）。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoryboardGenerateRequest'
+            example:
+              provider: fixture
+              tool_profile: seedance_2
+              storyboard_skill: borrowed_dongman
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryboardEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/storyboard/validate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [StoryboardDraft]
+      operationId: validateStoryboard
+      summary: 机检（不改锁）
+      description: |
+        硬：shot_cap、CAM 枚举、cast id（O5）、禁提示词、bridge_id 非空、shot_id 唯一、seq。
+        软 warn：J1–J2、grid_strict 建议、tool_profile 未选。
+        duration↔bucket：未选 tool_profile 时不硬拒 G2；选了则不一致 → error（挡 ready_for_n4）。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryboardValidateEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/storyboard/reorder:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [StoryboardDraft]
+      operationId: reorderStoryboard
+      summary: 按 shot_ids 调序（锁前）
+      description: |
+        仅 locked=false。保持各行 bridge_id；重写 seq；可选规范化 shot_id 连续。
+        锁后 → 409（须 unlock_edit 后 PUT/reorder）。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoryboardReorderRequest'
+            example:
+              shot_ids: [S02, S01, S03]
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryboardEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/storyboard/reset:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [StoryboardDraft]
+      operationId: resetStoryboard
+      summary: 清空分镜表
+      description: |
+        上游未锁 → 409。已锁须 unlock_edit=true → 升 version + 清 locked + stale 后清空。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unlock_edit: { type: boolean, default: false }
+                actor: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryboardEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/gates/g2:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [Gates]
+      operationId: getGateG2
+      summary: 读门 G2 状态
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateG2Envelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{project_id}/episodes/{ep}/gates/g2/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [Gates]
+      operationId: confirmGateG2
+      summary: 确认门 G2（唯一锁入口）
+      description: |
+        前置 G1b locked；否则 409 `upstream_unlocked`。
+        storyboard.stale=true（上游升版未处理）→ 409 `stale_upstream`。
+        pass → locked=true；confirmed_by=actor；next_edges=["D-N3"]；不创建 D-N3 job。
+        reject → locked=false；记 note。
+        force_pass/force/skip_gate → 400 `force_pass_forbidden`。
+        硬机检 FAIL → 422；J1–J2 warn 不挡 pass。
+        未选 tool_profile 时 pass 允许，ready_for_n4 必须 false。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GateConfirmRequest'
+            examples:
+              pass:
+                value: { decision: pass, actor: yangzhou, note: 镜序与景别可过 }
+              reject:
+                value: { decision: reject, actor: yangzhou, note: 'G2-D3 主爽桥 0 镜' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateG2Envelope'
+              example:
+                ok: true
+                project_id: proj_01
+                episode_id: EP01
+                node: D-N2
+                gate:
+                  gate_id: g2
+                  state: passed
+                  locked: true
+                  version: 2
+                  last_decision: pass
+                  note: 镜序与景别可过
+                  actor: yangzhou
+                  decided_at: '2026-09-30T03:00:00+08:00'
+                storyboard:
+                  episode_id: EP01
+                  pipeline_profile: drama
+                  lane: female
+                  shot_cap: 12
+                  shot_count: 2
+                  tool_profile: seedance_2
+                  storyboard_skill: borrowed_dongman
+                  upstream_outline_version: 3
+                  upstream_cast_version: 3
+                  stale: false
+                  ready_for_n4: true
+                  rows: []
+                  version: 2
+                  locked: true
+                  confirmed_by: yangzhou
+                next_edges: [D-N3]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string, example: proj_01 }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, pattern: '^EP\\d{2,}$', example: EP01 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema: { type: string }
+      description: 资源 version；不匹配 → 409 version_conflict
+  responses:
+    BadRequest:
+      description: 400
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: force_pass_forbidden, message: ForcePass=never, details: {} }
+    NotFound:
+      description: 404
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: not_found, message: not found, details: {} }
+    Conflict:
+      description: 409
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            locked:
+              value:
+                ok: false
+                error: { code: locked, message: locked; set unlock_edit to edit, details: { node: D-N2 } }
+            version_conflict:
+              value:
+                ok: false
+                error: { code: version_conflict, message: If-Match mismatch, details: { expected: 2, actual: 3 } }
+            upstream_unlocked:
+              value:
+                ok: false
+                error: { code: upstream_unlocked, message: D-N1 G1b not locked, details: { node: D-N1, gate: g1b } }
+            stale_upstream:
+              value:
+                ok: false
+                error: { code: stale_upstream, message: outline/cast bumped; refresh storyboard, details: { stale: [d_n2] } }
+    Unprocessable:
+      description: 422
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            shot_cap_exceeded:
+              value:
+                ok: false
+                error: { code: shot_cap_exceeded, message: rows exceed shot_cap, details: { shot_cap: 12, row_count: 13 } }
+            prompt_forbidden:
+              value:
+                ok: false
+                error: { code: prompt_forbidden, message: full generation prompts forbidden in storyboard, details: {} }
+            cam_enum_invalid:
+              value:
+                ok: false
+                error: { code: cam_enum_invalid, message: shot_size/camera not in CAM closed set, details: { field: shot_size, value: 中景 } }
+            duration_bucket_mismatch:
+              value:
+                ok: false
+                error: { code: duration_bucket_mismatch, message: duration_s not in tool_duration_bucket, details: { duration_s: 7, tool_duration_bucket: 'seedance:5' } }
+            cast_id_unknown:
+              value:
+                ok: false
+                error: { code: cast_id_unknown, message: named CHAR/SCENE not in locked cast, details: { id: CHAR-99 } }
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - validation
+        - not_found
+        - conflict
+        - locked
+        - upstream_unlocked
+        - stale_upstream
+        - version_conflict
+        - shot_cap_exceeded
+        - storyboard_empty
+        - storyboard_incomplete
+        - prompt_forbidden
+        - cast_id_unknown
+        - bridge_id_missing
+        - shot_id_duplicate
+        - seq_invalid
+        - cam_enum_invalid
+        - duration_bucket_mismatch
+        - episode_abandoned
+        - force_pass_forbidden
+        - provider
+        - projection_dirty
+        - wrong_profile
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    ErrorEnvelope:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { $ref: '#/components/schemas/ErrorBody' }
+
+    ShotSize:
+      type: string
+      description: CAM §2.1 闭集（provisional O7=英文短码）
+      enum: [ELS, LS, MS, CU, ECU]
+    CameraMove:
+      type: string
+      description: CAM §3.1 一镜一主运镜闭集
+      enum:
+        [STATIC, POV, HANDHELD, OTS, DEEP_FOCUS, PUSH, PULL, PAN_H, PAN_V,
+         TRUCK, TRACK, CRANE_UP, CRANE_DOWN, ORBIT, ROLL, DOLLY_ZOOM,
+         WHIP_PUSH, WHIP_PULL, STATIC_TO_MOVE]
+    ToolProfile:
+      type: string
+      enum: [seedance_2, kling, hailuo, veo]
+      description: O9 provisional；狗粮示例 seedance_2；D5 未拍板
+    ToolDurationBucket:
+      type: string
+      enum:
+        ['seedance:5', 'seedance:8', 'seedance:10', 'kling:5', 'kling:10',
+         'hailuo:6', 'hailuo:10', 'veo:8']
+
+    StoryboardRow:
+      type: object
+      required: [shot_id, bridge_id, seq, duration_s, shot_size, camera, action, char_ids, scene_id]
+      additionalProperties: false
+      description: |
+        NODE-SPEC §3.3 + PRD bridge_id。禁止 prompt/negative_prompt/seedance_*/outpaint_*/grid_prompt。
+        PRD body_rows[] ≡ 本 schema 数组元素。
+      properties:
+        shot_id: { type: string, pattern: '^S\\d{2,}$' }
+        bridge_id:
+          type: string
+          minLength: 1
+          description: 大纲桥段号如 B3；幽灵镜挂最近桥并 notes 说明〔DIR/PRD〕
+          example: B1
+        seq: { type: integer, minimum: 1 }
+        duration_s: { type: integer, minimum: 1, description: 整数秒 }
+        shot_size: { $ref: '#/components/schemas/ShotSize' }
+        camera: { $ref: '#/components/schemas/CameraMove' }
+        action: { type: string, minLength: 1 }
+        char_ids:
+          type: array
+          items: { type: string }
+          description: |
+            O5：具名 CHAR-* 须 ∈ 锁定 cast，否则 422 cast_id_unknown。
+            空镜/背影/群杂：允许 ["NONE"] 或 []，且 notes 说明；禁止混用未知 CHAR。
+        scene_id:
+          type: string
+          description: SCENE-* ∈ cast，或合规空镜 "NONE"
+        dialogue: { type: string, nullable: true }
+        transition: { type: string, nullable: true }
+        dynamic_level: { type: string, nullable: true }
+        tool_duration_bucket:
+          allOf: [{ $ref: '#/components/schemas/ToolDurationBucket' }]
+          nullable: true
+        grid_strict: { type: boolean, default: false }
+        notes: { type: string, nullable: true }
+
+    StoryboardDraft:
+      type: object
+      required: [episode_id, pipeline_profile, shot_cap, shot_count, rows, version, locked]
+      properties:
+        episode_id: { type: string, pattern: '^EP\\d{2,}$' }
+        pipeline_profile: { type: string, enum: [drama] }
+        lane: { type: string, enum: [female, male], nullable: true }
+        shot_cap:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 12
+          description: 继承 outline.shot_cap（≡ ENG shot_budget）；硬上限 12
+        shot_count:
+          type: integer
+          minimum: 0
+          description: = rows.length；pass 时须 1..shot_cap
+        tool_profile:
+          allOf: [{ $ref: '#/components/schemas/ToolProfile' }]
+          nullable: true
+        storyboard_skill:
+          type: string
+          enum: [borrowed_dongman, custom, unset]
+          default: borrowed_dongman
+        upstream_outline_version: { type: integer, minimum: 0 }
+        upstream_cast_version: { type: integer, minimum: 0 }
+        stale:
+          type: boolean
+          default: false
+          description: 上游 unlock_edit 后 true；G2 pass 前须处理
+        ready_for_n4:
+          type: boolean
+          default: false
+          description: 仅 tool_profile 已选且硬机检（含 duration↔bucket）通过
+        rows:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/StoryboardRow' }
+          description: PRD 字段名 body_rows 的 API 映射
+        version: { type: integer, minimum: 0 }
+        locked: { type: boolean }
+        confirmed_by: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: string, nullable: true }
+        job_id: { type: string, nullable: true }
+
+    StoryboardRowWrite:
+      type: object
+      required: [bridge_id, seq, duration_s, shot_size, camera, action, char_ids, scene_id]
+      additionalProperties: false
+      properties:
+        shot_id: { type: string, pattern: '^S\\d{2,}$' }
+        bridge_id: { type: string, minLength: 1 }
+        seq: { type: integer, minimum: 1 }
+        duration_s: { type: integer, minimum: 1 }
+        shot_size: { $ref: '#/components/schemas/ShotSize' }
+        camera: { $ref: '#/components/schemas/CameraMove' }
+        action: { type: string, minLength: 1 }
+        char_ids: { type: array, items: { type: string } }
+        scene_id: { type: string }
+        dialogue: { type: string, nullable: true }
+        transition: { type: string, nullable: true }
+        dynamic_level: { type: string, nullable: true }
+        tool_duration_bucket:
+          allOf: [{ $ref: '#/components/schemas/ToolDurationBucket' }]
+          nullable: true
+        grid_strict: { type: boolean, default: false }
+        notes: { type: string, nullable: true }
+
+    StoryboardWrite:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/StoryboardRowWrite' }
+        tool_profile: { $ref: '#/components/schemas/ToolProfile' }
+        storyboard_skill: { type: string, enum: [borrowed_dongman, custom, unset] }
+        unlock_edit: { type: boolean, default: false }
+        actor: { type: string }
+
+    StoryboardGenerateRequest:
+      type: object
+      properties:
+        provider: { type: string, enum: [fixture, llm, skill], default: fixture }
+        tool_profile: { $ref: '#/components/schemas/ToolProfile' }
+        storyboard_skill: { type: string, enum: [borrowed_dongman, custom], default: borrowed_dongman }
+        unlock_edit: { type: boolean, default: false }
+        actor: { type: string }
+        shot_cap_override: { type: integer, minimum: 1, maximum: 12 }
+
+    StoryboardReorderRequest:
+      type: object
+      required: [shot_ids]
+      properties:
+        shot_ids:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items: { type: string, pattern: '^S\\d{2,}$' }
+        actor: { type: string }
+
+    StoryboardEnvelope:
+      type: object
+      required: [ok, storyboard]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N2] }
+        storyboard: { $ref: '#/components/schemas/StoryboardDraft' }
+        next_edges: { type: array, items: { type: string } }
+        stale_downstream: { type: array, items: { type: string } }
+        validate_warnings:
+          type: array
+          items: { $ref: '#/components/schemas/ValidateIssue' }
+
+    ValidateIssue:
+      type: object
+      required: [severity, code, message]
+      properties:
+        severity: { type: string, enum: [error, warn] }
+        code: { type: string }
+        message: { type: string }
+        shot_id: { type: string, nullable: true }
+        field: { type: string, nullable: true }
+        details: { type: object, additionalProperties: true }
+
+    StoryboardValidateEnvelope:
+      type: object
+      required: [ok, valid, issues]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N2] }
+        valid: { type: boolean }
+        ready_for_n4: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ValidateIssue' }
+        storyboard:
+          allOf: [{ $ref: '#/components/schemas/StoryboardDraft' }]
+          nullable: true
+
+    GateG2Status:
+      type: object
+      required: [gate_id, state, locked, version]
+      properties:
+        gate_id: { type: string, enum: [g2] }
+        state: { type: string, enum: [idle, ready, passed, rejected] }
+        locked: { type: boolean }
+        version: { type: integer }
+        last_decision: { type: string, enum: [pass, reject], nullable: true }
+        note: { type: string, nullable: true }
+        actor: { type: string, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+
+    GateConfirmRequest:
+      type: object
+      required: [decision, actor]
+      additionalProperties: false
+      description: additionalProperties=false 拒绝 force_pass/force/skip_gate
+      properties:
+        decision: { type: string, enum: [pass, reject] }
+        note: { type: string }
+        actor: { type: string, minLength: 1 }
+        idempotency_key: { type: string }
+
+    GateG2Envelope:
+      type: object
+      required: [ok, gate]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N2] }
+        gate: { $ref: '#/components/schemas/GateG2Status' }
+        storyboard:
+          allOf: [{ $ref: '#/components/schemas/StoryboardDraft' }]
+          nullable: true
+        next_edges:
+          type: array
+          items: { type: string }

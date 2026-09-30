@@ -22,8 +22,9 @@ def _setup(client):
 def test_health(client):
     data = client.get("/health").json()
     assert data["ok"] is True
-    assert data["nodes"] == ["D-N0", "D-N1"]
+    assert data["nodes"] == ["D-N0", "D-N1", "D-N2"]
     assert data["gate"] == "g1b"
+    assert data["gates"] == ["g1b", "g2"]
     assert data["koubo_n1"] is False
     assert data["docs_pass"] is False
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0 — drama D-N2 storyboard + gate G2 (docs≠PASS)
+
+Implements `pipeline_profile=drama` **D-N2** (storyboard) + gate **G2** against OpenAPI **0.1.0**.
+
+- REST `/api/v0/.../drama/storyboard*` and `/gates/g2` match `openapi/drama-n2.v0.yaml`.
+- CLI `aiv drama storyboard ...` / `aiv drama g2 ...`; fixture generate without LLM keys.
+- API/DB (JsonStore tables `drama_storyboard` + `drama_storyboard_shot`) is source; disk projection `EP##-分镜.csv` + `EP##-分镜.md` + `.aiv/episode.json`.
+- ForcePass=never; G1b unlocked → 409; G2 pass → `next_edges: ["D-N3"]` candidates only (no D-N3 job).
+- Isolated from koubo-N1; bare `/n2` 404. Thin FE for D-N2 **not** shipped (API+CLI debt).
+
+### Frozen O1–O9 (DESIGN-ACCEPT; not a product PASS)
+
+- O1 outline+cast → storyboard (no script hard gate)
+- O2 `storyboard_skill: borrowed_dongman` (read-only borrow)
+- O3/O8 NODE-SPEC columns + required `bridge_id`; angle/speed in notes
+- O4 API/DB + csv/md projection
+- O5 unknown named CHAR/SCENE → `cast_id_unknown`; NONE allowed
+- O6 inherit `shot_cap`; hard ≤12
+- O7 English CAM codes on disk/DB
+- O9 empty `tool_profile` does not block G2; forbids `ready_for_n4`
+
 ## 0.1.0 — drama D-N0 / D-N1 runtime (docs≠PASS)
 
 Implements `pipeline_profile=drama` **D-N0** (brief) + **D-N1** (outline/cast · gate **G1b**) against OpenAPI **0.1.0**.

@@ -1,14 +1,14 @@
 # auto-ai-vedio
 
-KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）** runtime for `pipeline_profile=drama`.
+KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）** and **D-N2 分镜表（门 G2）** runtime for `pipeline_profile=drama`.
 
-- `.skill/` — Skill packages (writing + generation). Runtime **read-only** references 女/男频编剧.
+- `.skill/` — Skill packages (writing + generation). D-N1 **read-only** 女/男频编剧；D-N2 **read-only borrow** `.skill/writing/动态漫-转分镜`（`borrowed_dongman`）。不改教材正文。
 - `.prompt/` — Prompt / instruction documents (koubo, generation, consistency, seedance). **Not** used by this drama runtime.
-- `packages/drama-n0n1-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
-- `openapi/drama-n0n1.v0.yaml` — OpenAPI **0.1.0** copy
-- `docs/drama-n0n1.md` — humans + bots; koubo-N1 isolation
+- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
+- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` — OpenAPI **0.1.0** copies
+- `docs/drama-n0n1.md` · `docs/drama-n2.md` — humans + bots; koubo-N1 isolation
 
-docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`).
+docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. Thin FE for D-N2 is **debt** (API+CLI only).
 
 ## Drama D-N0 / D-N1
 
@@ -21,8 +21,19 @@ pytest
 aiv serve
 ```
 
-Sole lock: `POST /api/v0/projects/{id}/episodes/{ep}/gates/g1b/confirm`. After pass, `next_edges: ["D-N2"]` are candidates only — D-N2 is not started. Downstream `GET .../drama/downstream` is **409** `upstream_unlocked` until locked.
+Sole G1b lock: `POST /api/v0/projects/{id}/episodes/{ep}/gates/g1b/confirm`. After pass, `next_edges: ["D-N2"]` are candidates only — D-N2 is not started.
 
-**provisional:** D3 generate requires female\|male · D12 project-scoped library (no list/search) · D13–D15 no promote/fork · shot_cap hard 12.
+## Drama D-N2 / G2
+
+After G1b is locked, generate a storyboard (fixture, no API key), edit/reorder, then confirm **gate G2**. Pass returns `next_edges: ["D-N3"]` as candidates only — D-N3 is **not** created. ForcePass=never. `tool_profile` may be empty (does not block G2; forbids `ready_for_n4`).
+
+```bash
+aiv drama storyboard generate --project proj_01 --ep EP01 --provider fixture
+aiv drama g2 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
+```
+
+See [`docs/drama-n2.md`](docs/drama-n2.md). Frozen O1–O9: outline+cast→storyboard; borrowed_dongman; NODE-SPEC+`bridge_id`; API/DB+csv/md; named ID hard-reject / NONE ok; `shot_cap`≤12; English CAM codes; optional `tool_profile`.
+
+**provisional (D-N0/D-N1):** D3 generate requires female\|male · D12 project-scoped library (no list/search) · D13–D15 no promote/fork · shot_cap hard 12.
 
 See [`docs/drama-n0n1.md`](docs/drama-n0n1.md).

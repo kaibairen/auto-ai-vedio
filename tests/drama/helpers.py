@@ -42,3 +42,38 @@ def generate_ready(svc: DramaService, pid: str, lane: str = "female"):
         OutlineGenerateRequest(lane=lane, provider="fixture"),
         raw={"lane": lane, "provider": "fixture"},
     )
+
+
+def lock_g1b(svc: DramaService, pid: str, ep: str = "EP01", actor: str = "yangzhou"):
+    generate_ready(svc, pid)
+    return svc.confirm_gate(pid, ep, {"decision": "pass", "actor": actor})
+
+
+def sample_row(
+    *,
+    shot_id: str = "S01",
+    bridge_id: str = "B1",
+    seq: int = 1,
+    char_ids: list[str] | None = None,
+    scene_id: str = "SCENE-01",
+    **kw,
+) -> dict:
+    row = {
+        "shot_id": shot_id,
+        "bridge_id": bridge_id,
+        "seq": seq,
+        "duration_s": 5,
+        "shot_size": "MS",
+        "camera": "PUSH",
+        "action": "推门入室环顾",
+        "char_ids": char_ids if char_ids is not None else ["CHAR-01"],
+        "scene_id": scene_id,
+        "dialogue": None,
+        "transition": "cut",
+        "dynamic_level": "基础",
+        "tool_duration_bucket": None,
+        "grid_strict": False,
+        "notes": "angle:eye",
+    }
+    row.update(kw)
+    return row

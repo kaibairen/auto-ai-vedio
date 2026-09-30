@@ -46,7 +46,9 @@ from aiv_drama.validate import (
     require_shot_cap,
     validate_ep,
 )
-from aiv_schema.models import GATE_G1B, NODE_DN0, NODE_DN1, NODE_DN2, PIPELINE_DRAMA
+from aiv_drama_n2.ops import DramaN2Ops
+from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
+from aiv_schema.models import GATE_G1B, GATE_G2, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, PIPELINE_DRAMA
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService:
+class DramaService(DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -113,6 +115,7 @@ class DramaService:
         rec = self.store.state["episodes"].get(_key(project_id, ep))
         if not rec:
             raise AppError(404, "not_found", "episode not found", project_id=project_id, episode_id=ep)
+        self._ensure_n2_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -146,6 +149,7 @@ class DramaService:
             rec["episode"]["status"] = "awaiting_g1b" if rec.get("outline") else "in_progress"
         rec["episode"]["next_edges"] = []
         self._add_stale(rec, NODE_DN2)
+        self._mark_storyboard_stale(rec)
 
     def _add_stale(self, rec: dict[str, Any], node: str) -> None:
         stale = rec["episode"].setdefault("stale_downstream", [])
@@ -164,6 +168,7 @@ class DramaService:
         rec["episode"]["versions"]["brief"] = (rec.get("brief") or {}).get("version") or 0
         rec["episode"]["versions"]["outline"] = (rec.get("outline") or {}).get("version") or 0
         rec["episode"]["versions"]["cast"] = (rec.get("cast") or {}).get("version") or 0
+        rec["episode"]["versions"]["storyboard"] = (rec.get("storyboard") or {}).get("version") or 0
 
     def _project_disk(self, rec: dict[str, Any]) -> None:
         ep = rec["episode"]["episode_id"]
@@ -176,7 +181,13 @@ class DramaService:
                 write_outline(episode_dir, ep, rec["outline"], rec.get("source_skills"))
             if rec.get("cast"):
                 write_cast(episode_dir, ep, rec["cast"])
+            sb = rec.get("storyboard")
+            if sb is not None and (sb.get("version") or 0) > 0:
+                write_storyboard_csv(episode_dir, ep, sb)
+                write_storyboard_md(episode_dir, ep, sb)
             gate = rec["gate"]
+            g2 = rec.get("gate_g2") or {}
+            stale_nodes = rec["episode"].get("stale_downstream") or []
             meta = {
                 "episode_id": ep,
                 "project_id": project_id,
@@ -192,14 +203,34 @@ class DramaService:
                         "actor": gate.get("actor"),
                         "note": gate.get("note"),
                         "updated_at": gate.get("decided_at"),
-                    }
+                    },
+                    GATE_G2: {
+                        "status": g2.get("state"),
+                        "state": g2.get("state"),
+                        "locked": g2.get("locked"),
+                        "decision": g2.get("last_decision"),
+                        "actor": g2.get("actor"),
+                        "note": g2.get("note"),
+                        "updated_at": g2.get("decided_at"),
+                    },
                 },
                 "next_edges": list(rec["episode"].get("next_edges") or []),
                 "lane_preference": (rec.get("brief") or {}).get("lane_preference", "unset"),
-                "stale": {"d_n2": NODE_DN2 in (rec["episode"].get("stale_downstream") or [])},
-                "stale_downstream": list(rec["episode"].get("stale_downstream") or []),
+                "stale": {
+                    "d_n2": NODE_DN2 in stale_nodes or bool((sb or {}).get("stale")),
+                    "d_n3": NODE_DN3 in stale_nodes,
+                },
+                "stale_downstream": list(stale_nodes),
                 "locks": deepcopy(rec["episode"]["locks"]),
             }
+            if sb:
+                meta["storyboard_meta"] = {
+                    "storyboard_skill": sb.get("storyboard_skill"),
+                    "shot_cap": sb.get("shot_cap"),
+                    "shot_budget": sb.get("shot_cap"),
+                    "upstream_outline_version": sb.get("upstream_outline_version"),
+                    "upstream_cast_version": sb.get("upstream_cast_version"),
+                }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)
             rec["projection_dirty"] = False
@@ -372,8 +403,8 @@ class DramaService:
                 "status": "draft",
                 "aspect_ratio": body.aspect_ratio,
                 "target_duration_sec": body.target_duration_sec,
-                "locks": {"g1b": False},
-                "versions": {"brief": 0, "outline": 0, "cast": 0, "episode": 1},
+                "locks": {"g1b": False, "g2": False},
+                "versions": {"brief": 0, "outline": 0, "cast": 0, "storyboard": 0, "episode": 1},
                 "stale_downstream": [],
                 "next_edges": [],
                 "created_at": ts,
@@ -382,8 +413,19 @@ class DramaService:
             "brief": None,
             "outline": None,
             "cast": None,
+            "storyboard": None,
             "gate": {
                 "gate_id": GATE_G1B,
+                "state": "idle",
+                "locked": False,
+                "version": 0,
+                "last_decision": None,
+                "note": None,
+                "actor": None,
+                "decided_at": None,
+            },
+            "gate_g2": {
+                "gate_id": GATE_G2,
                 "state": "idle",
                 "locked": False,
                 "version": 0,
@@ -398,6 +440,7 @@ class DramaService:
             "scene_counter": 0,
             "source_skills": [],
             "d_n2_jobs": [],
+            "d_n3_jobs": [],
             "projection_dirty": False,
         }
         self.store.state["episodes"][key] = rec
@@ -535,6 +578,7 @@ class DramaService:
         }
         if self._g1b_locked(rec) and body.confirm_stale_outline:
             self._add_stale(rec, NODE_DN2)
+            self._mark_storyboard_stale(rec)
         if rec["episode"]["status"] == "draft":
             rec["episode"]["status"] = "in_progress"
         self._touch_episode(rec)

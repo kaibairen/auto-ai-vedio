@@ -9,7 +9,7 @@
 | 状态 | **docs≠PASS** · ForcePass=never · 实施 PR ≠ 产品 PASS |
 | 命名 | 短剧 **D-N0 / D-N1**；口播 **koubo-N1**。禁止裸写「N1」 |
 
-本包停在 G1b。`next_edges: ["D-N2"]` **只是候选**，**不**自动开 D-N2、不写分镜/提示词/宫格。
+本包停在 G1b。`next_edges: ["D-N2"]` **只是候选**，**不**自动开 D-N2。D-N2 运行时见 [`docs/drama-n2.md`](drama-n2.md)（须显式 generate；本包不写分镜）。
 
 ---
 
