@@ -189,7 +189,7 @@ class DramaN2Ops:
             "next_edges": edges,
         }
 
-    def _rows_from_write(self, rows: list[Any]) -> list[dict[str, Any]]:
+    def _storyboard_rows_from_write(self, rows: list[Any]) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for i, row in enumerate(rows, start=1):
             payload = row.model_dump() if hasattr(row, "model_dump") else dict(row)
@@ -241,7 +241,7 @@ class DramaN2Ops:
                 row_count=0,
                 node=NODE_DN2,
             )
-        rows = self._rows_from_write(body.rows)
+        rows = self._storyboard_rows_from_write(body.rows)
         cap = inherit_shot_cap((rec.get("outline") or {}).get("shot_cap") or sb.get("shot_cap"))
         if body.tool_profile is not None:
             sb["tool_profile"] = body.tool_profile
