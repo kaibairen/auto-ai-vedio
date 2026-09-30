@@ -34,7 +34,7 @@
 ## 人怎么走
 
 1. 先走完 D-N0 / D-N1，**门 G1b pass**（outline+cast 均 `locked`）。未锁时 generate / GET 分镜 → **409 `upstream_unlocked`**（`node=D-N1`, `gate=g1b`）。
-2. **POST** `.../drama/storyboard/generate`（默认 `provider=fixture`，无密钥）。Skill 元数据 `borrowed_dongman`。无独立 `script_draft`。
+2. **POST** `.../drama/storyboard/generate`。`provider=fixture`（默认 / 无密钥）走确定性草稿；`provider=llm` 走 **真实** OpenAI 兼容 Chat（与 D-N1 同一套 `AIV_OPENAI_*`）。无密钥却要 llm → **422 `provider`**，**不会**静默回落 fixture。Skill 元数据 `borrowed_dongman`。无独立 `script_draft`。
 3. 锁前可 **PUT** 整表、**POST validate / reorder / reset**。
 4. 未知具名 ID → **422 `cast_id_unknown`**；空镜用 `NONE`。镜数 > `shot_cap` → **422 `shot_cap_exceeded`**。表内完整出片提示词 → **422 `prompt_forbidden`**（无 prompt 列）。
 5. **门 G2**：`{ decision: pass|reject, actor, note? }`。
@@ -55,18 +55,38 @@ export AIV_DATA_DIR=./data
 export AIV_LLM_PROVIDER=fixture
 # 先走 D-N1 / G1b
 aiv --fixture --pretty drama demo --ep EP01 --lane female
-# D-N2
+# D-N2 fixture（无密钥）
 aiv drama storyboard generate --project proj_01 --ep EP01 --provider fixture
+# D-N2 真 LLM（须 AIV_OPENAI_API_KEY；DeepSeek 兼容基址示例）
+# export AIV_OPENAI_API_KEY=...
+# export AIV_OPENAI_BASE_URL=https://api.deepseek.com/v1
+# export AIV_OPENAI_MODEL=deepseek-chat
+aiv drama storyboard generate --project proj_01 --ep EP01 --provider llm
 aiv drama storyboard validate --project proj_01 --ep EP01
 aiv drama g2 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 aiv drama storyboard get --project proj_01 --ep EP01
 ```
 
+`provider` 分支：`fixture` / `skill` → `FixtureStoryboardProvider`；`llm`（及 `openai` / `openai_compat`）→ `LlmStoryboardProvider`。llm 注入锁态大纲+cast + 只读借用 `.skill/writing/动态漫-转分镜` 摘录，**不**注入 Seedance 出片 Skill。
+
+---
+
+## LLM 环境（与 D-N1 相同）
+
+| 变量 | 作用 |
+|------|------|
+| `AIV_OPENAI_API_KEY` 或 `OPENAI_API_KEY` | 必填才会打真模型 |
+| `AIV_OPENAI_BASE_URL` / `OPENAI_BASE_URL` | 默认 `https://api.openai.com/v1`；DeepSeek 用其兼容 `/v1` |
+| `AIV_OPENAI_MODEL` / `OPENAI_MODEL` | 默认 `gpt-4o-mini` |
+| `AIV_LLM_PROVIDER` | 进程默认；`fixture` 或 `llm`。CLI `--provider` 覆盖单次 generate |
+
+无密钥时请用 `--provider fixture`。密钥禁止写入 `episodes/**`。
+
 等价 REST（根路径 `/api/v0`）：
 
 ```
 GET|PUT  /projects/{id}/episodes/{ep}/drama/storyboard
-POST     .../drama/storyboard/generate    {provider: fixture, tool_profile?, actor?}
+POST     .../drama/storyboard/generate    {provider: fixture|llm|skill, tool_profile?, actor?}
 POST     .../drama/storyboard/validate
 POST     .../drama/storyboard/reorder     {shot_ids: ["S02","S01",...]}
 POST     .../drama/storyboard/reset       {unlock_edit?}

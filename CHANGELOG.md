@@ -5,7 +5,7 @@
 Implements `pipeline_profile=drama` **D-N2** (storyboard) + gate **G2** against OpenAPI **0.1.0**.
 
 - REST `/api/v0/.../drama/storyboard*` and `/gates/g2` match `openapi/drama-n2.v0.yaml`.
-- CLI `aiv drama storyboard ...` / `aiv drama g2 ...`; fixture generate without LLM keys.
+- CLI `aiv drama storyboard ...` / `aiv drama g2 ...`; `provider=fixture` without keys; `provider=llm` is a live OpenAI-compatible StoryboardProvider (same `AIV_OPENAI_*` as D-N1; no silent fixture fallback).
 - API/DB (JsonStore tables `drama_storyboard` + `drama_storyboard_shot`) is source; disk projection `EP##-分镜.csv` + `EP##-分镜.md` + `.aiv/episode.json`.
 - ForcePass=never; G1b unlocked → 409; G2 pass → `next_edges: ["D-N3"]` candidates only (no D-N3 job).
 - Isolated from koubo-N1; bare `/n2` 404. Thin FE for D-N2 **not** shipped (API+CLI debt).

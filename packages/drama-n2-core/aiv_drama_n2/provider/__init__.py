@@ -1,19 +1,34 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from aiv_drama.config import Settings
 from aiv_drama.errors import AppError
 from aiv_drama_n2.provider.fixture import FixtureStoryboardProvider
+from aiv_drama_n2.provider.llm import LlmStoryboardProvider
 
 
-def get_storyboard_provider(name: str | None, settings: Settings) -> FixtureStoryboardProvider:
+class StoryboardProvider(Protocol):
+    name: str
+
+    def generate(
+        self,
+        *,
+        episode_id: str,
+        outline: dict[str, Any],
+        cast: dict[str, Any],
+        shot_cap: int,
+        tool_profile: str | None,
+    ) -> list[dict[str, Any]]: ...
+
+
+def get_storyboard_provider(name: str | None, settings: Settings) -> StoryboardProvider:
+    """Branch fixture vs live LLM. Never silently swap llm → fixture."""
     chosen = (name or settings.default_provider or "fixture").strip().lower()
-    if chosen in {"openai", "openai_compat", "llm"}:
-        if not settings.openai_api_key:
-            raise AppError(422, "provider", "llm provider requires AIV_OPENAI_API_KEY; use fixture")
-        # Fixture LLM is the supported no-key path; live LLM is out of D-N2 dogfood.
-        return FixtureStoryboardProvider(settings)
+    if chosen in {"openai", "openai_compat"}:
+        chosen = "llm"
+    if chosen == "llm":
+        return LlmStoryboardProvider(settings)
     if chosen in {"fixture", "skill"}:
         return FixtureStoryboardProvider(settings)
     raise AppError(422, "validation", "provider must be fixture|llm|skill", provider=chosen)

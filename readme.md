@@ -25,10 +25,12 @@ Sole G1b lock: `POST /api/v0/projects/{id}/episodes/{ep}/gates/g1b/confirm`. Aft
 
 ## Drama D-N2 / G2
 
-After G1b is locked, generate a storyboard (fixture, no API key), edit/reorder, then confirm **gate G2**. Pass returns `next_edges: ["D-N3"]` as candidates only — D-N3 is **not** created. ForcePass=never. `tool_profile` may be empty (does not block G2; forbids `ready_for_n4`).
+After G1b is locked, generate a storyboard, edit/reorder, then confirm **gate G2**. `provider=fixture` (default / no key) is deterministic; `provider=llm` calls a live OpenAI-compatible Chat (same `AIV_OPENAI_*` as D-N1) and **422s** if the key is missing — no silent fixture fallback. Pass returns `next_edges: ["D-N3"]` as candidates only — D-N3 is **not** created. ForcePass=never. `tool_profile` may be empty (does not block G2; forbids `ready_for_n4`).
 
 ```bash
 aiv drama storyboard generate --project proj_01 --ep EP01 --provider fixture
+# export AIV_OPENAI_API_KEY=...  # and optionally AIV_OPENAI_BASE_URL / AIV_OPENAI_MODEL
+aiv drama storyboard generate --project proj_01 --ep EP01 --provider llm
 aiv drama g2 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 ```
 
