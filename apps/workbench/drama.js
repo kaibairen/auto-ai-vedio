@@ -3,6 +3,7 @@ const state = {
   ep: "EP01",
   intent: { confirmed: false, fingerprint: null },
   check: { conflict: false, can_confirm: false, suggested_lane: null },
+  sawConfirmed: false,
 };
 
 function $(id) { return document.getElementById(id); }
@@ -40,14 +41,14 @@ function applyIntent(data) {
   state.intent = data.intent || { confirmed: false, fingerprint: null };
   state.check = data;
   const confirmed = isIntentConfirmed();
-  const stale = !confirmed && Boolean(state.intent && state.intent.fingerprint === null && data.fingerprint_current);
-  const label = confirmed ? "intent:confirmed" : (state.check && state.check.conflict ? "intent:draft" : (stale ? "intent:stale" : "intent:draft"));
+  if (confirmed) state.sawConfirmed = true;
+  const stale = !confirmed && state.sawConfirmed;
   ["hdr-intent", "intent-badge"].forEach((id) => {
     const el = $(id);
     if (!el) return;
-    el.textContent = confirmed ? "intent:confirmed" : (label === "intent:stale" ? "intent:stale · 须重确认" : "intent:draft");
+    el.textContent = confirmed ? "intent:confirmed" : (stale ? "intent:stale · 须重确认" : "intent:draft");
     el.classList.toggle("ok", confirmed);
-    el.classList.toggle("warn", !confirmed);
+    el.classList.toggle("warn", stale);
     el.classList.toggle("muted", !confirmed);
   });
   const gen = $("btn-gen");
@@ -144,6 +145,7 @@ async function saveA2Draft() {
 $("btn-proj").onclick = async () => {
   const data = await api("POST", "/projects", { name: $("proj-name").value });
   state.projectId = data.project.id;
+  state.sawConfirmed = false;
   hdr();
   dump("hub-out", data);
 };
@@ -154,6 +156,7 @@ $("btn-ep").onclick = async () => {
     pipeline_profile: "drama",
     title: "第一集",
   });
+  state.sawConfirmed = false;
   hdr();
   dump("hub-out", data);
   await refreshIntent();
@@ -176,6 +179,7 @@ $("btn-save-brief").onclick = async () => {
     pin,
     setting_notes: $("notes").value,
     lane_preference: lane0(),
+    hero_one_line: $("a2-hero").value || undefined,
     actor: "yangzhou",
   });
   $("a2-title").value = $("title-intent").value;
