@@ -109,6 +109,12 @@ GROUP_LABELS = frozenset(
         "指出两王子",
         "两大王子",
         "两大AI王子",
+        "两侧王子",
+        "两边王子",
+        "双方王子",
+        "两端王子",
+        "两个闭源王子",
+        "两个开源王子",
         "AI王子",
         "王国王子",
         "公主们",
@@ -175,9 +181,12 @@ HALF_LINE_STARTERS = (
     "所以",
     "如果",
     "虽然",
+    "包的",
+    "豆包当众",
+    "当众",
 )
 # Grammar/function chars that never start a real proper name before 王子/公主.
-FRAGMENT_PREFIX_MARKERS = frozenset("被是而你我他她它咱这那把让给吗呢吧啊不没无")
+FRAGMENT_PREFIX_MARKERS = frozenset("被是而你我他她它咱这那把让给吗呢吧啊不没无的地得侧")
 
 # Vague collection / compound-title prefixes (大纲「两大AI王国王子」抽词).
 GENERIC_TITLE_PREFIXES = frozenset(
@@ -199,26 +208,92 @@ GENERIC_TITLE_PREFIXES = frozenset(
         "两位",
         "两名",
         "俩",
+        "两侧",
+        "两边",
+        "双方",
+        "两端",
+        "闭源",
+        "开源",
+        "两个闭源",
+        "两个开源",
     }
 )
 GENERIC_LATIN_PREFIXES = frozenset({"ai", "npc", "ui", "os", "vo", "a.i", "a.i."})
+GENERIC_TITLE_STARTS = (
+    "两侧",
+    "两边",
+    "双方",
+    "两端",
+    "两个",
+    "两位",
+    "两名",
+    "两大",
+    "两",
+    "双",
+    "俩",
+    "闭源",
+    "开源",
+)
 
 # Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
 SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,32})[：:]")
 
 # High-confidence titled proper names. Allows CURSOR(Opus5.5)王子.
+# CJK prefix capped at 4 so outline clauses (豆包当众拆穿两个王子) never full-match.
 PROPER_NAME_RE = re.compile(
     r"(?:"
     r"[A-Za-z][A-Za-z0-9._-]*(?:\([^)]{1,32}\))?"
-    r"|[\u4e00-\u9fff]{2,12}"
+    r"|[\u4e00-\u9fff]{2,4}"
     r")"
     r"(?:王子|公主|女王|国王|将军|大人|小姐|少爷|殿下)"
 )
 
 GROUP_RE = re.compile("|".join(sorted((re.escape(g) for g in GROUP_LABELS), key=len, reverse=True)))
+# 两侧王子 / 两个闭源王子 / 两大AI王国王子 — quantity+title, never a CHAR slot.
+GROUP_GENERIC_RE = re.compile(
+    r"(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|闭源|开源|王国)*王子"
+)
 
 DIRTY_PREFIX_RE = re.compile(r"^[\s/\\|#@*>\-–—·•、,，.。;；'\"“”‘’\[\]【】()（）]+")
 HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|目标")
+CLAUSE_MARKERS = (
+    "当众",
+    "拆穿",
+    "反制",
+    "权重",
+    "开源",
+    "闭源",
+    "续写",
+    "大纲",
+    "同时",
+    "伸出手",
+    "两个王子",
+    "两个闭源",
+    "两侧王子",
+    "包的",
+    "豆包当众",
+)
+CLAUSE_VERBS = (
+    "拆穿",
+    "反制",
+    "当众",
+    "指出",
+    "看着",
+    "走向",
+    "挡住",
+    "挡在",
+    "站在",
+    "出现",
+    "现身",
+    "追来",
+    "怒吼",
+    "破屏",
+    "伸出",
+    "打开",
+    "进入",
+    "离开",
+)
+CLAUSE_INFIX = frozenset("的地得和与或把被让给在对从向到并")
 
 # Well-known A-class recoveries (dogfood 王子专名). Only used when a group
 # label is present and no individual titled prince was extracted.
@@ -310,7 +385,7 @@ def is_dialogue_fragment(name: str) -> bool:
 
 
 def is_generic_title(name: str) -> bool:
-    """Vague collection / compound title (王国王子 / AI王子), not a true A-class slot."""
+    """Vague collection / compound title (王国王子 / AI王子 / 两侧王子), not a true A-class slot."""
     key = strip_dirty_prefix(normalize_name(name))
     split = _split_title(key)
     if not split:
@@ -321,6 +396,36 @@ def is_generic_title(name: str) -> bool:
         return True
     if prefix in TITLES or prefix in BARE_TITLES:
         return True
+    if any(prefix.startswith(p) or folded.startswith(p.casefold()) for p in GENERIC_TITLE_STARTS):
+        return True
+    return False
+
+
+def _cjk_len(text: str) -> int:
+    return sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff")
+
+
+def is_clause_fragment(name: str) -> bool:
+    """Sentence / outline-continuation slice, not a registerable character name."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key:
+        return True
+    if any(marker in key for marker in CLAUSE_MARKERS):
+        return True
+    if any(verb in key for verb in CLAUSE_VERBS):
+        return True
+    split = _split_title(key)
+    body = split[0] if split else key
+    if any(ch in CLAUSE_INFIX for ch in body):
+        return True
+    if split and _cjk_len(body) > 4 and not re.search(r"[A-Za-z]", body):
+        return True
+    if not split and _cjk_len(key) > 6:
+        return True
+    for lead in ("豆包", "林晚"):
+        if key.startswith(lead) and len(key) > len(lead):
+            if not split or body != lead:
+                return True
     return False
 
 
@@ -328,13 +433,14 @@ def is_half_line(name: str) -> bool:
     key = normalize_name(name)
     if not key:
         return True
-    if is_dialogue_fragment(key):
+    if is_dialogue_fragment(key) or is_clause_fragment(key):
         return True
     cleaned = strip_dirty_prefix(key)
     if (
         PROPER_NAME_RE.fullmatch(cleaned)
         and not is_generic_title(cleaned)
         and not is_dialogue_fragment(cleaned)
+        and not is_clause_fragment(cleaned)
     ):
         return False
     if len(key) > 16:
@@ -373,9 +479,12 @@ def is_generic_ref(name: str) -> bool:
 
 def is_group_label(name: str) -> bool:
     key = normalize_name(name)
-    if key in GROUP_LABELS:
+    stripped = strip_dirty_prefix(key)
+    if key in GROUP_LABELS or stripped in GROUP_LABELS:
         return True
-    return strip_dirty_prefix(key) in GROUP_LABELS
+    if GROUP_GENERIC_RE.fullmatch(key) or GROUP_GENERIC_RE.fullmatch(stripped):
+        return True
+    return False
 
 
 def is_b_class(name: str) -> bool:
@@ -384,13 +493,14 @@ def is_b_class(name: str) -> bool:
         return True
     if is_group_label(name) or is_generic_title(name):
         return True
-    if is_dialogue_fragment(name) or is_verb_phrase(name) or is_half_line(name):
+    if is_clause_fragment(name) or is_dialogue_fragment(name) or is_verb_phrase(name) or is_half_line(name):
         return True
     stripped = strip_dirty_prefix(name)
     if stripped != normalize_name(name) and (
         is_system_speaker(stripped)
         or is_group_label(stripped)
         or is_generic_title(stripped)
+        or is_clause_fragment(stripped)
         or is_dialogue_fragment(stripped)
         or is_verb_phrase(stripped)
         or is_half_line(stripped)
@@ -600,7 +710,13 @@ def extract_proper_names(text: str) -> list[str]:
 def extract_group_labels(text: str) -> list[str]:
     hits: list[str] = []
     seen: set[str] = set()
-    for match in GROUP_RE.finditer(text or ""):
+    body = text or ""
+    for match in GROUP_RE.finditer(body):
+        name = normalize_name(match.group(0))
+        if name and name not in seen:
+            seen.add(name)
+            hits.append(name)
+    for match in GROUP_GENERIC_RE.finditer(body):
         name = normalize_name(match.group(0))
         if name and name not in seen:
             seen.add(name)
@@ -1125,6 +1241,7 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
 def _is_dirty_cast_name(name: str) -> bool:
     return (
         is_dialogue_fragment(name)
+        or is_clause_fragment(name)
         or is_generic_title(name)
         or is_group_label(name)
         or is_system_speaker(name)

@@ -2,6 +2,8 @@
 
 ## 0.2.3 — BRIEF-AIV-020 cast hygiene + duration buckets + skill excerpt (docs≠PASS)
 
+LOOP-CONTINUE R4 (eng-020r3 FIT-GAP Acc#3): reject sentence-level outline fragments (`豆包当众拆穿两个王子` / `包的开源权重反制两个闭源王子`) and quantity generics (`两侧王子`); fold those hits onto GPT/Opus A slots. Acc#1/#2 brand-fold and P0-B/C unchanged.
+
 LOOP-CONTINUE R3 (eng-020r2 FIT-GAP): fold bare `CURSOR`/`CODEX` onto `Opus5.5王子`/`GPT王子` (never a bare-brand CHAR); glue `CURSOR（Opus5.5王子）` to one entity; hang A-class prince ids on dialogue/confrontation shots so clean slots are not orphans. A1 half-line/generic skip kept. P0-B/C unchanged.
 
 LOOP-CONTINUE (eng-020 FIT-GAP): skip dialogue half-slices `你被双王子` / `而是两王子` and generic titles `王国王子` / `AI王子`; full lines with `双王子` still map to GPT/Opus (or CODEX/CURSOR) A slots. P0-B/C unchanged.
