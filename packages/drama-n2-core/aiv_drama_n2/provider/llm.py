@@ -9,11 +9,17 @@ import httpx
 from aiv_drama.config import SKILL_ENTRY_EXCERPT_LIMIT, SKILL_REFERENCE_EXCERPT_LIMIT, Settings
 from aiv_drama.errors import AppError
 from aiv_drama.provider.llm import _parse_llm_json
+from aiv_drama_n2.duration import (
+    BUCKET_PROFILE_PREFIX,
+    TOOL_DURATION_BUCKETS,
+    adsorb_duration_row,
+    allowed_durations,
+    profile_selected,
+)
 from aiv_drama_n2.validate import (
     CAMERAS,
     SEEDANCE_SKILL_PATH,
     STORYBOARD_SKILL_PATH,
-    TOOL_DURATION_BUCKETS,
     extract_bridge_ids,
     normalize_row,
     text_has_prompt,
@@ -140,6 +146,7 @@ class LlmStoryboardProvider:
                 "No prompt / negative_prompt / seedance_* / outpaint_* fields",
                 "angle/camera_speed go in notes as angle: / speed: prefixes",
                 "Do not write D-N3 cards or N4 prompts",
+                *_duration_prompt_rules(tool_profile),
             ],
             "skill_excerpt": skill_excerpt,
             "skill_paths": skill_paths,
@@ -254,14 +261,38 @@ def _normalize_llm_rows(
         payload["seq"] = i
         payload["shot_id"] = f"S{i:02d}"
         payload["duration_s"] = _coerce_duration(payload.get("duration_s"))
-        payload["tool_duration_bucket"] = _coerce_bucket(
-            payload.get("tool_duration_bucket"),
-            tool_profile=tool_profile,
-            duration_s=int(payload["duration_s"]),
-        )
+        if profile_selected(tool_profile):
+            adsorbed = adsorb_duration_row(
+                payload.get("camera"),
+                payload["duration_s"],
+                tool_profile,
+                shot_id=payload.get("shot_id"),
+            )
+            payload["duration_s"] = adsorbed.duration_s
+            payload["tool_duration_bucket"] = adsorbed.tool_duration_bucket
+        else:
+            payload["tool_duration_bucket"] = _coerce_bucket(
+                payload.get("tool_duration_bucket"),
+                tool_profile=tool_profile,
+                duration_s=int(payload["duration_s"]),
+            )
         row = normalize_row(payload, index=i)
         out.append(row)
     return out
+
+
+def _duration_prompt_rules(tool_profile: str | None) -> list[str]:
+    if not profile_selected(tool_profile):
+        return [
+            "tool_profile is unset: duration_s may be any integer >= 1; tool_duration_bucket must be null",
+        ]
+    allow = allowed_durations(tool_profile)
+    prefix = BUCKET_PROFILE_PREFIX.get(str(tool_profile).strip(), "")
+    return [
+        f"duration_s must be one of {allow} for tool_profile={tool_profile}",
+        "complex cameras (WHIP_PUSH, WHIP_PULL, ORBIT, HANDHELD, DOLLY_ZOOM, ROLL, CRANE_UP, CRANE_DOWN, STATIC_TO_MOVE) must be at least 8s or the next legal bucket of this tool",
+        f"tool_duration_bucket must be '{prefix}<duration_s>' and equal duration_s",
+    ]
 
 
 def _alias_cam(raw: Any, table: dict[str, str]) -> Any:
@@ -281,14 +312,14 @@ def _coerce_duration(raw: Any) -> int:
 
 
 def _coerce_bucket(raw: Any, *, tool_profile: str | None, duration_s: int) -> str | None:
-    """O9: unset tool_profile → null bucket (fixture). Drop LLM junk like '3s'/'4s'."""
-    if not (tool_profile or "").strip():
+    """O9: unset tool_profile → null bucket. Selected profile: keep legal enum or synthesize; drop junk."""
+    if not profile_selected(tool_profile):
         return None
     if raw in TOOL_DURATION_BUCKETS:
         return raw
     if not raw and tool_profile == "seedance_2" and duration_s in {5, 8, 10}:
         return f"seedance:{duration_s}"
-    return raw if raw else None
+    return None
 
 
 def _fold_char_ids(raw: Any, by_id: dict[str, Any], by_name: dict[str, str]) -> list[str]:

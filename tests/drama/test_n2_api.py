@@ -150,6 +150,50 @@ def test_http_bare_n2_404(client):
         assert "D-N2" in res.json()["error"]["message"]
 
 
+def test_http_put_select_profile_adsorbs_short_shots(client):
+    pid = _setup_locked(client)
+    short = [sample_row(duration_s=2, camera="WHIP_PUSH", tool_duration_bucket=None, grid_strict=True)]
+    first = client.put(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard",
+        json={"rows": short},
+    )
+    assert first.status_code == 200
+    val = client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard/validate", json={})
+    assert val.status_code == 200
+    assert val.json()["valid"] is True
+    assert val.json()["ready_for_n4"] is False
+    assert any(i["code"] == "tool_profile_unset" for i in val.json()["issues"])
+    adsorbed = client.put(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard",
+        json={"rows": short, "tool_profile": "seedance_2"},
+    )
+    assert adsorbed.status_code == 200, adsorbed.text
+    row = adsorbed.json()["storyboard"]["rows"][0]
+    assert row["duration_s"] == 8
+    assert row["tool_duration_bucket"] == "seedance:8"
+    after = client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard/validate", json={})
+    assert after.status_code == 200
+    assert after.json()["valid"] is True
+    assert after.json()["ready_for_n4"] is True
+
+
+def test_http_selected_profile_short_shot_422(client):
+    pid = _setup_locked(client)
+    legal = [sample_row(duration_s=5, camera="STATIC", tool_duration_bucket="seedance:5")]
+    ok = client.put(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard",
+        json={"rows": legal, "tool_profile": "seedance_2"},
+    )
+    assert ok.status_code == 200
+    short = [sample_row(duration_s=2, camera="STATIC", tool_duration_bucket=None)]
+    bad = client.put(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard",
+        json={"rows": short, "tool_profile": "seedance_2"},
+    )
+    assert bad.status_code == 422
+    assert bad.json()["error"]["code"] == "duration_bucket_mismatch"
+
+
 def test_http_idempotency_generate(client):
     pid = _setup_locked(client)
     headers = {"Idempotency-Key": "sb-http"}

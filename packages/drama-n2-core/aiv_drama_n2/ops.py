@@ -11,6 +11,7 @@ from aiv_drama_n2.models import (
     StoryboardResetRequest,
     StoryboardWrite,
 )
+from aiv_drama_n2.duration import adsorb_storyboard_rows, profile_selected
 from aiv_drama_n2.provider import generate_rows
 from aiv_drama_n2.validate import (
     STORYBOARD_SKILL_PATH,
@@ -243,8 +244,17 @@ class DramaN2Ops:
             )
         rows = self._storyboard_rows_from_write(body.rows)
         cap = inherit_shot_cap((rec.get("outline") or {}).get("shot_cap") or sb.get("shot_cap"))
+        previous_profile = sb.get("tool_profile")
         if body.tool_profile is not None:
             sb["tool_profile"] = body.tool_profile
+        profile_changed = body.tool_profile is not None and body.tool_profile != previous_profile
+        adsorb_warns: list[dict[str, Any]] = []
+        # FREEZE O3: changing tool_profile re-adsorbs the table so the editor cannot 422-deadlock.
+        # Explicit duration↔bucket contradictions (T-V3) are left for hard validate.
+        if profile_changed and profile_selected(sb.get("tool_profile")):
+            rows, adsorb_warns = adsorb_storyboard_rows(
+                rows, sb.get("tool_profile"), skip_explicit_contradiction=True
+            )
         if body.storyboard_skill:
             sb["storyboard_skill"] = body.storyboard_skill
         sb["shot_cap"] = cap
@@ -257,6 +267,7 @@ class DramaN2Ops:
             cast=rec.get("cast"),
             outline_body=(rec.get("outline") or {}).get("body_md"),
         )
+        issues.extend(adsorb_warns)
         raise_hard(issues)
         self._pin_upstream(rec, sb)
         sb["locked"] = False
@@ -310,6 +321,7 @@ class DramaN2Ops:
             tool_profile=req.tool_profile,
             episode_id=rec["episode"]["episode_id"],
         )
+        rows, adsorb_warns = adsorb_storyboard_rows(rows, req.tool_profile)
         issues = collect_issues(
             rows,
             shot_cap=cap,
@@ -317,6 +329,7 @@ class DramaN2Ops:
             cast=rec.get("cast"),
             outline_body=(rec.get("outline") or {}).get("body_md"),
         )
+        issues.extend(adsorb_warns)
         raise_hard(issues)
         sb["shot_cap"] = cap
         sb["rows"] = rows

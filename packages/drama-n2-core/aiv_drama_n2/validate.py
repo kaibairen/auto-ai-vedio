@@ -6,6 +6,17 @@ from typing import Any
 from aiv_drama.config import SHOT_CAP_HARD
 from aiv_drama.errors import AppError
 from aiv_drama.validate import FORCE_KEYS
+from aiv_drama_n2.duration import (
+    BUCKET_PROFILE_PREFIX,
+    BUCKET_SECONDS,
+    CAMERA_FLOOR_CLASS_CDE,
+    TOOL_DURATION_ALLOWED,
+    TOOL_DURATION_BUCKETS,
+    allowed_durations,
+    camera_duration_floor,
+    legal_durations_at_or_above_floor,
+    profile_selected,
+)
 from aiv_schema.models import GATE_G2, NODE_DN2
 
 SHOT_SIZES = ("ELS", "LS", "MS", "CU", "ECU")
@@ -34,38 +45,6 @@ CAMERAS = (
 )
 
 TOOL_PROFILES = ("seedance_2", "kling", "hailuo", "veo")
-TOOL_DURATION_ALLOWED: dict[str, set[int]] = {
-    "seedance_2": {5, 8, 10},
-    "kling": {5, 10},
-    "hailuo": {6, 10},
-    "veo": {8},
-}
-TOOL_DURATION_BUCKETS = (
-    "seedance:5",
-    "seedance:8",
-    "seedance:10",
-    "kling:5",
-    "kling:10",
-    "hailuo:6",
-    "hailuo:10",
-    "veo:8",
-)
-BUCKET_SECONDS = {
-    "seedance:5": 5,
-    "seedance:8": 8,
-    "seedance:10": 10,
-    "kling:5": 5,
-    "kling:10": 10,
-    "hailuo:6": 6,
-    "hailuo:10": 10,
-    "veo:8": 8,
-}
-BUCKET_PROFILE_PREFIX = {
-    "seedance_2": "seedance:",
-    "kling": "kling:",
-    "hailuo": "hailuo:",
-    "veo": "veo:",
-}
 
 SHOT_ID_RE = re.compile(r"^S\d{2,}$")
 NONE_ID = "NONE"
@@ -383,70 +362,16 @@ def collect_issues(
                 )
             )
 
-        duration = row.get("duration_s")
-        bucket = row.get("tool_duration_bucket")
-        if bucket is not None and bucket not in TOOL_DURATION_BUCKETS:
-            issues.append(
-                issue(
-                    "error",
-                    "duration_bucket_mismatch",
-                    "duration_s not in tool_duration_bucket",
-                    shot_id=shot_id,
-                    field="tool_duration_bucket",
-                    duration_s=duration,
-                    tool_duration_bucket=bucket,
-                )
+        issues.extend(
+            _duration_issues(
+                shot_id=shot_id,
+                duration=row.get("duration_s"),
+                bucket=row.get("tool_duration_bucket"),
+                camera=camera,
+                tool_profile=tool_profile,
+                grid_strict=bool(row.get("grid_strict") or False),
             )
-        elif tool_profile and bucket:
-            expected = BUCKET_SECONDS.get(bucket)
-            prefix = BUCKET_PROFILE_PREFIX.get(tool_profile)
-            if expected is not None and duration != expected:
-                issues.append(
-                    issue(
-                        "error",
-                        "duration_bucket_mismatch",
-                        "duration_s not in tool_duration_bucket",
-                        shot_id=shot_id,
-                        field="duration_s",
-                        duration_s=duration,
-                        tool_duration_bucket=bucket,
-                    )
-                )
-            if prefix and isinstance(bucket, str) and not bucket.startswith(prefix):
-                issues.append(
-                    issue(
-                        "error",
-                        "duration_bucket_mismatch",
-                        "duration_s not in tool_duration_bucket",
-                        shot_id=shot_id,
-                        field="tool_duration_bucket",
-                        duration_s=duration,
-                        tool_duration_bucket=bucket,
-                    )
-                )
-        elif tool_profile and duration not in TOOL_DURATION_ALLOWED.get(tool_profile, set()):
-            issues.append(
-                issue(
-                    "error",
-                    "duration_bucket_mismatch",
-                    "duration_s not in tool_duration_bucket",
-                    shot_id=shot_id,
-                    field="duration_s",
-                    duration_s=duration,
-                    tool_profile=tool_profile,
-                )
-            )
-        elif not tool_profile:
-            if bucket:
-                issues.append(
-                    issue(
-                        "warn",
-                        "tool_profile_unset",
-                        "tool_profile empty; duration/bucket not blocking G2; ready_for_n4 stays false (O9)",
-                        shot_id=shot_id,
-                        field="tool_profile",
-                    )
-                )
+        )
 
         if size in SHOT_RANK and prev_size in SHOT_RANK:
             jump = abs(SHOT_RANK[size] - SHOT_RANK[prev_size])
@@ -509,7 +434,7 @@ def collect_issues(
                 )
             )
 
-    if not tool_profile:
+    if not profile_selected(tool_profile):
         issues.append(
             issue(
                 "warn",
@@ -549,6 +474,104 @@ def collect_issues(
     return issues
 
 
+def _duration_issues(
+    *,
+    shot_id: str,
+    duration: Any,
+    bucket: Any,
+    camera: Any,
+    tool_profile: str | None,
+    grid_strict: bool,
+) -> list[dict[str, Any]]:
+    """O9: unset profile never hard-fails duration. Selected profile: hard mismatch + CAM floors."""
+    found: list[dict[str, Any]] = []
+    if bucket == "":
+        bucket = None
+    if not profile_selected(tool_profile):
+        if bucket:
+            found.append(
+                issue(
+                    "warn",
+                    "tool_profile_unset",
+                    "tool_profile empty; duration/bucket not blocking G2; ready_for_n4 stays false (O9)",
+                    shot_id=shot_id,
+                    field="tool_profile",
+                )
+            )
+        return found
+
+    allow = allowed_durations(tool_profile)
+    prefix = BUCKET_PROFILE_PREFIX.get(str(tool_profile).strip())
+    floor = camera_duration_floor(camera if isinstance(camera, str) else None)
+    common = {
+        "duration_s": duration,
+        "tool_duration_bucket": bucket,
+        "tool_profile": tool_profile,
+        "allowed_duration_s": allow,
+    }
+
+    def _mismatch(field: str, reason: str, message: str = "duration_s not in tool_duration_bucket", **extra: Any) -> dict[str, Any]:
+        return issue(
+            "error",
+            "duration_bucket_mismatch",
+            message,
+            shot_id=shot_id,
+            field=field,
+            reason=reason,
+            **common,
+            **extra,
+        )
+
+    if bucket is None:
+        found.append(_mismatch("tool_duration_bucket", "bucket_null"))
+    elif bucket not in TOOL_DURATION_BUCKETS:
+        found.append(_mismatch("tool_duration_bucket", "bucket_invalid"))
+    else:
+        expected = BUCKET_SECONDS.get(bucket)
+        if expected is not None and duration != expected:
+            found.append(_mismatch("duration_s", "duration_not_in_bucket"))
+        if prefix and isinstance(bucket, str) and not bucket.startswith(prefix):
+            found.append(_mismatch("tool_duration_bucket", "bucket_family_mismatch"))
+
+    if duration not in TOOL_DURATION_ALLOWED.get(tool_profile or "", set()):
+        if not any(i.get("details", {}).get("reason") == "duration_not_in_bucket" for i in found):
+            found.append(_mismatch("duration_s", "duration_not_in_allow"))
+
+    if (
+        isinstance(duration, int)
+        and floor is not None
+        and duration < floor
+        and duration in TOOL_DURATION_ALLOWED.get(tool_profile or "", set())
+    ):
+        found.append(
+            _mismatch(
+                "duration_s",
+                "duration_below_camera_floor",
+                "duration_s below camera duration floor",
+                camera=camera,
+                camera_floor_s=floor,
+            )
+        )
+
+    if grid_strict and isinstance(camera, str) and camera in CAMERA_FLOOR_CLASS_CDE:
+        legal = legal_durations_at_or_above_floor(tool_profile, camera)
+        if legal and duration == legal[0] and len(legal) > 1:
+            found.append(
+                issue(
+                    "warn",
+                    "duration_floor_low_for_grid",
+                    "grid_strict complex shot is on the lowest legal bucket; prefer a longer one",
+                    shot_id=shot_id,
+                    field="duration_s",
+                    duration_s=duration,
+                    tool_profile=tool_profile,
+                    camera=camera,
+                    recommended_duration_s=legal[-1],
+                )
+            )
+    return found
+
+
 def first_hard_error(issues: list[dict[str, Any]]) -> dict[str, Any] | None:
     return next((i for i in issues if i.get("severity") == "error"), None)
 
@@ -566,7 +589,7 @@ def raise_hard(issues: list[dict[str, Any]]) -> None:
 
 
 def ready_for_n4(tool_profile: str | None, issues: list[dict[str, Any]]) -> bool:
-    if not tool_profile:
+    if not profile_selected(tool_profile):
         return False
     return first_hard_error(issues) is None
 

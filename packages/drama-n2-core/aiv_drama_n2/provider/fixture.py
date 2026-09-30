@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from aiv_drama.config import Settings
+from aiv_drama_n2.duration import adsorb_duration_row
 from aiv_drama_n2.validate import STORYBOARD_SKILL_PATH, extract_bridge_ids
 
 
@@ -35,17 +36,6 @@ class FixtureStoryboardProvider:
         support = chars[1] if len(chars) > 1 else lead
         scene = scenes[0] if scenes else "NONE"
         alt_scene = scenes[1] if len(scenes) > 1 else scene
-        bucket = "seedance:5" if tool_profile == "seedance_2" else None
-        duration = 5 if tool_profile in {None, "seedance_2"} else {"kling": 5, "hailuo": 6, "veo": 8}.get(tool_profile, 5)
-        if tool_profile == "kling":
-            bucket = "kling:5"
-        elif tool_profile == "hailuo":
-            bucket = "hailuo:6"
-            duration = 6
-        elif tool_profile == "veo":
-            bucket = "veo:8"
-            duration = 8
-
         templates = [
             ("MS", "PUSH", "开场立住冲突，推门入画", lead, scene, None, "cut", "基础", "angle:eye"),
             ("CU", "STATIC", "眼神一凛，压住场面", lead, scene, "你终于来了", "cut", "基础", "subtitle:yes"),
@@ -63,12 +53,13 @@ class FixtureStoryboardProvider:
             size, camera, action, cid, sid, dialogue, transition, dynamic, notes = templates[i % len(templates)]
             bridge = bridges[i] if i < len(bridges) else bridges[-1]
             char_ids = [cid] if cid != "NONE" else ["NONE"]
+            adsorbed = adsorb_duration_row(camera, 5, tool_profile, shot_id=f"S{i + 1:02d}")
             rows.append(
                 {
                     "shot_id": f"S{i + 1:02d}",
                     "bridge_id": bridge,
                     "seq": i + 1,
-                    "duration_s": duration,
+                    "duration_s": adsorbed.duration_s,
                     "shot_size": size,
                     "camera": camera,
                     "action": action,
@@ -77,7 +68,7 @@ class FixtureStoryboardProvider:
                     "dialogue": dialogue,
                     "transition": transition,
                     "dynamic_level": dynamic,
-                    "tool_duration_bucket": bucket,
+                    "tool_duration_bucket": adsorbed.tool_duration_bucket,
                     "grid_strict": size in {"CU", "ECU"},
                     "notes": notes,
                 }
@@ -88,12 +79,13 @@ class FixtureStoryboardProvider:
                 if len(rows) >= shot_cap:
                     break
                 n = len(rows) + 1
+                adsorbed = adsorb_duration_row("STATIC", 5, tool_profile, shot_id=f"S{n:02d}")
                 rows.append(
                     {
                         "shot_id": f"S{n:02d}",
                         "bridge_id": extra,
                         "seq": n,
-                        "duration_s": duration,
+                        "duration_s": adsorbed.duration_s,
                         "shot_size": "MS",
                         "camera": "STATIC",
                         "action": f"{episode_id} 桥段 {extra} 补镜",
@@ -102,7 +94,7 @@ class FixtureStoryboardProvider:
                         "dialogue": None,
                         "transition": "cut",
                         "dynamic_level": "基础",
-                        "tool_duration_bucket": bucket,
+                        "tool_duration_bucket": adsorbed.tool_duration_bucket,
                         "grid_strict": False,
                         "notes": "angle:eye",
                     }
