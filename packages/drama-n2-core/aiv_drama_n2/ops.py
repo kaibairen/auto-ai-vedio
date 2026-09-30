@@ -11,11 +11,21 @@ from aiv_drama_n2.models import (
     StoryboardResetRequest,
     StoryboardWrite,
 )
+from aiv_drama_n2.named_cast import (
+    AUTO_MERGE_ONE_LINE,
+    G2_BLOCK_MESSAGE,
+    NAMED_CAST_AUTO_MERGED,
+    NAMED_CAST_GATE,
+    auto_merge_named_cast,
+    blocking_named_cast_issues,
+    parse_named_cast_check,
+)
 from aiv_drama_n2.provider import generate_rows
 from aiv_drama_n2.validate import (
     STORYBOARD_SKILL_PATH,
     collect_issues,
     inherit_shot_cap,
+    issue,
     normalize_row,
     raise_hard,
     ready_for_n4,
@@ -124,6 +134,29 @@ class DramaN2Ops:
         sb["lane"] = outline.get("lane") or cast.get("lane") or sb.get("lane")
         sb["stale"] = False
 
+    def _named_cast_mode(self) -> str:
+        return parse_named_cast_check(getattr(self.settings, "named_cast_check", None))
+
+    def _collect_sb_issues(
+        self,
+        rec: dict[str, Any],
+        rows: list[dict[str, Any]] | None = None,
+        *,
+        shot_cap: int | None = None,
+        tool_profile: str | None = None,
+        for_pass: bool = False,
+    ) -> list[dict[str, Any]]:
+        sb = rec.get("storyboard") or {}
+        return collect_issues(
+            rows if rows is not None else (sb.get("rows") or []),
+            shot_cap=shot_cap if shot_cap is not None else (sb.get("shot_cap") or 12),
+            tool_profile=tool_profile if tool_profile is not None else sb.get("tool_profile"),
+            cast=rec.get("cast"),
+            outline_body=(rec.get("outline") or {}).get("body_md"),
+            for_pass=for_pass,
+            named_cast_check=self._named_cast_mode(),
+        )
+
     def _finish_storyboard(
         self,
         rec: dict[str, Any],
@@ -132,14 +165,7 @@ class DramaN2Ops:
         actor: str | None,
         bump: bool = True,
     ) -> None:
-        issues = collect_issues(
-            sb.get("rows") or [],
-            shot_cap=sb.get("shot_cap") or 12,
-            tool_profile=sb.get("tool_profile"),
-            cast=rec.get("cast"),
-            outline_body=(rec.get("outline") or {}).get("body_md"),
-            for_pass=False,
-        )
+        issues = self._collect_sb_issues(rec, sb.get("rows") or [], shot_cap=sb.get("shot_cap") or 12)
         sb["ready_for_n4"] = ready_for_n4(sb.get("tool_profile"), issues)
         sb["shot_count"] = len(sb.get("rows") or [])
         if bump:
@@ -172,6 +198,9 @@ class DramaN2Ops:
             env["projection_dirty"] = True
         if warnings:
             env["validate_warnings"] = warnings
+        hint_fn = getattr(self, "_hint_fields", None)
+        if callable(hint_fn):
+            env.update(hint_fn(rec))
         return env
 
     def gate_g2_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
@@ -202,12 +231,10 @@ class DramaN2Ops:
     def get_storyboard(self, project_id: str, ep: str) -> dict[str, Any]:
         rec = self._rec(project_id, ep)
         self._require_g1b_for_n2(rec)
-        issues = collect_issues(
+        issues = self._collect_sb_issues(
+            rec,
             (rec.get("storyboard") or {}).get("rows") or [],
             shot_cap=(rec.get("storyboard") or self._empty_storyboard(rec)).get("shot_cap") or 12,
-            tool_profile=(rec.get("storyboard") or {}).get("tool_profile"),
-            cast=rec.get("cast"),
-            outline_body=(rec.get("outline") or {}).get("body_md"),
         )
         warns = [i for i in issues if i.get("severity") == "warn"]
         return self.storyboard_envelope(rec, warnings=warns or None)
@@ -250,13 +277,7 @@ class DramaN2Ops:
         sb["shot_cap"] = cap
         sb["rows"] = rows
         sb["shot_count"] = len(rows)
-        issues = collect_issues(
-            rows,
-            shot_cap=cap,
-            tool_profile=sb.get("tool_profile"),
-            cast=rec.get("cast"),
-            outline_body=(rec.get("outline") or {}).get("body_md"),
-        )
+        issues = self._collect_sb_issues(rec, rows, shot_cap=cap, tool_profile=sb.get("tool_profile"))
         raise_hard(issues)
         self._pin_upstream(rec, sb)
         sb["locked"] = False
@@ -310,13 +331,28 @@ class DramaN2Ops:
             tool_profile=req.tool_profile,
             episode_id=rec["episode"]["episode_id"],
         )
-        issues = collect_issues(
+        # O1=A: after generate, auto-register named on-screen roles missing from cast.
+        # Does not unlock G1b or rewrite locked outline body (O2).
+        rows, added = auto_merge_named_cast(
+            rec,
             rows,
-            shot_cap=cap,
-            tool_profile=req.tool_profile,
-            cast=rec.get("cast"),
-            outline_body=(rec.get("outline") or {}).get("body_md"),
+            alloc_char=self._alloc_char,
+            one_line=AUTO_MERGE_ONE_LINE,
         )
+        extra_warns: list[dict[str, Any]] = []
+        if added:
+            set_hint = getattr(self, "_set_cast_change_hint", None)
+            if callable(set_hint):
+                set_hint(rec, added=added, source="auto_merge")
+            extra_warns.append(
+                issue(
+                    "warn",
+                    NAMED_CAST_AUTO_MERGED,
+                    "named on-screen roles auto-registered into cast",
+                    added=added,
+                )
+            )
+        issues = self._collect_sb_issues(rec, rows, shot_cap=cap, tool_profile=req.tool_profile)
         raise_hard(issues)
         sb["shot_cap"] = cap
         sb["rows"] = rows
@@ -330,7 +366,7 @@ class DramaN2Ops:
         self._pin_upstream(rec, sb)
         self._finish_storyboard(rec, sb, actor=req.actor)
         self._commit(rec)
-        warns = [i for i in issues if i.get("severity") == "warn"]
+        warns = extra_warns + [i for i in issues if i.get("severity") == "warn"]
         return self._idem_put(
             idempotency_key,
             f"generate_storyboard:{project_id}:{ep}",
@@ -348,14 +384,7 @@ class DramaN2Ops:
         rec = self._rec(project_id, ep)
         self._require_g1b_for_n2(rec)
         sb = rec.get("storyboard") or self._empty_storyboard(rec)
-        issues = collect_issues(
-            sb.get("rows") or [],
-            shot_cap=sb.get("shot_cap") or 12,
-            tool_profile=sb.get("tool_profile"),
-            cast=rec.get("cast"),
-            outline_body=(rec.get("outline") or {}).get("body_md"),
-            for_pass=False,
-        )
+        issues = self._collect_sb_issues(rec, sb.get("rows") or [], shot_cap=sb.get("shot_cap") or 12)
         if not (sb.get("rows") or []):
             issues.append(
                 {
@@ -502,15 +531,21 @@ class DramaN2Ops:
         note = raw.get("note")
         ts = now_iso()
         if decision == "pass":
-            issues = collect_issues(
-                sb.get("rows") or [],
-                shot_cap=sb.get("shot_cap") or 12,
-                tool_profile=sb.get("tool_profile"),
-                cast=rec.get("cast"),
-                outline_body=(rec.get("outline") or {}).get("body_md"),
-                for_pass=True,
-            )
+            issues = self._collect_sb_issues(rec, for_pass=True)
             raise_hard(issues)
+            leftover = blocking_named_cast_issues(issues)
+            if leftover:
+                raise AppError(
+                    422,
+                    NAMED_CAST_GATE,
+                    G2_BLOCK_MESSAGE,
+                    issues=leftover,
+                    node=NODE_DN2,
+                    gate=GATE_G2,
+                )
+            clear_hint = getattr(self, "_clear_cast_change_hint", None)
+            if callable(clear_hint):
+                clear_hint(rec)
             sb["locked"] = True
             sb["confirmed_by"] = actor
             sb["version"] = (sb.get("version") or 0) + 1

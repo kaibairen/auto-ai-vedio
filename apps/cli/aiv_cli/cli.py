@@ -21,6 +21,7 @@ from aiv_drama.models import (
     OutlineResetRequest,
     OutlineWrite,
     ProjectCreate,
+    SidecarAddCharacterRequest,
 )
 from aiv_drama.service import DramaService
 from aiv_drama_n2.models import (
@@ -258,6 +259,19 @@ def cast_detach(
 ) -> None:
     body = DetachRequest(character_id=character_id, unlock_edit=unlock_edit)
     _print(_guard(lambda: _service().detach_character(project_id, ep, body, raw=body.model_dump())))
+
+
+@cast_app.command("sidecar-add")
+def cast_sidecar_add(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    name: str = typer.Option(..., "--name"),
+    one_line: Optional[str] = typer.Option(None, "--one-line"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    """O2: add a named CHAR without unlocking G1b or rewriting outline body."""
+    body = SidecarAddCharacterRequest(name=name, one_line=one_line, actor=actor)
+    _print(_guard(lambda: _service().sidecar_add_character(project_id, ep, body, raw=body.model_dump())))
 
 
 @gate_app.command("get")

@@ -40,6 +40,32 @@ def test_cli_storyboard_after_demo(data_dir, monkeypatch):
     assert '"locked": true' in con.output
 
 
+def test_cli_sidecar_add_after_demo(data_dir, monkeypatch):
+    monkeypatch.setenv("AIV_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("AIV_LLM_PROVIDER", "fixture")
+    demo = runner.invoke(app, ["--fixture", "--pretty", "drama", "demo", "--ep", "EP01", "--lane", "female"])
+    assert demo.exit_code == 0, demo.output
+    add = runner.invoke(
+        app,
+        [
+            "drama",
+            "cast",
+            "sidecar-add",
+            "--project",
+            "proj_01",
+            "--ep",
+            "EP01",
+            "--name",
+            "CODEX王子",
+            "--one-line",
+            "弹窗反派",
+        ],
+    )
+    assert add.exit_code == 0, add.output
+    assert "CODEX王子" in add.output
+    assert "cast_changed" in add.output
+
+
 def test_cli_storyboard_llm_missing_key(data_dir, monkeypatch):
     monkeypatch.setenv("AIV_DATA_DIR", str(data_dir))
     monkeypatch.setenv("AIV_LLM_PROVIDER", "fixture")

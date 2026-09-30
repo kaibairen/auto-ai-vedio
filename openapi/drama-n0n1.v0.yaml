@@ -516,6 +516,43 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /projects/{project_id}/episodes/{ep}/drama/cast/sidecar-add:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [CastDraft]
+      operationId: sidecarAddCharacter
+      summary: 侧车加角（BRIEF-AIV-017a O2）
+      description: |
+        G1b 锁后追加具名 CHAR：**不** unlock / 不拆 G1b、**不**改锁态大纲正文。
+        仅 bump `cast.version`；回包 `cast_changed` + `hints`。
+        与 PUT cast（锁后须 unlock_edit）不同。ForcePass=never。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SidecarAddCharacterRequest'
+            example:
+              name: CODEX王子
+              one_line: 弹窗反派
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CastEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /projects/{project_id}/episodes/{ep}/gates/g1b:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -1024,6 +1061,22 @@ components:
         next_edges:
           type: array
           items: { type: string }
+        cast_changed:
+          type: boolean
+          description: 侧车/自动入表后 true（O2 UI/API hint）
+        hints:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    SidecarAddCharacterRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1 }
+        one_line: { type: string }
+        actor: { type: string }
     AttachRequest:
       type: object
       required: [character_id, version]

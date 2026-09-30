@@ -25,6 +25,7 @@
    - reject → 保持可编辑，记 note，不写通过态 `confirmed_by`。
    - 请求带 `force_pass` / `force` / `skip_gate` → **400 `force_pass_forbidden`**。
 7. 锁后写必须 `unlock_edit=true` → 升 version、清 locked、`stale_downstream` 含 **D-N2**。静默 PUT → **409 `locked`**。
+   **例外（017a O2）**：`POST .../drama/cast/sidecar-add` 锁后可加具名 CHAR，**不**拆 G1b、**不**改大纲正文，只 bump `cast.version` 并回 `cast_changed` hint。
 8. 未锁时下游读 `GET .../drama/downstream` → **409 `upstream_unlocked`**。该路径是 D-N2 **只读消费面**（OpenAPI 未列；不启动 D-N2）。
 
 薄 UI（可选）：`aiv serve` 后打开 `/` 或 `/workbench`。无 force 控件。
@@ -69,6 +70,7 @@ POST /projects/{id}/episodes/{ep}/drama/outline/reset
 GET|PUT .../drama/cast
 POST .../drama/cast/attach   {character_id, version}
 POST .../drama/cast/detach   {character_id}
+POST .../drama/cast/sidecar-add {name, one_line?}  # O2 不拆 G1b
 GET  .../gates/g1b
 POST .../gates/g1b/confirm   {decision, actor, note?}
 GET  .../drama/downstream    # 扩展：未锁 409；pass 后只读；started=false

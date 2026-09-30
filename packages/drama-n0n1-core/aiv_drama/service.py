@@ -23,6 +23,7 @@ from aiv_drama.models import (
     OutlineWrite,
     ProjectCreate,
     ProjectPatch,
+    SidecarAddCharacterRequest,
 )
 from aiv_drama.projection import (
     assert_no_secrets,
@@ -46,6 +47,7 @@ from aiv_drama.validate import (
     require_shot_cap,
     validate_ep,
 )
+from aiv_drama_n2.named_cast import CAST_CHANGED_HINT, SIDECAR_ONE_LINE, normalize_name
 from aiv_drama_n2.ops import DramaN2Ops
 from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
 from aiv_schema.models import GATE_G1B, GATE_G2, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, PIPELINE_DRAMA
@@ -297,10 +299,33 @@ class DramaService(DramaN2Ops):
             env["warnings"] = list(warnings)
         return env
 
+    def _set_cast_change_hint(
+        self,
+        rec: dict[str, Any],
+        *,
+        added: list[dict[str, Any]],
+        source: str,
+    ) -> None:
+        rec["cast_change_hint"] = {
+            **CAST_CHANGED_HINT,
+            "added": added,
+            "source": source,
+            "cast_version": (rec.get("cast") or {}).get("version") or 0,
+        }
+
+    def _clear_cast_change_hint(self, rec: dict[str, Any]) -> None:
+        rec.pop("cast_change_hint", None)
+
+    def _hint_fields(self, rec: dict[str, Any]) -> dict[str, Any]:
+        hint = rec.get("cast_change_hint")
+        if not hint:
+            return {}
+        return {"cast_changed": True, "hints": [deepcopy(hint)]}
+
     def cast_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
         if not rec.get("cast"):
             raise AppError(404, "not_found", "cast not found", node=NODE_DN1)
-        return {
+        env: dict[str, Any] = {
             "ok": True,
             "project_id": rec["episode"]["project_id"],
             "episode_id": rec["episode"]["episode_id"],
@@ -308,6 +333,8 @@ class DramaService(DramaN2Ops):
             "cast": deepcopy(rec["cast"]),
             "next_edges": list(rec["episode"].get("next_edges") or []),
         }
+        env.update(self._hint_fields(rec))
+        return env
 
     def gate_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
         edges = list(rec["episode"].get("next_edges") or [])
@@ -1090,6 +1117,57 @@ class DramaService(DramaN2Ops):
         self._touch_episode(rec)
         self._commit(rec)
         return self._idem_put(idempotency_key, f"detach:{project_id}:{ep}:{body.character_id}", self.cast_envelope(rec))
+
+    def sidecar_add_character(
+        self,
+        project_id: str,
+        ep: str,
+        body: SidecarAddCharacterRequest,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """O2: add a named CHAR without unlocking G1b or rewriting locked outline body."""
+        reject_force_keys(raw)
+        cached = self._idem_get(idempotency_key, f"sidecar_add:{project_id}:{ep}:{body.name}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        if not rec.get("cast"):
+            raise AppError(404, "not_found", "cast not found", node=NODE_DN1)
+        name = normalize_name(body.name)
+        if not name:
+            raise AppError(422, "validation", "name is required", node=NODE_DN1)
+        existing = next(
+            (
+                c
+                for c in rec["cast"]["characters"]
+                if normalize_name(str(c.get("name") or "")) == name
+            ),
+            None,
+        )
+        if not existing:
+            ident = self._alloc_char(rec)
+            rec["cast"]["characters"].append(
+                {
+                    "id": ident,
+                    "name": name,
+                    "one_line": (body.one_line or "").strip() or SIDECAR_ONE_LINE,
+                    "library_ref": None,
+                }
+            )
+            rec["cast"]["version"] = (rec["cast"].get("version") or 0) + 1
+            rec["cast"]["updated_at"] = now_iso()
+            self._set_cast_change_hint(rec, added=[{"id": ident, "name": name}], source="sidecar")
+        # O2: do not unlock/un-confirm G1b; do not mutate outline body.
+        self._touch_episode(rec)
+        self._commit(rec)
+        return self._idem_put(
+            idempotency_key,
+            f"sidecar_add:{project_id}:{ep}:{body.name}",
+            self.cast_envelope(rec),
+        )
 
     # ----- gate G1b -----------------------------------------------------------------
 

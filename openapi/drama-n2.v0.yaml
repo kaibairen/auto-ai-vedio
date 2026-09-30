@@ -172,6 +172,8 @@ paths:
       description: |
         前置 G1b locked；否则 409。已锁分镜须 unlock_edit。
         Skill 只读借用动态漫-转分镜（O2）；不注入 Seedance 出片 Skill；无独立剧本资源（O1）。
+        BRIEF-AIV-017a **O1=A**：normalize 后自动登记 action/dialogue 具名对戏主体（缺则入 cast + 回填 char_ids）；
+        **不**拆 G1b、**不**改锁态大纲正文；cast.version++ 并回 `cast_changed` / hints。
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -211,6 +213,9 @@ paths:
         硬：shot_cap、CAM 枚举、cast id（O5）、禁提示词、bridge_id 非空、shot_id 唯一、seq。
         软 warn：J1–J2、grid_strict 建议、tool_profile 未选。
         duration↔bucket：未选 tool_profile 时不硬拒 G2；选了则不一致 → error（挡 ready_for_n4）。
+        O5-N（BRIEF-AIV-017a）：`named_cast_check=off|warn|error`（默认 **warn**）。
+        专名对戏未入表 / 未入本镜 char_ids → issues `named_cast_*`。
+        warn 不改 `valid`；error 使 `valid=false`。G2 pass 见 confirm。
       requestBody:
         required: false
         content:
@@ -335,6 +340,8 @@ paths:
         force_pass/force/skip_gate → 400 `force_pass_forbidden`。
         硬机检 FAIL → 422；J1–J2 warn 不挡 pass。
         未选 tool_profile 时 pass 允许，ready_for_n4 必须 false。
+        O5（017a）：若仍有 `named_cast_*` issue（不含 `named_cast_auto_merged`）→ **422 `named_cast_gate`** 产品门阻断（默认 warn 亦挡）。
+        `AIV_NAMED_CAST_CHECK=off` 关闭检出。ForcePass=never。
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -707,6 +714,14 @@ components:
         validate_warnings:
           type: array
           items: { $ref: '#/components/schemas/ValidateIssue' }
+        cast_changed:
+          type: boolean
+          description: generate 自动入表或侧车加角后 true
+        hints:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
 
     ValidateIssue:
       type: object

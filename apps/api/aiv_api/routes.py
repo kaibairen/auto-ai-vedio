@@ -19,6 +19,7 @@ from aiv_drama.models import (
     OutlineWrite,
     ProjectCreate,
     ProjectPatch,
+    SidecarAddCharacterRequest,
 )
 from aiv_drama.service import DramaService
 from aiv_drama.validate import reject_dual_skill, reject_force_keys
@@ -238,6 +239,19 @@ async def detach_character(
 ) -> dict[str, Any]:
     raw = await _raw(request)
     return _svc(request).detach_character(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/cast/sidecar-add")
+async def sidecar_add_character(
+    project_id: str,
+    ep: str,
+    body: SidecarAddCharacterRequest,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    """O2 sidecar: add CHAR without unlocking G1b or rewriting locked outline."""
+    raw = await _raw(request)
+    return _svc(request).sidecar_add_character(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 @router.get("/projects/{project_id}/episodes/{ep}/gates/g1b")

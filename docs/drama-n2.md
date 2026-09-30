@@ -25,6 +25,9 @@
 | **O3 / O8** | NODE-SPEC 最低列 + 必填 `bridge_id`；`angle` / `camera_speed` 默认 `notes` 前缀，不加死列 |
 | **O4** | API/DB 权威 + 盘投影 `EP##-分镜.csv` + `EP##-分镜.md` |
 | **O5** | 未知具名 CHAR/SCENE 硬拒 `cast_id_unknown`；空镜/群杂允许 `NONE` 或 `[]` |
+| **017a O1=A** | generate 后自动入表具名对戏主体并回填 `char_ids` |
+| **017a O2** | 侧车加角不拆 G1b；cast 升 version + hint；禁静默改锁态大纲正文 |
+| **017a O5** | 默认 `named_cast_check=warn`；G2 pass 若仍有 `named_cast_*` → `named_cast_gate` |
 | **O6** | `shot_cap` 继承 outline；硬上限 **≤12**；超限 `shot_cap_exceeded` |
 | **O7** | 景别/运镜 **英文短码**入库/落盘；中文标签仅 UI（本批无薄 FE） |
 | **O9** | `tool_profile` 可空不挡 G2；未选禁 `ready_for_n4` |
@@ -43,6 +46,7 @@
    - `force_pass` / `force` / `skip_gate` → **400 `force_pass_forbidden`**。
    - `stale=true`（上游 unlock 未刷新）→ **409 `stale_upstream`**。
    - 未选 `tool_profile` 可通过；`ready_for_n4` 必须 false。
+   - 仍有 `named_cast_*`（017a O5）→ **422 `named_cast_gate`**。默认 warn 不改 validate `valid`，但挡 G2 pass。
 6. 锁后改表须 `unlock_edit=true` → version++、清 locked、下游 **D-N3 stale**。静默 PUT → **409 `locked`**。
 
 ---
@@ -62,6 +66,8 @@ aiv drama storyboard generate --project proj_01 --ep EP01 --provider fixture
 # export AIV_OPENAI_BASE_URL=https://api.deepseek.com/v1
 # export AIV_OPENAI_MODEL=deepseek-chat
 aiv drama storyboard generate --project proj_01 --ep EP01 --provider llm
+# 侧车加角（不拆 G1b / 不改大纲正文）
+aiv drama cast sidecar-add --project proj_01 --ep EP01 --name CODEX王子 --one-line 弹窗反派
 aiv drama storyboard validate --project proj_01 --ep EP01
 aiv drama g2 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 aiv drama storyboard get --project proj_01 --ep EP01
@@ -87,6 +93,7 @@ aiv drama storyboard get --project proj_01 --ep EP01
 ```
 GET|PUT  /projects/{id}/episodes/{ep}/drama/storyboard
 POST     .../drama/storyboard/generate    {provider: fixture|llm|skill, tool_profile?, actor?}
+POST     .../drama/cast/sidecar-add       {name, one_line?, actor?}   # O2 不拆 G1b
 POST     .../drama/storyboard/validate
 POST     .../drama/storyboard/reorder     {shot_ids: ["S02","S01",...]}
 POST     .../drama/storyboard/reset       {unlock_edit?}
@@ -145,6 +152,7 @@ G1b pass 的 `next_edges: ["D-N2"]` 与 G2 pass 的 `["D-N3"]` 都只是导航�
 | `storyboard_empty` | 422 | G2 pass 时空表 |
 | `prompt_forbidden` | 422 | 完整出片提示词入表 / 禁列 |
 | `cast_id_unknown` | 422 | 具名 CHAR/SCENE ∉ cast |
+| `named_cast_gate` | 422 | G2 pass 时仍有 `named_cast_*`（017a O5 产品门） |
 | `bridge_id_missing` | 422 | 缺 bridge_id |
 | `cam_enum_invalid` | 422 | shot_size/camera 非 CAM 英文闭集 |
 | `duration_bucket_mismatch` | 422 | 已选 tool_profile 且 duration↔bucket 不一致 |

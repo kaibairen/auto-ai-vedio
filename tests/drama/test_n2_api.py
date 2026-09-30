@@ -150,6 +150,49 @@ def test_http_bare_n2_404(client):
         assert "D-N2" in res.json()["error"]["message"]
 
 
+def test_http_sidecar_add_keeps_g1b_and_hints(client):
+    pid = _setup_locked(client)
+    before = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/outline").json()
+    outline_body = before["outline"]["body_md"]
+    outline_ver = before["outline"]["version"]
+    res = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/cast/sidecar-add",
+        json={"name": "CODEX王子", "one_line": "弹窗反派", "actor": "yangzhou"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["cast_changed"] is True
+    assert body["cast"]["locked"] is True
+    names = [c["name"] for c in body["cast"]["characters"]]
+    assert "CODEX王子" in names
+    after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/outline").json()
+    assert after["outline"]["locked"] is True
+    assert after["outline"]["body_md"] == outline_body
+    assert after["outline"]["version"] == outline_ver
+    gate = client.get(f"/api/v0/projects/{pid}/episodes/EP01/gates/g1b").json()
+    assert gate["gate"]["locked"] is True
+    assert gate["gate"]["last_decision"] == "pass"
+
+
+def test_http_named_cast_warn_blocks_g2(client):
+    pid = _setup_locked(client)
+    put = client.put(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard",
+        json={"rows": [sample_row(dialogue="CODEX王子：嫁给我。", action="弹窗弹出")]},
+    )
+    assert put.status_code == 200
+    assert any(w["code"] == "named_cast_missing" for w in put.json().get("validate_warnings") or [])
+    val = client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard/validate", json={})
+    assert val.status_code == 200
+    assert val.json()["valid"] is True
+    con = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/gates/g2/confirm",
+        json={"decision": "pass", "actor": "yangzhou"},
+    )
+    assert con.status_code == 422
+    assert con.json()["error"]["code"] == "named_cast_gate"
+
+
 def test_http_idempotency_generate(client):
     pid = _setup_locked(client)
     headers = {"Idempotency-Key": "sb-http"}

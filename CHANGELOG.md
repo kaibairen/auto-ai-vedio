@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — BRIEF-AIV-017a named-cast (O1/O2/O5, docs≠PASS)
+
+Frozen FREEZE O1=A / O2 / O5 on drama D-N2 only. ForcePass=never. Does not change O9 coerce.
+
+- **O1=A**: after storyboard generate, auto-register high-confidence named speakers/agents from action/dialogue; merge into cast; wire `char_ids`.
+- **O2**: `POST .../drama/cast/sidecar-add` does **not** unlock G1b or rewrite locked outline body; bumps `cast.version`; API/UI `cast_changed` + hints.
+- **O5**: default `named_cast_check=warn` (`AIV_NAMED_CAST_CHECK=off|warn|error`); issues `named_cast_*`. G2 pass blocks if any remain (`named_cast_gate`). Strict/error is the knob.
+- Workbench Screen E surfaces the hint. Thin chips still only reflect `char_ids` (no auto-add from FE).
+
 ## 0.2.0 — drama D-N2 storyboard + gate G2 (docs≠PASS)
 
 Implements `pipeline_profile=drama` **D-N2** (storyboard) + gate **G2** against OpenAPI **0.1.0**.

@@ -6,6 +6,7 @@ from typing import Any
 from aiv_drama.config import SHOT_CAP_HARD
 from aiv_drama.errors import AppError
 from aiv_drama.validate import FORCE_KEYS
+from aiv_drama_n2.named_cast import collect_named_cast_issues, parse_named_cast_check
 from aiv_schema.models import GATE_G2, NODE_DN2
 
 SHOT_SIZES = ("ELS", "LS", "MS", "CU", "ECU")
@@ -237,6 +238,7 @@ def collect_issues(
     cast: dict[str, Any] | None,
     outline_body: str | None = None,
     for_pass: bool = False,
+    named_cast_check: str | None = None,
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     known_chars = {c.get("id") for c in ((cast or {}).get("characters") or []) if c.get("id")}
@@ -545,6 +547,16 @@ def collect_issues(
                     missing=missing,
                 )
             )
+
+    issues.extend(
+        collect_named_cast_issues(
+            rows,
+            cast=cast,
+            outline_body=outline_body,
+            named_cast_check=parse_named_cast_check(named_cast_check),
+            issue_fn=issue,
+        )
+    )
 
     return issues
 

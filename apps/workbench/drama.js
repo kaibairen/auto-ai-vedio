@@ -13,6 +13,25 @@ function showBanner(msg, ok) {
   el.textContent = msg || "";
   el.style.background = ok ? "#1d3a28" : "#3a2020";
 }
+function showCastHint(data) {
+  const el = $("cast-hint");
+  if (!el) return;
+  const hints = data?.hints || [];
+  const named = (data?.validate_warnings || data?.issues || []).filter((i) =>
+    String(i.code || "").startsWith("named_cast_")
+  );
+  if (data?.cast_changed || hints.length || named.length) {
+    const hintMsg = hints[0]?.message || "角色表已更新；G1b 仍锁定，大纲正文未改。";
+    const namedMsg = named.length
+      ? `具名配角 issue ${named.length} 条（${named.map((i) => i.code).join(", ")}）— G2 pass 将被阻断。`
+      : "";
+    el.hidden = false;
+    el.textContent = [data?.cast_changed ? hintMsg : "", namedMsg].filter(Boolean).join(" ");
+  } else {
+    el.hidden = true;
+    el.textContent = "";
+  }
+}
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach((s) => { s.hidden = s.id !== `screen-${name}`; });
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.screen === name));
@@ -146,4 +165,37 @@ $("btn-downstream").onclick = async () => {
     dump("dn-out", err.data || { error: String(err) });
   }
 };
+$("btn-sb-gen").onclick = async () => {
+  const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/generate`, {
+    provider: "fixture",
+    actor: "yangzhou",
+  });
+  showCastHint(data);
+  dump("e-out", data);
+};
+$("btn-sb-val").onclick = async () => {
+  const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/storyboard/validate`, {});
+  showCastHint(data);
+  dump("e-out", data);
+};
+$("btn-sidecar").onclick = async () => {
+  const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/cast/sidecar-add`, {
+    name: $("side-name").value || "CODEX王子",
+    one_line: $("side-line").value || undefined,
+    actor: "yangzhou",
+  });
+  showCastHint(data);
+  dump("e-out", data);
+};
+async function confirmG2(decision) {
+  const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/gates/g2/confirm`, {
+    decision,
+    actor: $("g2-actor").value,
+    note: $("g2-note").value || undefined,
+  });
+  showCastHint(data);
+  dump("e-out", data);
+}
+$("btn-g2-pass").onclick = () => confirmG2("pass");
+$("btn-g2-reject").onclick = () => confirmG2("reject");
 hdr();

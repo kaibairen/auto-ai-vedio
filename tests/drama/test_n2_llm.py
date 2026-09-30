@@ -161,6 +161,8 @@ def test_llm_http_prompt_and_fold(tmp_path, monkeypatch):
     assert SEEDANCE_SKILL_PATH not in user["skill_excerpt"]
     assert "Seedance 出片" not in user["skill_excerpt"]
     assert any("CHAR-*" in r for r in user["rules"])
+    assert any("cast.characters" in r or "named speakers" in r for r in user["rules"])
+    assert any("系统音" in r for r in user["rules"])
     assert rows[0]["char_ids"] == ["CHAR-01"]
     assert rows[0]["scene_id"] == "SCENE-01"
     assert rows[0]["shot_size"] == "MS"
