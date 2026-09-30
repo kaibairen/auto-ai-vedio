@@ -29,6 +29,8 @@ After G1b is locked, generate a storyboard, edit/reorder, then confirm **gate G2
 
 BRIEF-AIV-017a (FREEZE O1=A / O2 / O5): generate auto-registers named on-screen roles; sidecar-add does not unlock G1b or rewrite outline; default `named_cast_check=warn` and G2 pass blocks leftover `named_cast_*`.
 
+BRIEF-AIV-020 P0: B-class names (系统音 / 半截台词 / 动词短语 / dirty prefix) do not open CHAR; A-class princes auto-enter + hang `char_ids`; generate adsorbs durations to {5,8,10} (profile unset) or the selected profile's closed set; skill path + excerpt/trace persist on generate/GET/validate (`n2_request`).
+
 ```bash
 aiv drama storyboard generate --project proj_01 --ep EP01 --provider fixture
 # export AIV_OPENAI_API_KEY=...  # and optionally AIV_OPENAI_BASE_URL / AIV_OPENAI_MODEL

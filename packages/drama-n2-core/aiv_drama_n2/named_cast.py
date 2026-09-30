@@ -1,7 +1,8 @@
-"""O5-N named-cast scan + O1 auto-register helpers (BRIEF-AIV-017a).
+"""O5-N named-cast scan + O1 auto-register helpers (BRIEF-AIV-017a / 020).
 
 Rule-first extraction: dialogue speaker prefixes and high-confidence action
-proper names. Does not invent CHAR-* without writing cast. Isolated from koubo.
+proper names. B-class (系统音 / 半截台词 / 动词短语 / 脏前缀) never opens CHAR.
+Does not invent CHAR-* without writing cast. Isolated from koubo.
 """
 
 from __future__ import annotations
@@ -16,7 +17,10 @@ NAMED_CAST_ROW_GAP = "named_cast_row_gap"
 NAMED_CAST_UNREFERENCED = "named_cast_unreferenced"
 NAMED_CAST_HEURISTIC = "named_cast_heuristic"
 NAMED_CAST_AUTO_MERGED = "named_cast_auto_merged"
+NAMED_CAST_SIDECAR_ADDED = "named_cast_sidecar_added"
 NAMED_CAST_GATE = "named_cast_gate"
+
+INFORMATIONAL_NAMED_CAST = frozenset({NAMED_CAST_AUTO_MERGED, NAMED_CAST_SIDECAR_ADDED})
 
 NAMED_CAST_CHECK_MODES = ("off", "warn", "error")
 DEFAULT_NAMED_CAST_CHECK = "warn"
@@ -51,6 +55,17 @@ SYSTEM_SPEAKERS = frozenset(
         "os",
     }
 )
+
+# Substring tags that mark a B-class speaker even when glued to a brand/token.
+SYSTEM_CONTAINS_MARKERS = (
+    "【系统音】",
+    "[系统音]",
+    "系统音",
+    "画外音",
+    "内心独白",
+    "通缉令",
+)
+SYSTEM_PREFIX_MARKERS = ("旁白", "广播", "弹窗", "字幕")
 
 GENERIC_REFS = frozenset(
     {
@@ -88,8 +103,15 @@ GROUP_LABELS = frozenset(
         "两位王子",
         "俩王子",
         "两名王子",
+        "两王子",
+        "两个王子",
+        "双王子",
+        "指出两王子",
         "公主们",
         "两位公主",
+        "俩公主",
+        "两名公主",
+        "两公主",
     }
 )
 
@@ -109,16 +131,57 @@ BARE_TITLES = frozenset(
     }
 )
 
-# Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
-SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,24})[：:]")
+TITLES = ("王子", "公主", "女王", "国王", "将军", "大人", "小姐", "少爷", "殿下")
 
-# High-confidence titled proper names (015: CODEX王子 / OPUS5.5王子).
+VERB_LEADERS = (
+    "指出",
+    "看着",
+    "走向",
+    "走向了",
+    "喊出",
+    "拿出",
+    "举起",
+    "打开",
+    "点击",
+    "进入",
+    "离开",
+    "追向",
+    "指向",
+    "望向",
+    "示意",
+    "拦住",
+    "抓住",
+    "拉住",
+    "推开",
+)
+
+# Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
+SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,32})[：:]")
+
+# High-confidence titled proper names. Allows CURSOR(Opus5.5)王子.
 PROPER_NAME_RE = re.compile(
-    r"(?:[A-Za-z][A-Za-z0-9._-]*|[\u4e00-\u9fff]{1,12})"
+    r"(?:"
+    r"[A-Za-z][A-Za-z0-9._-]*(?:\([^)]{1,32}\))?"
+    r"|[\u4e00-\u9fff]{2,12}"
+    r")"
     r"(?:王子|公主|女王|国王|将军|大人|小姐|少爷|殿下)"
 )
 
 GROUP_RE = re.compile("|".join(sorted((re.escape(g) for g in GROUP_LABELS), key=len, reverse=True)))
+
+DIRTY_PREFIX_RE = re.compile(r"^[\s/\\|#@*>\-–—·•、,，.。;；'\"“”‘’\[\]【】()（）]+")
+HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|目标")
+
+# Well-known A-class recoveries (dogfood 王子专名). Only used when a group
+# label is present and no individual titled prince was extracted.
+WELL_KNOWN_A_CLASS = ("CODEX王子", "CURSOR(Opus5.5)王子")
+BRAND_TOKEN_RES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"CURSOR\s*\(\s*Opus\s*5\.5\s*\)", re.I), "CURSOR(Opus5.5)王子"),
+    (re.compile(r"\bCURSOR\b", re.I), "CURSOR(Opus5.5)王子"),
+    (re.compile(r"OPUS\s*5\.5", re.I), "CURSOR(Opus5.5)王子"),
+    (re.compile(r"Opus\s*5\.5", re.I), "CURSOR(Opus5.5)王子"),
+    (re.compile(r"\bCODEX\b", re.I), "CODEX王子"),
+)
 
 NONE_ID = "NONE"
 
@@ -133,6 +196,31 @@ def normalize_name(name: str) -> str:
     return " ".join(text.split())
 
 
+def strip_dirty_prefix(name: str) -> str:
+    text = normalize_name(name)
+    while True:
+        stripped = DIRTY_PREFIX_RE.sub("", text).strip()
+        if stripped == text:
+            return stripped
+        text = stripped
+
+
+def is_half_line(name: str) -> bool:
+    key = normalize_name(name)
+    if not key:
+        return True
+    if PROPER_NAME_RE.fullmatch(key):
+        return False
+    if len(key) > 16:
+        return True
+    return bool(HALF_LINE_PUNCT_RE.search(key))
+
+
+def is_verb_phrase(name: str) -> bool:
+    key = strip_dirty_prefix(normalize_name(name))
+    return any(key.startswith(v) for v in VERB_LEADERS)
+
+
 def is_system_speaker(name: str) -> bool:
     key = normalize_name(name)
     if not key:
@@ -140,22 +228,51 @@ def is_system_speaker(name: str) -> bool:
     if key in SYSTEM_SPEAKERS:
         return True
     lowered = key.lower()
-    return lowered in {s.lower() for s in SYSTEM_SPEAKERS}
+    if lowered in {s.lower() for s in SYSTEM_SPEAKERS}:
+        return True
+    stripped = strip_dirty_prefix(key)
+    if stripped in SYSTEM_SPEAKERS or stripped.lower() in {s.lower() for s in SYSTEM_SPEAKERS}:
+        return True
+    haystack = key.replace(" ", "")
+    if any(marker in haystack for marker in SYSTEM_CONTAINS_MARKERS):
+        return True
+    if any(stripped.startswith(marker) or key.startswith(marker) for marker in SYSTEM_PREFIX_MARKERS):
+        return True
+    return False
 
 
 def is_generic_ref(name: str) -> bool:
-    return normalize_name(name) in GENERIC_REFS
+    return normalize_name(name) in GENERIC_REFS or strip_dirty_prefix(name) in GENERIC_REFS
 
 
 def is_group_label(name: str) -> bool:
-    return normalize_name(name) in GROUP_LABELS
+    key = normalize_name(name)
+    if key in GROUP_LABELS:
+        return True
+    return strip_dirty_prefix(key) in GROUP_LABELS
+
+
+def is_b_class(name: str) -> bool:
+    """F1: system-vo / popup / VO / half-line / verb phrase / dirty leftover."""
+    if is_system_speaker(name) or is_generic_ref(name):
+        return True
+    if is_group_label(name):
+        return True
+    if is_verb_phrase(name) or is_half_line(name):
+        return True
+    stripped = strip_dirty_prefix(name)
+    if stripped != normalize_name(name) and (
+        is_system_speaker(stripped) or is_group_label(stripped) or is_verb_phrase(stripped) or is_half_line(stripped)
+    ):
+        return True
+    return False
 
 
 def is_registerable_name(name: str) -> bool:
-    key = normalize_name(name)
+    key = strip_dirty_prefix(name)
     if not key or len(key) < 2:
         return False
-    if is_system_speaker(key) or is_generic_ref(key) or is_group_label(key):
+    if is_b_class(name) or is_b_class(key):
         return False
     if key in BARE_TITLES:
         return False
@@ -182,9 +299,12 @@ def extract_proper_names(text: str) -> list[str]:
     seen: set[str] = set()
     for match in PROPER_NAME_RE.finditer(text or ""):
         name = normalize_name(match.group(0))
-        if name and name not in seen:
-            seen.add(name)
-            hits.append(name)
+        if not name or name in seen:
+            continue
+        if not is_registerable_name(name):
+            continue
+        seen.add(name)
+        hits.append(name)
     return hits
 
 
@@ -243,6 +363,110 @@ def expand_group(label: str, individual_names: Iterable[str]) -> list[str]:
     return members
 
 
+def _title_core(name: str) -> str:
+    text = strip_dirty_prefix(normalize_name(name))
+    text = re.sub(r"[【】\[\]/]", "", text)
+    for title in TITLES:
+        if text.endswith(title):
+            text = text[: -len(title)]
+            break
+    text = re.sub(r"[()（）.\s_-]", "", text)
+    return text.casefold()
+
+
+def names_are_aliases(left: str, right: str) -> bool:
+    a = _title_core(left)
+    b = _title_core(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) >= 3 and len(b) >= 3 and (a in b or b in a):
+        return True
+    return False
+
+
+def prefer_name(left: str, right: str) -> str:
+    a = normalize_name(left)
+    b = normalize_name(right)
+    if ("(" in a or "（" in a) and "(" not in b and "（" not in b:
+        return a
+    if ("(" in b or "（" in b) and "(" not in a and "（" not in a:
+        return b
+    return a if len(a) >= len(b) else b
+
+
+def fold_needed(names: Iterable[str]) -> list[str]:
+    out: list[str] = []
+    for raw in names:
+        name = normalize_name(raw)
+        if not is_registerable_name(name):
+            continue
+        replaced = False
+        for idx, existing in enumerate(out):
+            if names_are_aliases(name, existing):
+                out[idx] = prefer_name(existing, name)
+                replaced = True
+                break
+        if not replaced:
+            out.append(name)
+    return out
+
+
+def resolve_to_pool_name(name: str, pool: Iterable[str]) -> str | None:
+    key = normalize_name(name)
+    cleaned = strip_dirty_prefix(key)
+    ordered = [normalize_name(p) for p in pool if normalize_name(p)]
+    if key in ordered:
+        return key
+    if cleaned in ordered:
+        return cleaned
+    if is_b_class(key) and not is_group_label(key):
+        return None
+    if not is_registerable_name(key) and cleaned not in ordered:
+        for p in ordered:
+            if names_are_aliases(cleaned, p) and is_registerable_name(p):
+                return p
+        return None
+    for p in ordered:
+        if names_are_aliases(cleaned, p) and is_registerable_name(p):
+            return p
+    if is_registerable_name(cleaned):
+        return cleaned
+    return None
+
+
+def _corpus_from_rows(rows: list[dict[str, Any]], outline_body: str | None) -> str:
+    parts = [outline_body or ""]
+    for row in rows:
+        action, dialogue, _ = _row_prose(row)
+        parts.append(action)
+        parts.append(dialogue)
+    return "\n".join(parts)
+
+
+def infer_a_class_names(
+    rows: list[dict[str, Any]],
+    *,
+    outline_body: str | None = None,
+) -> list[str]:
+    """A-tier proper names from outline + shots; recover well-known princes only if needed."""
+    outline_names = extract_proper_names(outline_body or "")
+    shot_text = "\n".join(_row_prose(row)[2] for row in rows)
+    shot_names = extract_proper_names(shot_text)
+    names = fold_needed([*outline_names, *shot_names])
+    corpus = _corpus_from_rows(rows, outline_body)
+    has_group = bool(extract_group_labels(corpus))
+    has_prince = any("王子" in n and is_registerable_name(n) for n in names)
+    if has_group and not has_prince:
+        recovered: list[str] = []
+        for rx, canon in BRAND_TOKEN_RES:
+            if rx.search(corpus):
+                recovered.append(canon)
+        names = fold_needed([*names, *recovered])
+    return names
+
+
 def _cast_name_index(cast: dict[str, Any] | None) -> tuple[dict[str, str], dict[str, str]]:
     """Return (norm_name→id, id→norm_name) for characters."""
     by_name: dict[str, str] = {}
@@ -276,14 +500,15 @@ def collect_named_hits(
     """
     by_name, _ = _cast_name_index(cast)
     pool: set[str] = set(by_name)
-    outline_names = extract_proper_names(outline_body or "")
-    pool.update(outline_names)
+    pool.update(infer_a_class_names(rows, outline_body=outline_body))
 
     for row in rows:
         action, dialogue, _ = _row_prose(row)
         for name in extract_speakers(dialogue) + extract_speakers(action):
-            if not is_system_speaker(name) and not is_generic_ref(name):
-                pool.add(name)
+            if is_b_class(name):
+                continue
+            if is_registerable_name(name):
+                pool.add(strip_dirty_prefix(name) or name)
         pool.update(extract_proper_names(action))
         pool.update(extract_proper_names(dialogue))
 
@@ -297,16 +522,22 @@ def collect_named_hits(
         for name in extract_speakers(dialogue):
             if is_system_speaker(name) or is_generic_ref(name):
                 continue
-            names[name] = "group" if is_group_label(name) else "speaker"
+            if is_b_class(name) and not is_group_label(name):
+                continue
+            cleaned = strip_dirty_prefix(name) or name
+            names[cleaned] = "group" if is_group_label(cleaned) else "speaker"
             fields.add("dialogue")
         for name in extract_speakers(action):
             if is_system_speaker(name) or is_generic_ref(name):
                 continue
-            names.setdefault(name, "group" if is_group_label(name) else "speaker")
+            if is_b_class(name) and not is_group_label(name):
+                continue
+            cleaned = strip_dirty_prefix(name) or name
+            names.setdefault(cleaned, "group" if is_group_label(cleaned) else "speaker")
             fields.add("action")
 
         for name in names_mentioned(combined, pool):
-            if is_system_speaker(name) or is_generic_ref(name):
+            if is_b_class(name) and not is_group_label(name):
                 continue
             if name in names:
                 continue
@@ -340,8 +571,11 @@ def collect_named_hits(
 def resolve_hit_names(name: str, individual_pool: Iterable[str]) -> list[str]:
     if is_group_label(name):
         return expand_group(name, individual_pool)
+    target = resolve_to_pool_name(name, individual_pool)
+    if target:
+        return [target]
     if is_registerable_name(name):
-        return [normalize_name(name)]
+        return [strip_dirty_prefix(name) or normalize_name(name)]
     return []
 
 
@@ -351,7 +585,7 @@ def blocking_named_cast_issues(issues: list[dict[str, Any]]) -> list[dict[str, A
         code = str(item.get("code") or "")
         if not code.startswith(NAMED_CAST_PREFIX):
             continue
-        if code == NAMED_CAST_AUTO_MERGED:
+        if code in INFORMATIONAL_NAMED_CAST:
             continue
         out.append(item)
     return out
@@ -359,6 +593,37 @@ def blocking_named_cast_issues(issues: list[dict[str, Any]]) -> list[dict[str, A
 
 def named_cast_issue_severity(mode: str) -> str:
     return "error" if mode == "error" else "warn"
+
+
+def observational_named_cast_issues(
+    hint: dict[str, Any] | None,
+    *,
+    issue_fn: Callable[..., dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Persist-visible warn for sidecar / auto-merge (F3; generate/GET/validate)."""
+    if not hint:
+        return []
+    source = str(hint.get("source") or "auto_merge")
+    if source == "sidecar":
+        code = NAMED_CAST_SIDECAR_ADDED
+        message = "sidecar added named cast; G1b still locked; outline unchanged"
+    else:
+        code = NAMED_CAST_AUTO_MERGED
+        message = "named on-screen roles auto-registered into cast"
+    return [
+        issue_fn(
+            "warn",
+            code,
+            message,
+            added=list(hint.get("added") or []),
+            source=source,
+            cast_version=hint.get("cast_version"),
+            cast_version_old=hint.get("cast_version_old"),
+            cast_version_new=hint.get("cast_version_new"),
+            g1b_still_locked=True,
+            outline_unchanged=True,
+        )
+    ]
 
 
 def collect_named_cast_issues(
@@ -375,9 +640,8 @@ def collect_named_cast_issues(
     severity = named_cast_issue_severity(mode)
     by_name, _ = _cast_name_index(cast)
     hits = collect_named_hits(rows, cast=cast, outline_body=outline_body)
-    individual_pool = set(by_name) | {
-        h["name"] for h in hits if h.get("registerable")
-    }
+    a_class = infer_a_class_names(rows, outline_body=outline_body)
+    individual_pool = set(by_name) | {h["name"] for h in hits if h.get("registerable")} | set(a_class)
 
     issues: list[dict[str, Any]] = []
     referenced_ids: set[str] = set()
@@ -397,6 +661,8 @@ def collect_named_cast_issues(
         char_ids = [str(c) for c in ((row or {}).get("char_ids") or []) if str(c) != NONE_ID]
 
         if not resolved:
+            if is_b_class(hit["name"]) or is_group_label(hit["name"]):
+                continue
             key = (shot_id, hit["name"])
             if key not in seen_missing:
                 seen_missing.add(key)
@@ -485,12 +751,24 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
     for row in rows:
         updated = dict(row)
         action, dialogue, combined = _row_prose(row)
-        mentioned = set(names_mentioned(combined, pool))
+        mentioned: set[str] = set()
+        for name in names_mentioned(combined, pool):
+            target = resolve_to_pool_name(name, pool)
+            if target:
+                mentioned.add(target)
         for name in extract_speakers(dialogue) + extract_speakers(action):
-            if name in name_to_id:
-                mentioned.add(name)
             if is_group_label(name):
                 mentioned.update(expand_group(name, pool))
+                continue
+            if is_b_class(name):
+                continue
+            target = resolve_to_pool_name(name, pool)
+            if target:
+                mentioned.add(target)
+        for name in extract_proper_names(combined):
+            target = resolve_to_pool_name(name, pool)
+            if target:
+                mentioned.add(target)
         for label in extract_group_labels(combined):
             mentioned.update(expand_group(label, pool))
         add_ids = [name_to_id[n] for n in mentioned if n in name_to_id]
@@ -504,6 +782,14 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
                 current.append(cid)
         updated["char_ids"] = current or [NONE_ID]
         out.append(updated)
+    return out
+
+
+def _existing_canonical(by_name: dict[str, str]) -> dict[str, str]:
+    """canonical core → existing cast name."""
+    out: dict[str, str] = {}
+    for name in by_name:
+        out.setdefault(_title_core(name) or normalize_name(name).casefold(), name)
     return out
 
 
@@ -525,13 +811,34 @@ def auto_merge_named_cast(
     outline_body = (rec.get("outline") or {}).get("body_md")
     hits = collect_named_hits(rows, cast=cast, outline_body=outline_body)
     by_name, _ = _cast_name_index(cast)
-    individual_pool = set(by_name) | {h["name"] for h in hits if h.get("registerable")}
+    a_class = infer_a_class_names(rows, outline_body=outline_body)
+    individual_pool = set(by_name) | {h["name"] for h in hits if h.get("registerable")} | set(a_class)
 
     needed: list[str] = []
+    for name in a_class:
+        target = resolve_to_pool_name(name, individual_pool) or name
+        if target not in by_name and target not in needed and is_registerable_name(target):
+            needed.append(target)
     for hit in hits:
         for name in resolve_hit_names(hit["name"], individual_pool):
-            if name not in by_name and name not in needed:
-                needed.append(name)
+            target = resolve_to_pool_name(name, individual_pool) or name
+            if target not in by_name and target not in needed and is_registerable_name(target):
+                needed.append(target)
+    needed = fold_needed(needed)
+
+    canon_existing = _existing_canonical(by_name)
+    filtered: list[str] = []
+    for name in needed:
+        core = _title_core(name) or name.casefold()
+        if core in canon_existing:
+            existing = canon_existing[core]
+            if existing not in by_name:
+                continue
+            # near-duplicate of an already-listed row — reuse, do not open CHAR
+            continue
+        filtered.append(name)
+        canon_existing[core] = name
+    needed = filtered
 
     added: list[dict[str, Any]] = []
     for name in needed:

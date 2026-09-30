@@ -31,6 +31,9 @@
 | **O6** | `shot_cap` 继承 outline；硬上限 **≤12**；超限 `shot_cap_exceeded` |
 | **O7** | 景别/运镜 **英文短码**入库/落盘；中文标签仅 UI（本批无薄 FE） |
 | **O9** | `tool_profile` 可空不挡 G2；未选禁 `ready_for_n4` |
+| **020 P0-A** | B 档（`【系统音】`/弹窗/旁白/广播半截/动词短语/脏前缀）**不得**开 CHAR；A 档王子专名入表+挂镜；「两王子」解析到个体槽 |
+| **020 P0-B** | generate 时长默认吸附到 **{5,8,10}**（profile 空也吸附，bucket 仍 null）；选 `tool_profile` 后硬吸附且 duration↔bucket 同秒 |
+| **020 P0-C** | generate/GET/validate 落盘 `skill_paths` + `skill_excerpt` + `skill_trace`；`n2_request` 备证 |
 
 ---
 

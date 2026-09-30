@@ -47,9 +47,10 @@ function isStoryboardLocked(sb) {
   return sb.locked === true && Boolean(sb.confirmed_by);
 }
 function blockingNamedCast(issues) {
+  const informational = new Set(["named_cast_auto_merged", "named_cast_sidecar_added"]);
   return (issues || []).filter((i) => {
     const code = String(i.code || "");
-    return code.startsWith("named_cast_") && code !== "named_cast_auto_merged";
+    return code.startsWith("named_cast_") && !informational.has(code);
   });
 }
 function hardErrors(issues) {

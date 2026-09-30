@@ -636,6 +636,17 @@ components:
           maxItems: 12
           items: { $ref: '#/components/schemas/StoryboardRow' }
           description: PRD 字段名 body_rows 的 API 映射
+        skill_paths:
+          type: array
+          items: { type: string }
+          description: 只读借用的 skill 相对路径（入口 + 指南）
+        skill_excerpt:
+          type: string
+          description: 注入摘录（路径级+摘录级可查）
+        skill_trace:
+          type: object
+          additionalProperties: true
+          description: path / chars / sha256 追溯
         version: { type: integer, minimum: 0 }
         locked: { type: boolean }
         confirmed_by: { type: string, nullable: true }
@@ -722,6 +733,22 @@ components:
           items:
             type: object
             additionalProperties: true
+        skill_paths:
+          type: array
+          items: { type: string }
+        skill_excerpt: { type: string }
+        skill_trace:
+          type: object
+          additionalProperties: true
+        excerpts:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        n2_request:
+          type: object
+          additionalProperties: true
+          description: generate 备证（skill 路径+摘录+trace，非仅旗标）
 
     ValidateIssue:
       type: object
@@ -750,6 +777,16 @@ components:
         storyboard:
           allOf: [{ $ref: '#/components/schemas/StoryboardDraft' }]
           nullable: true
+        skill_paths:
+          type: array
+          items: { type: string }
+        skill_excerpt: { type: string }
+        skill_trace:
+          type: object
+          additionalProperties: true
+        n2_request:
+          type: object
+          additionalProperties: true
 
     GateG2Status:
       type: object

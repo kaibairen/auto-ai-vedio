@@ -11,16 +11,18 @@ from aiv_drama_n2.models import (
     StoryboardResetRequest,
     StoryboardWrite,
 )
+from aiv_drama_n2.duration import adsorb_rows
 from aiv_drama_n2.named_cast import (
     AUTO_MERGE_ONE_LINE,
     G2_BLOCK_MESSAGE,
-    NAMED_CAST_AUTO_MERGED,
     NAMED_CAST_GATE,
     auto_merge_named_cast,
     blocking_named_cast_issues,
+    observational_named_cast_issues,
     parse_named_cast_check,
 )
 from aiv_drama_n2.provider import generate_rows
+from aiv_drama_n2.skill_evidence import load_storyboard_skill_evidence, n2_request_evidence
 from aiv_drama_n2.validate import (
     STORYBOARD_SKILL_PATH,
     collect_issues,
@@ -179,6 +181,23 @@ class DramaN2Ops:
         rec["episode"]["next_edges"] = [NODE_DN2]
         self._touch_episode(rec)
 
+    def _named_cast_observability_issues(self, rec: dict[str, Any]) -> list[dict[str, Any]]:
+        return observational_named_cast_issues(rec.get("cast_change_hint"), issue_fn=issue)
+
+    def _merge_validate_warnings(
+        self,
+        rec: dict[str, Any],
+        warnings: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = list(warnings or [])
+        seen = {(item.get("code"), str(item.get("details") or {}).get("source")) for item in merged}
+        for item in self._named_cast_observability_issues(rec):
+            key = (item.get("code"), str((item.get("details") or {}).get("source")))
+            if key not in seen:
+                merged.append(item)
+                seen.add(key)
+        return merged
+
     def storyboard_envelope(self, rec: dict[str, Any], *, warnings: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         sb = self._storyboard_view(rec)
         edges = list(rec["episode"].get("next_edges") or [])
@@ -196,14 +215,22 @@ class DramaN2Ops:
         }
         if rec.get("projection_dirty"):
             env["projection_dirty"] = True
-        if warnings:
-            env["validate_warnings"] = warnings
+        warns = self._merge_validate_warnings(rec, warnings)
+        if warns:
+            env["validate_warnings"] = warns
         skill_paths = [p for p in (sb.get("skill_paths") or []) if p and p != "none"]
         src = rec.get("source_storyboard_skill")
         if src and src not in skill_paths:
             skill_paths.append(src)
         env["skill_paths"] = skill_paths
         env["storyboard_skill"] = sb.get("storyboard_skill")
+        if sb.get("skill_excerpt"):
+            env["skill_excerpt"] = sb.get("skill_excerpt")
+        if sb.get("skill_trace"):
+            env["skill_trace"] = deepcopy(sb.get("skill_trace"))
+            env["excerpts"] = list((sb.get("skill_trace") or {}).get("excerpts") or [])
+        if rec.get("n2_request"):
+            env["n2_request"] = deepcopy(rec["n2_request"])
         hint_fn = getattr(self, "_hint_fields", None)
         if callable(hint_fn):
             env.update(hint_fn(rec))
@@ -337,6 +364,8 @@ class DramaN2Ops:
             tool_profile=req.tool_profile,
             episode_id=rec["episode"]["episode_id"],
         )
+        # P0-B: default ladder {5,8,10}; selected profile hard-adsorbs without bucket collision.
+        rows = adsorb_rows(rows, req.tool_profile)
         # O1=A: after generate, auto-register named on-screen roles missing from cast.
         # Does not unlock G1b or rewrite locked outline body (O2).
         rows, added = auto_merge_named_cast(
@@ -345,35 +374,35 @@ class DramaN2Ops:
             alloc_char=self._alloc_char,
             one_line=AUTO_MERGE_ONE_LINE,
         )
-        extra_warns: list[dict[str, Any]] = []
         if added:
             set_hint = getattr(self, "_set_cast_change_hint", None)
             if callable(set_hint):
                 set_hint(rec, added=added, source="auto_merge")
-            extra_warns.append(
-                issue(
-                    "warn",
-                    NAMED_CAST_AUTO_MERGED,
-                    "named on-screen roles auto-registered into cast",
-                    added=added,
-                )
-            )
         issues = self._collect_sb_issues(rec, rows, shot_cap=cap, tool_profile=req.tool_profile)
         raise_hard(issues)
+        evidence = load_storyboard_skill_evidence(self.settings, skill=skill)
         sb["shot_cap"] = cap
         sb["rows"] = rows
         sb["shot_count"] = len(rows)
         sb["tool_profile"] = req.tool_profile
         sb["storyboard_skill"] = skill
-        sb["skill_paths"] = [STORYBOARD_SKILL_PATH] if skill == "borrowed_dongman" else []
+        sb["skill_paths"] = list(evidence.get("paths") or [])
+        sb["skill_excerpt"] = evidence.get("excerpt") or ""
+        sb["skill_trace"] = dict(evidence.get("trace") or {})
         sb["locked"] = False
         sb["confirmed_by"] = None
         sb["job_id"] = None
         rec["source_storyboard_skill"] = STORYBOARD_SKILL_PATH if skill == "borrowed_dongman" else None
+        rec["n2_request"] = n2_request_evidence(
+            provider=req.provider,
+            skill=skill,
+            tool_profile=req.tool_profile,
+            evidence=evidence,
+        )
         self._pin_upstream(rec, sb)
         self._finish_storyboard(rec, sb, actor=req.actor)
         self._commit(rec)
-        warns = extra_warns + [i for i in issues if i.get("severity") == "warn"]
+        warns = [i for i in issues if i.get("severity") == "warn"]
         return self._idem_put(
             idempotency_key,
             f"generate_storyboard:{project_id}:{ep}",
@@ -402,9 +431,10 @@ class DramaN2Ops:
                     "field": "rows",
                 }
             )
+        issues.extend(self._named_cast_observability_issues(rec))
         valid = all(i.get("severity") != "error" for i in issues)
         ready = ready_for_n4(sb.get("tool_profile"), issues) and valid
-        return {
+        env: dict[str, Any] = {
             "ok": True,
             "project_id": project_id,
             "episode_id": rec["episode"]["episode_id"],
@@ -414,6 +444,18 @@ class DramaN2Ops:
             "issues": issues,
             "storyboard": deepcopy(sb) if rec.get("storyboard") else sb,
         }
+        skill_paths = [p for p in (sb.get("skill_paths") or []) if p and p != "none"]
+        src = rec.get("source_storyboard_skill")
+        if src and src not in skill_paths:
+            skill_paths.append(src)
+        env["skill_paths"] = skill_paths
+        if sb.get("skill_excerpt"):
+            env["skill_excerpt"] = sb.get("skill_excerpt")
+        if sb.get("skill_trace"):
+            env["skill_trace"] = deepcopy(sb.get("skill_trace"))
+        if rec.get("n2_request"):
+            env["n2_request"] = deepcopy(rec["n2_request"])
+        return env
 
     def reorder_storyboard(
         self,

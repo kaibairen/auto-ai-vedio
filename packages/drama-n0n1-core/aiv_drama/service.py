@@ -245,6 +245,8 @@ class DramaService(DramaN2Ops):
                     "upstream_cast_version": sb.get("upstream_cast_version"),
                     "skill_paths": skill_paths,
                     "tool_profile": sb.get("tool_profile"),
+                    "skill_trace": deepcopy(sb.get("skill_trace") or rec.get("n2_request", {}).get("skill_trace") or {}),
+                    "skill_excerpt": (sb.get("skill_excerpt") or "")[:2000],
                 }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)

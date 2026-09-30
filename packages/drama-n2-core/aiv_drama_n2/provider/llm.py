@@ -6,21 +6,20 @@ from typing import Any
 
 import httpx
 
-from aiv_drama.config import SKILL_ENTRY_EXCERPT_LIMIT, SKILL_REFERENCE_EXCERPT_LIMIT, Settings
+from aiv_drama.config import Settings
 from aiv_drama.errors import AppError
 from aiv_drama.provider.llm import _parse_llm_json
+from aiv_drama_n2.duration import adsorb_duration
+from aiv_drama_n2.skill_evidence import STORYBOARD_GUIDE_PATH, excerpt_borrowed_dongman
 from aiv_drama_n2.validate import (
     CAMERAS,
     SEEDANCE_SKILL_PATH,
     STORYBOARD_SKILL_PATH,
-    TOOL_DURATION_BUCKETS,
     extract_bridge_ids,
     normalize_row,
     text_has_prompt,
 )
 from aiv_schema.models import NODE_DN2
-
-STORYBOARD_GUIDE_PATH = ".skill/writing/动态漫-转分镜/动态漫剧本转分镜生成指南.md"
 
 SHOT_SIZE_ALIASES = {
     "ELS": "ELS",
@@ -98,7 +97,7 @@ class LlmStoryboardProvider:
                 node=NODE_DN2,
             )
 
-        skill_excerpt, skill_paths = _excerpt_borrowed_dongman(self.settings)
+        skill_excerpt, skill_paths, _excerpts = excerpt_borrowed_dongman(self.settings)
         if any(SEEDANCE_SKILL_PATH in p for p in skill_paths):
             raise AppError(422, "provider", "Seedance 出片 Skill must not be injected", node=NODE_DN2)
 
@@ -138,7 +137,11 @@ class LlmStoryboardProvider:
                 "Fold names onto locked cast ids; do not invent CHAR/SCENE ids",
                 "action/dialogue must not introduce named speakers or action agents absent from cast.characters[].name; weaken unknowns to UI/系统音 or use only given cast names",
                 "Group labels (王子们 / 两位王子) must expand to already-listed CHAR ids; do not invent a group CHAR",
-                "系统音 / 弹窗字 / 旁白 without a character-name speaker prefix are OK",
+                "系统音 / 弹窗字 / 旁白 / 广播 without a character-name speaker prefix are OK and must NOT become CHAR names",
+                "Never invent CHAR from 【系统音】/半截广播台词/动词短语/脏前缀 (leading /). Collection 两王子/指出两王子 expand to CODEX王子 + CURSOR(Opus5.5)王子 (or outline-equivalent proper names), never as their own CHAR",
+                "duration_s must be one of 5, 8, or 10 (dogfood tool档). Prefer 5 dialogue CU, 8 action, 10 complex camera. Do not emit 2s/3s/4s",
+                "If tool_profile is set, duration_s must be in that profile's closed set and tool_duration_bucket must match the same seconds (no collision)",
+                "If tool_profile is empty, leave tool_duration_bucket null; still use duration_s ∈ {5,8,10}",
                 "action/dialogue/notes are short intent only — no 提示词, 宫格, Seedance, [ImageN], 时间轴, or full outpaint prompts",
                 "No prompt / negative_prompt / seedance_* / outpaint_* fields",
                 "angle/camera_speed go in notes as angle: / speed: prefixes",
@@ -192,24 +195,6 @@ class LlmStoryboardProvider:
         return rows
 
 
-def _excerpt_borrowed_dongman(settings: Settings) -> tuple[str, list[str]]:
-    chunks: list[str] = []
-    used: list[str] = []
-    entry = settings.repo_root / STORYBOARD_SKILL_PATH
-    if entry.is_file():
-        text = entry.read_text(encoding="utf-8")[:SKILL_ENTRY_EXCERPT_LIMIT]
-        if text.strip():
-            chunks.append(f"### {STORYBOARD_SKILL_PATH}\n{text}")
-            used.append(STORYBOARD_SKILL_PATH)
-    guide = settings.repo_root / STORYBOARD_GUIDE_PATH
-    if guide.is_file():
-        text = guide.read_text(encoding="utf-8")[:SKILL_REFERENCE_EXCERPT_LIMIT]
-        if text.strip():
-            chunks.append(f"### {STORYBOARD_GUIDE_PATH}\n{text}")
-            used.append(STORYBOARD_GUIDE_PATH)
-    return "\n\n".join(chunks), used
-
-
 def _normalize_llm_rows(
     raw_rows: list[Any],
     *,
@@ -256,12 +241,9 @@ def _normalize_llm_rows(
             payload["bridge_id"] = bridges[min(i - 1, len(bridges) - 1)] if bridges else ""
         payload["seq"] = i
         payload["shot_id"] = f"S{i:02d}"
-        payload["duration_s"] = _coerce_duration(payload.get("duration_s"))
-        payload["tool_duration_bucket"] = _coerce_bucket(
-            payload.get("tool_duration_bucket"),
-            tool_profile=tool_profile,
-            duration_s=int(payload["duration_s"]),
-        )
+        duration, bucket = adsorb_duration(_coerce_duration(payload.get("duration_s")), tool_profile)
+        payload["duration_s"] = duration
+        payload["tool_duration_bucket"] = bucket
         row = normalize_row(payload, index=i)
         out.append(row)
     return out
@@ -281,17 +263,6 @@ def _coerce_duration(raw: Any) -> int:
     except (TypeError, ValueError):
         return 5
     return value if value >= 1 else 5
-
-
-def _coerce_bucket(raw: Any, *, tool_profile: str | None, duration_s: int) -> str | None:
-    """O9: unset tool_profile → null bucket (fixture). Drop LLM junk like '3s'/'4s'."""
-    if not (tool_profile or "").strip():
-        return None
-    if raw in TOOL_DURATION_BUCKETS:
-        return raw
-    if not raw and tool_profile == "seedance_2" and duration_s in {5, 8, 10}:
-        return f"seedance:{duration_s}"
-    return raw if raw else None
 
 
 def _fold_char_ids(raw: Any, by_id: dict[str, Any], by_name: dict[str, str]) -> list[str]:

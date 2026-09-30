@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — BRIEF-AIV-020 cast hygiene + duration buckets + skill excerpt (docs≠PASS)
+
+P0 engineering loop on tip `0d16e92` (PR#11 stack). ForcePass=never. Does not merge to main. Does not rewrite eng-015/019 dogfood artifacts.
+
+- **P0-A**: named_cast skips B-class (`【系统音】` / 系统音 / 弹窗 / 旁白 / 广播半截台词 / 动词短语 / leading `/`); dedupes near-duplicates; A-class `CODEX王子` / `CURSOR(Opus5.5)王子` (or outline-equivalent) auto-enter cast and hang `char_ids`. Collection `两王子` / `指出两王子` resolve to individual A slots. Sidecar still does not unlock G1b or rewrite outline; bump `cast.version` + warn `named_cast_auto_merged` / `named_cast_sidecar_added` on generate/GET/validate.
+- **P0-B**: generate adsorbs `duration_s` onto {5,8,10} when `tool_profile` is unset (bucket stays null, O9). Selected profile hard-adsorbs onto that profile's closed set and writes a matching bucket (017b O3, no collision). PUT mismatch still errors.
+- **P0-C**: persist `skill_paths` (entry+guide), `skill_excerpt`, `skill_trace` (path/chars/sha256). Generate/GET/validate expose `n2_request` skill evidence (not flag-only).
+
 ## 0.2.2 — BRIEF-AIV-018c workbench + episode projection (docs≠PASS)
 
 Workbench E–G MVP on the 018a + 017a stack. ForcePass=never. Does not merge to main. Does not substitute PRs #5–#9.
