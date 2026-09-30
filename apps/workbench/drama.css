@@ -66,4 +66,4 @@ table.cards th, table.cards td { border-bottom: 1px solid #2a2e36; padding: 6px 
 .chip.local { background: #2a2e36; color: var(--muted); }
 .chip.attached { background: #1d3a28; color: var(--ok); }
 .chip.none { background: #3a2a14; color: #e6c27a; }
-#h-weak, #h-g2-hint { margin: 8px 0; }
+#g3-weak-bind-banner, #h-g2-hint { margin: 8px 0; }

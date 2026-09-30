@@ -1019,7 +1019,7 @@ function isG2Ready() {
 }
 function applyHWriteGate() {
   const ready = isG2Ready();
-  const g3Locked = Boolean(state.n3?.gate?.locked);
+  const g3Locked = isG3Locked(state.n3);
   const mat = $("btn-n3-mat");
   if (mat) mat.disabled = !ready || g3Locked;
   const hint = $("h-g2-hint");
@@ -1057,22 +1057,36 @@ function renderCardRows(tbodyId, cards) {
     </tr>`;
   }).join("");
 }
+function isG3Locked(data) {
+  const cards = data?.cards || {};
+  const gate = data?.gate || {};
+  const locked = Boolean(gate.locked || cards.locked);
+  const confirmed = Boolean(cards.confirmed_by || gate.actor);
+  return locked && confirmed;
+}
 function paintHBadges(data) {
   const g3 = $("h-g3-badge");
-  const usable = $("h-usable-badge");
-  const locked = Boolean(data?.gate?.locked);
+  const usable = $("usable-for-n4");
+  const sum = $("h-g3-locked");
+  const locked = isG3Locked(data);
+  const confirmed = data?.cards?.confirmed_by || data?.gate?.actor || "";
   const ok = data?.usable_for_n4 === true;
   if (g3) {
     g3.textContent = locked ? "G3: locked" : "G3: 未锁定";
     g3.className = `badge ${locked ? "ok" : "muted"}`;
   }
   if (usable) {
-    usable.textContent = `usable_for_n4: ${ok ? "true" : "false"}`;
+    usable.textContent = ok ? "usable_for_n4: true" : "usable_for_n4: false";
     usable.className = `badge ${ok ? "ok" : "muted"}`;
+  }
+  if (sum) {
+    sum.textContent = locked
+      ? `locked=true · confirmed_by=${confirmed} · 不单靠 next_edges`
+      : "尚未 G3 pass（看 locked/confirmed_by，不单靠 next_edges）。";
   }
 }
 function paintHWeak(data) {
-  const el = $("h-weak");
+  const el = $("g3-weak-bind-banner");
   if (!el) return;
   const cards = [...(data?.cards?.characters || []), ...(data?.cards?.scenes || [])];
   const weak = cards.some((c) => c.missing_ref || c.weak_binding);

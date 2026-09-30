@@ -20,13 +20,14 @@ def test_workbench_021b_screen_h_card_list_and_badges():
     assert "<th>name</th>" in html
     assert "<th>ref</th>" in html
     assert 'id="h-g3-badge"' in html
-    assert 'id="h-usable-badge"' in html
-    assert "h-usable-badge" in html
+    assert 'id="usable-for-n4"' in html
+    assert 'id="g3-weak-bind-banner"' in html
+    assert 'id="h-g3-locked"' in html
     assert "usable_for_n4=false · G3 locked=" not in html
     assert "usable_for_n4=false · G3 locked=" not in js
     assert "视觉弱绑定 · 下游一致性自负" in html
     assert "视觉弱绑定 · 下游一致性自负" in js
-    assert 'id="h-weak"' in html
+    assert "isG3Locked" in js
     assert "attached@" in js
     assert 'text: "local"' in js
     assert 'text: "none"' in js
@@ -64,7 +65,8 @@ def test_workbench_021b_served(client):
     assert "h-char-tbody" in res.text
     assert "视觉弱绑定 · 下游一致性自负" in res.text
     assert "h-g3-badge" in res.text
-    assert "h-usable-badge" in res.text
+    assert "usable-for-n4" in res.text
+    assert "g3-weak-bind-banner" in res.text
     js = client.get("/workbench/static/drama.js")
     assert js.status_code == 200
     assert "上游门 G2 未锁，不能进 D-N3" in js.text
