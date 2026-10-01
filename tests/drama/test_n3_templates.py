@@ -6,7 +6,13 @@ import json
 from pathlib import Path
 
 from aiv_drama_n3.models import N3MaterializeRequest
-from aiv_drama_n3.templates import KEEP_CHAR_TEMPLATES, KEEP_STORYBOARD_REF, SEEDANCE_PARAM_REF, n3_template_paths
+from aiv_drama_n3.templates import (
+    KEEP_CHAR_TEMPLATES,
+    KEEP_STORYBOARD_REF,
+    SEEDANCE_PARAM_REF,
+    thicken_skill_paths,
+    n3_template_paths,
+)
 
 from tests.drama.helpers import lock_g2, seed_project_episode
 
@@ -48,3 +54,7 @@ def test_prompt_not_written_into_n1_n2_skill_paths(svc, data_dir):
     assert all(str(p).startswith(".prompt/consistency/") for p in n3m["template_paths"])
     outline_env = svc.get_outline(pid, "EP01")
     assert all(not str(p).startswith(".prompt/") for p in (outline_env.get("skill_paths") or []))
+    assert thicken_skill_paths(svc.settings.repo_root, include_bio_skill=False) == []
+    bio = thicken_skill_paths(svc.settings.repo_root, include_bio_skill=True)
+    assert all(not str(p).startswith(".prompt/") for p in bio)
+    assert SEEDANCE_PARAM_REF not in bio

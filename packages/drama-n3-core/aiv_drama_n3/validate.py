@@ -18,6 +18,8 @@ G3_FORCE_MESSAGE = "ForcePass=never，禁止跳过 G3"
 UPSTREAM_G2_MESSAGE = "D-N2 G2 未锁定，禁止写入 D-N3"
 CARDS_EMPTY_MESSAGE = "本集尚无工作副本卡；请先从 cast 物化 cards"
 CAST_ONLY_MESSAGE = "卡 id 必须来自本集 cast，禁止自由发明"
+IMAGE_GEN_KEYS = ("image_gen", "generate_look", "generate_image", "look_path")
+IMAGE_GEN_MESSAGE = "N3 thicken 只加厚文字；禁止生图 / look 字段"
 
 
 def reject_force_keys_n3(body: dict[str, Any] | None) -> None:
@@ -32,6 +34,20 @@ def reject_force_keys_n3(body: dict[str, Any] | None) -> None:
                 field=key,
                 node=NODE_DN3,
                 gate=GATE_G3,
+            )
+
+
+def reject_image_gen_n3(body: dict[str, Any] | None) -> None:
+    if not isinstance(body, dict):
+        return
+    for key in IMAGE_GEN_KEYS:
+        if key in body:
+            raise AppError(
+                400,
+                "validation",
+                IMAGE_GEN_MESSAGE,
+                field=key,
+                node=NODE_DN3,
             )
 
 
@@ -163,4 +179,50 @@ def collect_n3_issues(
                     shot_id=row.get("shot_id"),
                 )
             )
+
+    issues.extend(
+        _duplicate_name_warns(
+            characters,
+            code="duplicate_char_name",
+            message="同集 CHAR 显示名碰撞；ID 权威，禁止静默并 ID",
+        )
+    )
+    issues.extend(
+        _duplicate_name_warns(
+            scenes,
+            code="duplicate_scene_name",
+            message="同集 SCENE 显示名碰撞；ID 权威，禁止静默并 ID；本拍不硬挡 G3",
+        )
+    )
     return issues
+
+
+def _duplicate_name_warns(cards: list[dict[str, Any]], *, code: str, message: str) -> list[dict[str, Any]]:
+    buckets: dict[str, list[str]] = {}
+    for card in cards:
+        name = (card.get("name") or "").strip()
+        ident = card.get("id")
+        if not name or not ident:
+            continue
+        buckets.setdefault(name, []).append(ident)
+    out: list[dict[str, Any]] = []
+    for name, ids in buckets.items():
+        uniq: list[str] = []
+        for ident in ids:
+            if ident not in uniq:
+                uniq.append(ident)
+        if len(uniq) < 2:
+            continue
+        item = issue(
+            "warn",
+            code,
+            message,
+            card_id=uniq[0],
+            field="name",
+            ids=uniq,
+            name=name,
+        )
+        item["ids"] = uniq
+        item["name"] = name
+        out.append(item)
+    return out

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.8 — AIV-029 N3 card text thicken (docs≠PASS)
+
+IMPL on main tip `9477302b`. ForcePass=never. Does **not** merge to main. Does not call image-gen, write look refs/md5 as success, flip `usable_for_n4`, assemble N4 jsonl, or open N5 / bot-MCP.
+
+- **API / CLI**: `POST .../drama/n3/cards/thicken` and `aiv drama n3 thicken --provider llm`. Dogfood default = thicken **before** G3 lock (`unlock_edit` only if already locked).
+- **MUST slots**: CHAR `appearance`+`immutable`; SCENE space `appearance`+`light_anchor`. KEEP `.prompt/consistency/人物卡模板/*` (+ limited 臭猫故事板参考) via `prompt_paths` / `thicken_prompt_paths`. SCENE template is **provisional_inline** (no invented KEEP path).
+- **Optional** `.skill/writing/动态漫-人物小传` excerpt via `include_bio_skill` → `thicken_skill_paths` only. `.prompt` never leaks into N1/N2 `skill_paths`.
+- **CAM** crop/framing lex soft-merges into appearance/light_anchor (does not block content review).
+- **SCENE 同名**: ID authoritative; warn `duplicate_scene_name`; does not hard-block G3; no silent ID merge.
+- **eng-029**: same `title_intent` fingerprint lineage as eng-027 → materialize → thicken → thickened card samples. SUCCESS ≠ green N4.
+- Tests: `tests/drama/test_n3_thicken.py` (happy path + hard bans). OpenAPI stays **0.1.x**. **docs≠PASS**.
+
 ## 0.2.7 — AIV-025 Class-D thicken SHOULD + named_cast leak patch (docs≠PASS)
 
 - **SCENE spatial first**: `is_scene_b_class` lets `…空间` / `…门厅` / `…战场` (and existing spatial tokens) pass through before `is_system_speaker`. Fixes live eng-025 `弹窗空间` `b_class_skipped` → G3 `card_missing_for_shot`. CHAR `弹窗王子` / bare `弹窗` still DENY.

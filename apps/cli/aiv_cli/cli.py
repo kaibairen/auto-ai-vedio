@@ -37,6 +37,7 @@ from aiv_drama_n3.models import (
     N3AttachRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
+    N3ThickenRequest,
 )
 
 app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
@@ -493,6 +494,27 @@ def n3_materialize(
 ) -> None:
     body = N3MaterializeRequest(actor=actor, unlock_edit=unlock_edit)
     _print(_guard(lambda: _service().materialize_n3_cards(project_id, ep, body, raw=body.model_dump())))
+
+
+@n3_app.command("thicken")
+def n3_thicken(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    provider: str = typer.Option("llm", "--provider"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+    ids: Optional[str] = typer.Option(None, "--ids", help="Comma-separated CHAR-*/SCENE-* (default: all)"),
+    include_bio_skill: bool = typer.Option(False, "--include-bio-skill"),
+) -> None:
+    id_list = [s.strip() for s in (ids or "").split(",") if s.strip()]
+    body = N3ThickenRequest(
+        actor=actor,
+        provider=provider,  # type: ignore[arg-type]
+        ids=id_list,
+        unlock_edit=unlock_edit,
+        include_bio_skill=include_bio_skill,
+    )
+    _print(_guard(lambda: _service().thicken_n3_cards(project_id, ep, body, raw=body.model_dump())))
 
 
 @n3_app.command("crop")

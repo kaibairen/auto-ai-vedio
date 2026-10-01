@@ -132,10 +132,11 @@ def card_from_cast_row(
         "status_tags": tags,
         "appearance": prev.get("appearance"),
         "immutable": prev.get("immutable"),
-        "light_anchor": prev.get("light_anchor") if kind == "scene" else None,
+        "light_anchor": prev.get("light_anchor"),
         "crop_hints": prev.get("crop_hints"),
         "decision": None,
-        "template_status": "deferred" if kind == "scene" else None,
+        "template_status": prev.get("template_status")
+        or ("deferred" if kind == "scene" else None),
         "template_path": None if kind == "scene" else prev.get("template_path"),
     }
 
