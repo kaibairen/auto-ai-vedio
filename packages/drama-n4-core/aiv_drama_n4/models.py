@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class N4AssembleRequest(BaseModel):
@@ -10,6 +10,7 @@ class N4AssembleRequest(BaseModel):
     tool_profile: str | None = None
     aspect: str | None = None
     unlock_edit: bool = False
+    force_reassemble: bool = False
 
 
 class N4ValidateRequest(BaseModel):

@@ -596,8 +596,14 @@ def n4_assemble(
     tool_profile: Optional[str] = typer.Option(None, "--tool-profile"),
     aspect: Optional[str] = typer.Option(None, "--aspect"),
     actor: Optional[str] = typer.Option(None, "--actor"),
+    force_reassemble: bool = typer.Option(False, "--force-reassemble"),
 ) -> None:
-    body = N4AssembleRequest(actor=actor, tool_profile=tool_profile, aspect=aspect)
+    body = N4AssembleRequest(
+        actor=actor,
+        tool_profile=tool_profile,
+        aspect=aspect,
+        force_reassemble=force_reassemble,
+    )
     _print(_guard(lambda: _service().assemble_n4(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 

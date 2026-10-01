@@ -55,7 +55,7 @@ See [`docs/drama-n3.md`](docs/drama-n3.md). docs≠PASS. ForcePass=never.
 
 ## Drama D-N4 assemble (026)
 
-After G3 is locked **and** `usable_for_n4=true` (real CHAR/SCENE refs on disk), `POST .../drama/n4/assemble` fills DIR skeleton slots (not LLM) and writes `episodes/EP##/EP##-prompts.jsonl`. `usable_for_n4=false` returns a missing-ref list and **does not write**. Input alias `seedance_2_0` persists as `seedance_2`. Bare `/n4` is isolated; use `/drama/n4/...`. N5 is not opened.
+After G2+G3 are locked **and** `ready_for_n4=true` **and** `usable_for_n4=true` (real CHAR/SCENE refs on disk), `POST .../drama/n4/assemble` fills DIR slots (not LLM) and writes `episodes/EP##/EP##-prompts.jsonl`. `usable_for_n4=false` returns **409** + a missing-ref list and **does not write**. Input alias `seedance_2_0` persists as `seedance_2`. Bare `/n4` is isolated; use `/drama/n4/...`. N5 is not opened.
 
 ```bash
 aiv drama n4 assemble --project proj_01 --ep EP01 --tool-profile seedance_2_0 --actor yangzhou

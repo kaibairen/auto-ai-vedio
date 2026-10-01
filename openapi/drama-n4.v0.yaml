@@ -13,16 +13,17 @@ info:
     - docs≠PASS；ForcePass=never；ACCEPT≠实施；≠产品/N5 PASS
 
     ## 冻结条
-    - **硬门**：`usable_for_n4=false` → **不写** `EP##-prompts.jsonl`，返回明确缺图/缺 ref 列表。
-    - **拼装**：按 DIR 骨架槽序填槽（风格→主体→场景→动作→镜头→光影→对白）；非 LLM。
-    - **CAM**：景别 + **一镜一主运镜**词表（N2 英文字段 → 中文一词）。
+    - **硬门**：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。`usable_for_n4=false` → **409** 且 **不写** `EP##-prompts.jsonl`，返回明确缺图/缺 ref 列表。`ready_for_n4=false` → **409** `not_ready_for_n4`。
+    - **拼装**：DIR `join_nonempty` 槽序（ref_lead→主体特征→场锚→光色有则拼→action→微表情→景别→运镜→时长）；不发明平光；对白不进正词；非 LLM。
+    - **CAM**：N2 闭集码 → 中文可执行短语；**一镜一主运镜**。Class-D 时长 ≥8。
     - **负面**：`negative` 非空，必须含 NEG_CORE。
-    - **ID**：禁止 prompt 只留裸 `CHAR-` / `SCENE-` ID，须 ID→中文特征。
-    - **工具**：入参别名 `seedance_2_0` → 落盘闭集 **`seedance_2`**。壳可扩展，本拍只交这一种。
-    - **stale**：上游 cards/分镜/cast 升版 → N4 stale，语义对齐 N3。覆盖写须 `assemble_version` 可追溯。
+    - **ID**：禁止 prompt 只留裸 `CHAR-` / `SCENE-` ID，须 ID→中文特征。缺卡 → 422 `missing_card`。
+    - **工具**：入参别名 `seedance_2_0` → 落盘闭集 **`seedance_2`**。时长 {5,8,10}；画幅 9:16|16:9|2.35:1；`max_prompt_len=800`；ref_images≤9。
+    - **stale**：上游 cards/分镜/cast 升版 → N4 stale，语义对齐 N3。覆盖写须 `assemble_version` + 旁路 `EP##-prompts.v{n}.jsonl`。`force_reassemble` 可在 stale 态重跑。
+    - **D11**：软 validate + `first_shot_review` 首镜抽查建议。无独立 G-N4。
     - **N5 / 补图 / Skill·MCP / FE UI**：DEFER。不自动开 D-N5。
   x-assign: AIV-026
-  x-date: '2026-10-01'
+  x-date: '2026-10-02'
 servers:
   - url: /api/v0
 tags:
@@ -126,9 +127,11 @@ paths:
       operationId: assembleDramaN4
       summary: 确定性拼装并写 EP##-prompts.jsonl
       description: |
-        usable_for_n4=false → **422 且不写盘**，details.missing_refs 列出缺图/缺 ref。
-        成功 → 一镜一行 jsonl；覆盖写 bump `assemble_version` 并保留 history。
-        `seedance_2_0` 入参落盘 `seedance_2`。
+        写盘 iff G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4。
+        usable_for_n4=false → **409** 且不写盘，details.missing_refs 列出缺图/缺 ref。
+        ready_for_n4=false → **409** `not_ready_for_n4`。
+        成功 → 一镜一行 jsonl + 旁路 `v{n}`；覆盖写 bump `assemble_version` 并保留 history。
+        `seedance_2_0` 入参落盘 `seedance_2`。响应含 `path` / `g2_fingerprint` / `first_shot_review`。
       requestBody:
         required: false
         content:
@@ -153,6 +156,10 @@ paths:
                 assemble_version: 1
                 tool_profile: seedance_2
                 artifact: episodes/EP01/EP01-prompts.jsonl
+                path: episodes/EP01/EP01-prompts.jsonl
+                first_shot_review:
+                  shot_id: S01
+                  message: 请人工抽查首镜
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
@@ -230,22 +237,36 @@ components:
               value:
                 ok: false
                 error: { code: stale_upstream, message: 上游 cast/分镜/cards 已升版；请重新拼装 D-N4 }
+            usable_for_n4_false:
+              value:
+                ok: false
+                error:
+                  code: usable_for_n4_false
+                  message: usable_for_n4=false · 缺图/缺 ref，拒绝写盘
+                  details:
+                    written: false
+                    missing_refs:
+                      - {id: CHAR-01, kind: character, reason: missing_ref}
+                      - {id: SCENE-01, kind: scene, reason: missing_file, path: refs/SCENE-01.png}
+            not_ready_for_n4:
+              value:
+                ok: false
+                error: { code: not_ready_for_n4, message: ready_for_n4=false · 未选 tool_profile 或分镜硬检未过，拒绝写盘 }
     Unprocessable:
       description: 422
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            ok: false
-            error:
-              code: usable_for_n4_false
-              message: usable_for_n4=false · 缺图/缺 ref，拒绝写盘
-              details:
-                written: false
-                missing_refs:
-                  - {id: CHAR-01, kind: character, reason: missing_ref}
-                  - {id: SCENE-01, kind: scene, reason: missing_file, path: refs/SCENE-01.png}
+          examples:
+            missing_card:
+              value:
+                ok: false
+                error: { code: missing_card, message: 镜绑定 CHAR/SCENE 无卡，拒绝写盘 }
+            validation_failed:
+              value:
+                ok: false
+                error: { code: validation_failed, message: N4 硬规则校验失败，拒绝写盘 }
   schemas:
     ErrorCode:
       type: string
@@ -268,6 +289,12 @@ components:
         - empty_prompt
         - unsupported_tool_profile
         - storyboard_empty
+        - not_ready_for_n4
+        - missing_card
+        - validation_failed
+        - duration_out_of_profile
+        - duration_below_camera_floor
+        - prompt_too_long
     ErrorBody:
       type: object
       required: [code, message]
@@ -299,6 +326,7 @@ components:
           type: string
           example: '9:16'
         unlock_edit: { type: boolean, default: false }
+        force_reassemble: { type: boolean, default: false }
     N4ValidateRequest:
       type: object
       additionalProperties: false
@@ -335,7 +363,10 @@ components:
         cards_version: { type: integer }
         assemble_version: { type: integer }
         fingerprint: { type: string }
-        skeleton_id: { type: string, example: dir-seedance-v0 }
+        card_fingerprint: { type: string }
+        g2_fingerprint: { type: string }
+        storyboard_version: { type: integer }
+        skeleton_id: { type: string, example: dir-n4-skeleton-v0 }
     N4State:
       type: object
       properties:
@@ -365,6 +396,11 @@ components:
         tool_profile: { type: string, nullable: true }
         artifact: { type: string, nullable: true }
         usable_for_n4: { type: boolean }
+        ready_for_n4: { type: boolean }
+        path: { type: string, nullable: true }
+        g2_fingerprint: { type: string, nullable: true }
+        card_fingerprint: { type: string, nullable: true }
+        first_shot_review: { type: object, additionalProperties: true }
         missing_refs: { type: array, items: { type: object } }
         lines:
           type: array
@@ -384,9 +420,12 @@ components:
         stale: { type: boolean }
         assemble_version: { type: integer }
         usable_for_n4: { type: boolean }
+        ready_for_n4: { type: boolean }
         missing_refs: { type: array, items: { type: object } }
         artifact: { type: string, nullable: true }
+        path: { type: string, nullable: true }
         fingerprint: { type: string, nullable: true }
+        g2_fingerprint: { type: string, nullable: true }
     N4ValidateEnvelope:
       type: object
       required: [ok, valid, written]
@@ -411,6 +450,7 @@ components:
         usable_for_n4: { type: boolean }
         missing_refs: { type: array, items: { type: object } }
         artifact: { type: string, nullable: true }
+        prompts_path: { type: string, nullable: true }
         jsonl:
           type: array
           items: { $ref: '#/components/schemas/PromptLine' }

@@ -98,13 +98,22 @@ def lock_g1b(svc: DramaService, pid: str, ep: str = "EP01", actor: str = "yangzh
     return svc.confirm_gate(pid, ep, {"decision": "pass", "actor": actor})
 
 
-def lock_g2(svc: DramaService, pid: str, ep: str = "EP01", actor: str = "yangzhou"):
+def lock_g2(
+    svc: DramaService,
+    pid: str,
+    ep: str = "EP01",
+    actor: str = "yangzhou",
+    tool_profile: str | None = None,
+):
     lock_g1b(svc, pid, ep=ep, actor=actor)
+    raw: dict = {"provider": "fixture"}
+    if tool_profile:
+        raw["tool_profile"] = tool_profile
     svc.generate_storyboard(
         pid,
         ep,
-        StoryboardGenerateRequest(provider="fixture"),
-        raw={"provider": "fixture"},
+        StoryboardGenerateRequest(provider="fixture", tool_profile=tool_profile),
+        raw=raw,
     )
     return svc.confirm_gate_g2(pid, ep, {"decision": "pass", "actor": actor})
 
@@ -126,7 +135,7 @@ def attach_real_refs(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01")
 
 
 def lock_g3_usable(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01", actor: str = "yangzhou"):
-    lock_g2(svc, pid, ep=ep, actor=actor)
+    lock_g2(svc, pid, ep=ep, actor=actor, tool_profile="seedance_2")
     svc.materialize_n3_cards(pid, ep, N3MaterializeRequest(actor=actor))
     attach_real_refs(svc, pid, data_dir, ep=ep)
     return svc.confirm_gate_g3(pid, ep, {"decision": "pass", "actor": actor})

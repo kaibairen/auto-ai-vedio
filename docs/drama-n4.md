@@ -14,12 +14,12 @@
 
 ## 人怎么走
 
-1. 先走完 D-N3，**门 G3 pass**。未锁 → **409 `upstream_unlocked`**。
-2. 每张 CHAR/SCENE 工作副本须有真实 ref（path+md5，文件存在）。否则 `usable_for_n4=false`。
-3. **POST** `.../drama/n4/validate`：软校验，不写盘，返回 `missing_refs` / issues。
-4. **POST** `.../drama/n4/assemble`：按 DIR 槽序填槽。成功写 jsonl；`n4-consumer.started=true`。
-5. 入参 `seedance_2_0` → 落盘 `seedance_2`。覆盖写 `assemble_version++`，history 可追溯。
-6. 上游 cards/分镜/cast 升版 → N4 `stale`（对齐 N3）。stale cards 写路径 **409**；重新拼装可覆盖。
+1. 先走完 D-N2 **G2 pass**（须已选 `tool_profile`，`ready_for_n4=true`）和 D-N3 **G3 pass**。未锁 → **409 `upstream_unlocked`**。
+2. 每张 CHAR/SCENE 工作副本须有真实 ref（path+md5，文件存在）。否则 `usable_for_n4=false` → assemble **409**。
+3. 未选工具 / `ready_for_n4=false` → assemble **409 `not_ready_for_n4`**。
+4. **POST** `.../drama/n4/validate`：软校验，不写盘，返回 `missing_refs` / issues / `first_shot_review`。
+5. **POST** `.../drama/n4/assemble`：DIR `join_nonempty` 填槽。成功写 jsonl + `EP##-prompts.v{n}.jsonl`；`n4-consumer.started=true`。
+6. 入参 `seedance_2_0` → 落盘 `seedance_2`。覆盖写 `assemble_version++`。stale 态须 `--force-reassemble` 或先消 stale。
 7. 裸 `/n4` → 404，改走 `/drama/n4/...`。
 
 ---
@@ -29,14 +29,18 @@
 ```bash
 aiv drama n4 validate --project proj_01 --ep EP01 --tool-profile seedance_2_0
 aiv drama n4 assemble --project proj_01 --ep EP01 --tool-profile seedance_2_0 --actor yangzhou
+aiv drama n4 assemble --project proj_01 --ep EP01 --force-reassemble --actor yangzhou
 aiv drama n4 get --project proj_01 --ep EP01
 aiv drama n4 status --project proj_01 --ep EP01
 ```
 
 ---
 
-## DESIGN 偏差（本环境 uploads/ 未挂载）
+## DESIGN 对齐（PRD 契约 + ENG adapter 优先）
 
-- DIR 槽序取仓内 KEEP Seedance 核心公式（风格/主体/场景/动作/镜头/光影），不是上传 DESIGN 原文逐行照抄。
-- CAM 词表 = N2 英文字段闭集 → 中文一词；一镜只填一个主运镜。
-- 无 G4。N5 / Skill·MCP / FE **DEFER**。
+- 写盘门：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。usable 假 → **409** + 缺图列表，不造假 ref。
+- DIR 槽：`slot_ref_lead` → 主体特征块 → 场锚 → 光色（无则空，不造平光）→ action → 微表情 → 景别 → 运镜 → 约 N 秒。对白不进正词。
+- CAM 词表：N2 码 → DESIGN-026-CAM 中文短语；一镜一主运镜；Class-D ≥8s。
+- Adapter：`seedance_2`（别名 `seedance_2_0`）；时长 {5,8,10}；画幅 9:16|16:9|2.35:1；`max_prompt_len=800`；ref≤9。
+- jsonl 行含 `char_ids` / `scene_id` / `card_versions` / `card_fingerprint` / `g2_fingerprint` / `assemble_version`。
+- D11：`first_shot_review` 软建议。无独立 G-N4。无 LLM 主链。无 FE。

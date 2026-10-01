@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests.drama.test_n2_api import _setup_locked
 from tests.drama.test_n3_api import _setup_g2
 
 
@@ -25,7 +26,17 @@ def _attach_refs_via_store(client, pid):
 
 
 def _setup_g3_usable(client):
-    pid = _setup_g2(client)
+    pid = _setup_locked(client)
+    gen = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard/generate",
+        json={"provider": "fixture", "tool_profile": "seedance_2"},
+    )
+    assert gen.status_code == 200, gen.text
+    con = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/gates/g2/confirm",
+        json={"decision": "pass", "actor": "yangzhou"},
+    )
+    assert con.status_code == 200, con.text
     mat = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize",
         json={"actor": "yangzhou"},
@@ -57,6 +68,9 @@ def test_openapi_n4_copy_served(client):
     assert "seedance_2" in text
     assert "seedance_2_0" in text
     assert "usable_for_n4_false" in text
+    assert "not_ready_for_n4" in text
+    assert "force_reassemble" in text
+    assert "first_shot_review" in text
     assert "EP##-prompts.jsonl" in text or "EP01-prompts.jsonl" in text
     assert "force_pass_forbidden" in text
     assert "/drama/n4" in text
@@ -73,6 +87,7 @@ def test_http_assemble_and_consumer(client):
     assert val.json()["written"] is False
     assert val.json()["valid"] is True
     assert val.json()["tool_profile"] == "seedance_2"
+    assert val.json()["first_shot_review"]
     asm = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/assemble",
         json={"tool_profile": "seedance_2_0", "actor": "yangzhou"},
@@ -81,8 +96,10 @@ def test_http_assemble_and_consumer(client):
     body = asm.json()
     assert body["written"] is True
     assert body["started"] is True
+    assert body["path"] == "episodes/EP01/EP01-prompts.jsonl"
     assert body["n4"]["tool_profile"] == "seedance_2"
     assert body["lines"]
+    assert body["first_shot_review"]["message"]
     assert all("CHAR-" not in (row.get("prompt") or "") for row in body["lines"])
     got = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n4")
     assert got.status_code == 200
@@ -90,14 +107,25 @@ def test_http_assemble_and_consumer(client):
     st = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/status")
     assert st.status_code == 200
     assert st.json()["assemble_version"] == 1
+    assert st.json()["ready_for_n4"] is True
     n4c = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n4-consumer")
     assert n4c.status_code == 200
     assert n4c.json()["started"] is True
     assert n4c.json()["jsonl"]
+    assert n4c.json()["prompts_path"]
 
 
 def test_http_usable_false_validate_soft_assemble_hard(client):
-    pid = _setup_g2(client)
+    pid = _setup_locked(client)
+    gen = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard/generate",
+        json={"provider": "fixture", "tool_profile": "seedance_2"},
+    )
+    assert gen.status_code == 200, gen.text
+    client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/gates/g2/confirm",
+        json={"decision": "pass", "actor": "yangzhou"},
+    )
     client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize",
         json={"actor": "yangzhou"},
@@ -115,7 +143,7 @@ def test_http_usable_false_validate_soft_assemble_hard(client):
         f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/assemble",
         json={"actor": "yangzhou"},
     )
-    assert asm.status_code == 422
+    assert asm.status_code == 409
     err = asm.json()["error"]
     assert err["code"] == "usable_for_n4_false"
     assert err["details"]["written"] is False
@@ -123,6 +151,25 @@ def test_http_usable_false_validate_soft_assemble_hard(client):
     n4c = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n4-consumer")
     assert n4c.status_code == 200
     assert n4c.json()["started"] is False
+
+
+def test_http_not_ready_for_n4(client):
+    pid = _setup_g2(client)
+    client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize",
+        json={"actor": "yangzhou"},
+    )
+    _attach_refs_via_store(client, pid)
+    client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/gates/g3/confirm",
+        json={"decision": "pass", "actor": "yangzhou"},
+    )
+    asm = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/assemble",
+        json={"actor": "yangzhou"},
+    )
+    assert asm.status_code == 409
+    assert asm.json()["error"]["code"] == "not_ready_for_n4"
 
 
 def test_http_force_pass_forbidden(client):
