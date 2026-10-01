@@ -193,6 +193,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "禁止强制通过（ForcePass=never）。",
         "en": "ForcePass=never",
     },
+    "usable_for_n4_false": {
+        "zh": "usable_for_n4=false · 缺图/缺 ref，拒绝写盘。",
+        "en": "usable_for_n4 is false; missing refs/images — jsonl not written.",
+    },
+    "bare_id_in_prompt": {
+        "zh": "prompt 禁止只留裸 CHAR-/SCENE- ID，须替换为中文特征。",
+        "en": "Prompt must not keep bare CHAR-/SCENE- ids; replace with Chinese features.",
+    },
+    "empty_negative": {
+        "zh": "negative 不可为空（NEG_CORE）。",
+        "en": "negative must be non-empty (NEG_CORE).",
+    },
+    "unsupported_tool_profile": {
+        "zh": "本拍工具闭集只落盘 seedance_2（入参别名 seedance_2_0 可接受）。",
+        "en": "This shot persists only seedance_2 (seedance_2_0 is an input alias).",
+    },
     "lane_required": {
         "zh": "生成大纲前必须选择女频或男频赛道。",
         "en": "select female|male before generate",

@@ -35,7 +35,7 @@ def _confirm(client, pid):
 def test_health(client):
     data = client.get("/health").json()
     assert data["ok"] is True
-    assert data["nodes"] == ["D-N0", "D-N1", "D-N2", "D-N3"]
+    assert data["nodes"] == ["D-N0", "D-N1", "D-N2", "D-N3", "D-N4"]
     assert data["gate"] == "g1b"
     assert data["gates"] == ["g1b", "g2", "g3"]
     assert data["koubo_n1"] is False

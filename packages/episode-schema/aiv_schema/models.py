@@ -82,6 +82,7 @@ class EpisodeVersions(BaseModel):
     cast: int = 0
     storyboard: int = 0
     cards: int = 0
+    prompts: int = 0
     episode: int = 1
 
 

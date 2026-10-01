@@ -41,6 +41,8 @@ from aiv_drama_n3.models import (
     N3ThickenRequest,
 )
 from aiv_drama_n3.validate import reject_force_keys_n3, reject_image_gen_n3
+from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
+from aiv_drama_n4.validate import reject_force_keys_n4
 
 router = APIRouter(prefix="/api/v0")
 
@@ -81,6 +83,17 @@ async def _raw_n3(request: Request) -> dict[str, Any]:
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys_n3(data)
     reject_image_gen_n3(data)
+    return data
+
+
+async def _raw_n4(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_n4(data)
     return data
 
 
@@ -549,8 +562,37 @@ async def confirm_gate_g3(
 
 @router.get("/projects/{project_id}/episodes/{ep}/drama/n4-consumer")
 def get_dn4_consumer(project_id: str, ep: str, request: Request) -> dict[str, Any]:
-    """D-N4 consumer read. 409 if G3 unlocked. Does not start D-N4."""
+    """D-N4 consumer read. 409 if G3 unlocked. started=true after successful assemble."""
     return _svc(request).get_dn4_consumer(project_id, ep)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n4")
+def get_n4(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n4(project_id, ep)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n4/status")
+def get_n4_status(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n4_status(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n4/validate")
+async def validate_n4(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw_n4(request)
+    body = N4ValidateRequest.model_validate(raw) if raw else N4ValidateRequest()
+    return _svc(request).validate_n4(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n4/assemble")
+async def assemble_n4(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n4(request)
+    body = N4AssembleRequest.model_validate(raw) if raw else N4AssembleRequest()
+    return _svc(request).assemble_n4(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 def _koubo_isolated() -> JSONResponse:
@@ -628,14 +670,20 @@ def _bare_n4_isolated() -> JSONResponse:
             "ok": False,
             "error": {
                 "code": "not_found",
-                "message": "D-N4 is not implemented; G3 pass is not auto-open N4",
-                "details": {"pipeline_profile": "drama", "auto_open_dn4": False},
+                "message": "bare N4 is not served; use D-N4 /drama/n4 and /drama/n4-consumer",
+                "details": {
+                    "pipeline_profile": "drama",
+                    "nodes": ["D-N4"],
+                    "use": ["/drama/n4", "/drama/n4/assemble", "/drama/n4/validate", "/drama/n4/status"],
+                },
             },
         },
     )
 
 
 @router.api_route("/projects/{project_id}/episodes/{ep}/n4/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n4/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 @router.api_route("/projects/{project_id}/episodes/{ep}/n4", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n4", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def bare_n4_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
     return _bare_n4_isolated()

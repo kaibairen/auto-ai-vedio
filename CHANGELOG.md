@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.9 — AIV-026 D-N4 deterministic prompt assemble (docs≠PASS)
+
+Engineering on main tip `1c3b921d` (AIV-029 N3 thicken + 弹窗审判庭 already on main). ForcePass=never. Does **not** merge to main. Does not implement N5 / 补图 / Skill·MCP / FE UI. OpenAPI **0.1.0** increment (`openapi/drama-n4.v0.yaml`). **docs≠PASS**.
+
+- New `packages/drama-n4-core`: assemble / validate / tool adapter registry. Assembly is **not** stuffed into `drama-n3-core`.
+- API: `POST .../drama/n4/assemble` · `POST .../drama/n4/validate` · `GET .../drama/n4` · `GET .../drama/n4/status`. Bare `/n4` is 404 isolation (use `/drama/n4/...`), no longer `D-N4 is not implemented`.
+- Writes `episodes/EP##/EP##-prompts.jsonl` (one shot per line). `usable_for_n4=false` → **no write**, explicit missing-ref/missing-file list. Soft validate does not write.
+- DIR slot fill (非 LLM): 风格→主体→场景→动作→镜头→光影. CAM 景别 + 一镜一主运镜词表. NEG_CORE 负面非空. CHAR-/SCENE- ID → 中文特征.
+- Tool: BRIEF alias `seedance_2_0` persists as closed-set **`seedance_2`**. Overwrite traces `assemble_version` + history. Upstream bump → N4 stale (align N3).
+- After successful assemble, `n4-consumer` `started=true` and can read jsonl. Tests: `tests/drama/test_n4_*.py`.
+
 ## 0.2.8 — AIV-029 N3 card text thicken (docs≠PASS)
 
 IMPL on main tip `9477302b`. ForcePass=never. Does **not** merge to main. Does not call image-gen, write look refs/md5 as success, flip `usable_for_n4`, assemble N4 jsonl, or open N5 / bot-MCP.

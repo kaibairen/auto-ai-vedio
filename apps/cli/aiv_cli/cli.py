@@ -39,9 +39,10 @@ from aiv_drama_n3.models import (
     N3PromoteRequest,
     N3ThickenRequest,
 )
+from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 
-app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
-drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3")
+app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
+drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / D-N4")
 project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
@@ -55,6 +56,7 @@ storyboard_app = typer.Typer(help="D-N2 storyboard")
 g2_app = typer.Typer(help="Gate G2")
 n3_app = typer.Typer(help="D-N3 unit cards + crop")
 g3_app = typer.Typer(help="Gate G3")
+n4_app = typer.Typer(help="D-N4 deterministic prompt assemble")
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
@@ -70,6 +72,7 @@ drama.add_typer(storyboard_app, name="storyboard")
 drama.add_typer(g2_app, name="g2")
 drama.add_typer(n3_app, name="n3")
 drama.add_typer(g3_app, name="g3")
+drama.add_typer(n4_app, name="n4")
 
 _PRETTY = False
 
@@ -556,6 +559,46 @@ def g3_get(
     ep: str = typer.Option(..., "--ep"),
 ) -> None:
     _print(_guard(lambda: _service().get_gate_g3(project_id, ep)))
+
+
+@n4_app.command("get")
+def n4_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n4(project_id, ep)))
+
+
+@n4_app.command("status")
+def n4_status(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n4_status(project_id, ep)))
+
+
+@n4_app.command("validate")
+def n4_validate(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    tool_profile: Optional[str] = typer.Option(None, "--tool-profile"),
+    aspect: Optional[str] = typer.Option(None, "--aspect"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = N4ValidateRequest(actor=actor, tool_profile=tool_profile, aspect=aspect)
+    _print(_guard(lambda: _service().validate_n4(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n4_app.command("assemble")
+def n4_assemble(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    tool_profile: Optional[str] = typer.Option(None, "--tool-profile"),
+    aspect: Optional[str] = typer.Option(None, "--aspect"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = N4AssembleRequest(actor=actor, tool_profile=tool_profile, aspect=aspect)
+    _print(_guard(lambda: _service().assemble_n4(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @g3_app.command("confirm")

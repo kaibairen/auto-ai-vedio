@@ -11,6 +11,7 @@ from aiv_drama.models import (
 )
 from aiv_drama.service import DramaService
 from aiv_drama_n2.models import StoryboardGenerateRequest
+from aiv_drama_n3.models import N3MaterializeRequest
 
 
 def seed_project_episode(
@@ -106,6 +107,29 @@ def lock_g2(svc: DramaService, pid: str, ep: str = "EP01", actor: str = "yangzho
         raw={"provider": "fixture"},
     )
     return svc.confirm_gate_g2(pid, ep, {"decision": "pass", "actor": actor})
+
+
+def attach_real_refs(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01") -> None:
+    """Write on-disk ref files so usable_for_n4 can be true. No fake missing_file=false."""
+    rec = svc._rec(pid, ep)
+    cards = (rec.get("n3") or {}).get("cards") or {}
+    for card in list(cards.get("characters") or []) + list(cards.get("scenes") or []):
+        ident = card["id"]
+        role = "face" if card.get("kind") == "character" else "plate"
+        path = data_dir / "refs" / f"{ident}.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"ref-{ident}".encode("utf-8"))
+        card["refs"] = [{"path": str(path), "md5": "abc123", "role": role, "missing_file": False}]
+        card["missing_ref"] = False
+        card["weak_binding"] = False
+    svc._commit(rec)
+
+
+def lock_g3_usable(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01", actor: str = "yangzhou"):
+    lock_g2(svc, pid, ep=ep, actor=actor)
+    svc.materialize_n3_cards(pid, ep, N3MaterializeRequest(actor=actor))
+    attach_real_refs(svc, pid, data_dir, ep=ep)
+    return svc.confirm_gate_g3(pid, ep, {"decision": "pass", "actor": actor})
 
 
 def sample_row(
