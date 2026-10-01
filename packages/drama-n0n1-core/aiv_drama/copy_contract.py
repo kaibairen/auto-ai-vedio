@@ -58,6 +58,7 @@ N2_ERROR_CODES: frozenset[str] = frozenset(
         "seq_invalid",
         "cam_enum_invalid",
         "duration_bucket_mismatch",
+        "duration_below_camera_floor",
         "episode_abandoned",
         "force_pass_forbidden",
         "provider",
@@ -78,6 +79,7 @@ ISSUE_CODES: frozenset[str] = frozenset(
         "named_cast_unreferenced",
         "named_cast_row_gap",
         "named_cast_auto_merged",
+        "duration_below_camera_floor",
     }
 )
 
@@ -163,6 +165,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "duration_bucket_mismatch": {
         "zh": "还有镜的时长对不上当前工具档（例如写成了 2–3 秒，而当前工具只允许合法档）。请改秒数或重新吸附后再试。在全部对齐前，不能标记可出片。",
         "en": "One or more shot durations do not match the selected tool duration buckets. Fix or re-adsorb before ready-for-n4.",
+    },
+    "duration_below_camera_floor": {
+        "zh": "类 D 运镜（手持/急推急拉/环绕/滑动变焦/旋转）时长须 ≥8 秒。请升到 8 或 10，勿停留在 5 秒档。",
+        "en": "Class-D camera moves (HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL) require duration_s ≥ 8.",
     },
     "ready_for_n4_requires_tool_profile": {
         "zh": "请先选择出片工具。未选工具时不能进入出片准备。",
@@ -269,7 +275,7 @@ def collect_duration_issues(
         cast=None,
         named_cast_check="off",
     )
-    keep = {"tool_profile_unset", "duration_bucket_mismatch"}
+    keep = {"tool_profile_unset", "duration_bucket_mismatch", "duration_below_camera_floor"}
     return [decorate_issue(item) for item in issues if item.get("code") in keep]
 
 

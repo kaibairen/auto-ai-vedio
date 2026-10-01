@@ -138,8 +138,9 @@ class LlmStoryboardProvider:
                 "action/dialogue must not introduce named speakers or action agents absent from cast.characters[].name; weaken unknowns to UI/系统音 or use only given cast names",
                 "Group labels (王子们 / 两位王子) must expand to already-listed CHAR ids; do not invent a group CHAR",
                 "系统音 / 弹窗字 / 旁白 / 广播 without a character-name speaker prefix are OK and must NOT become CHAR names",
-                "Never invent CHAR from 【系统音】/半截广播台词/半截对白切片/句级叙述碎片/动词短语/脏前缀 (leading /). Ban names like 你被双王子 / 而是两王子 / 王国王子 / AI王子 / 两侧王子 / 豆包当众拆穿两个王子 / 包的开源权重反制两个闭源王子. Collection 两王子/双王子/两侧王子/指出两王子 expand to GPT王子 + Opus5.5王子 or CODEX王子 + CURSOR(Opus5.5)王子 (or outline-equivalent proper names), never as their own CHAR. Bare brands CURSOR/CODEX/GPT fold onto Opus5.5王子/GPT王子 (or CURSOR(Opus5.5)王子/CODEX王子) — never open a bare-brand CHAR. Parenthesis wraps like CURSOR（Opus5.5王子） are one entity, not two rows",
+                "Never invent CHAR from 【系统音】/半截广播台词/半截对白切片/句级叙述碎片/动词短语/脏前缀 (leading /). Ban names like 你被双王子 / 而是两王子 / 王国王子 / AI王子 / 两侧王子 / 豆包当众拆穿两个王子 / 包的开源权重反制两个闭源王子 / 吐槽两位王子 / 技术王子 / 幕里两位王子 / 两位王子 / 幕里…王子. Collection 两王子/双王子/两侧王子/指出两王子/幕里两位王子 expand to GPT王子 + Opus5.5王子 or GPT(CODEX)王子 + Opus5.5(CURSOR)王子 (or CODEX王子 + CURSOR(Opus5.5)王子), never as their own CHAR. Bare brands CURSOR/CODEX/GPT fold onto Opus5.5王子/GPT王子 — never open a bare-brand CHAR. Keep 程序员 / 豆包 / GPT(CODEX)王子 / Opus5.5(CURSOR)王子. Parenthesis wraps like CURSOR（Opus5.5王子） are one entity, not two rows",
                 "duration_s must be one of 5, 8, or 10 (dogfood tool档). Prefer 5 dialogue CU, 8 action, 10 complex camera. Do not emit 2s/3s/4s",
+                "Class-D cameras HANDHELD/WHIP_PUSH/WHIP_PULL/ORBIT/DOLLY_ZOOM/ROLL must use duration_s ≥ 8 (default 8; never 5)",
                 "If tool_profile is set, duration_s must be in that profile's closed set and tool_duration_bucket must match the same seconds (no collision)",
                 "If tool_profile is empty, leave tool_duration_bucket null; still use duration_s ∈ {5,8,10}",
                 "action/dialogue/notes are short intent only — no 提示词, 宫格, Seedance, [ImageN], 时间轴, or full outpaint prompts",
@@ -241,7 +242,11 @@ def _normalize_llm_rows(
             payload["bridge_id"] = bridges[min(i - 1, len(bridges) - 1)] if bridges else ""
         payload["seq"] = i
         payload["shot_id"] = f"S{i:02d}"
-        duration, bucket = adsorb_duration(_coerce_duration(payload.get("duration_s")), tool_profile)
+        duration, bucket = adsorb_duration(
+            _coerce_duration(payload.get("duration_s")),
+            tool_profile,
+            camera=payload.get("camera"),
+        )
         payload["duration_s"] = duration
         payload["tool_duration_bucket"] = bucket
         row = normalize_row(payload, index=i)

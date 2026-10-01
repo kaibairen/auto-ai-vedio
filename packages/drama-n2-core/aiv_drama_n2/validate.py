@@ -109,6 +109,9 @@ PROMPT_MARKERS = (
 )
 
 COMPLEX_CAMERAS = frozenset({"WHIP_PUSH", "WHIP_PULL", "DOLLY_ZOOM", "ROLL", "HANDHELD", "ORBIT"})
+CLASS_D_CAMERAS = COMPLEX_CAMERAS
+CLASS_D_DURATION_FLOOR = 8
+DURATION_BELOW_CAMERA_FLOOR = "duration_below_camera_floor"
 STORYBOARD_SKILL_PATH = ".skill/writing/动态漫-转分镜/SKILL.md"
 SEEDANCE_SKILL_PATH = ".skill/generation/Seedance2.0-分镜"
 
@@ -449,6 +452,27 @@ def collect_issues(
                         field="tool_profile",
                     )
                 )
+
+        if camera in CLASS_D_CAMERAS:
+            try:
+                dur_int = int(duration)
+            except (TypeError, ValueError):
+                dur_int = 0
+            allowed = TOOL_DURATION_ALLOWED.get(tool_profile or "", set())
+            profile_can_floor = bool(tool_profile and any(d >= CLASS_D_DURATION_FLOOR for d in allowed))
+            if dur_int and dur_int < CLASS_D_DURATION_FLOOR:
+                floor_issue = issue(
+                    "error" if profile_can_floor else "warn",
+                    DURATION_BELOW_CAMERA_FLOOR,
+                    "class-D camera duration must be ≥8",
+                    shot_id=shot_id,
+                    field="duration_s",
+                    duration_s=duration,
+                    camera=camera,
+                    floor=CLASS_D_DURATION_FLOOR,
+                    tool_profile=tool_profile,
+                )
+                issues.append(floor_issue)
 
         if size in SHOT_RANK and prev_size in SHOT_RANK:
             jump = abs(SHOT_RANK[size] - SHOT_RANK[prev_size])

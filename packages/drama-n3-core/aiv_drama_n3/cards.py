@@ -6,7 +6,12 @@ from copy import deepcopy
 from typing import Any
 
 from aiv_drama.ids import CHAR_RE, SCENE_RE
-from aiv_drama_n2.named_cast import is_b_class, is_group_label, is_system_speaker
+from aiv_drama_n2.named_cast import (
+    is_b_class,
+    is_group_label,
+    is_scene_b_class,
+    is_system_speaker,
+)
 
 NONE_IDS = frozenset({"NONE", "none", "None"})
 CHAR_ID_RE = CHAR_RE
@@ -60,15 +65,24 @@ def has_usable_ref(card: dict[str, Any]) -> bool:
     return False
 
 
-def skip_cast_row(row: dict[str, Any]) -> bool:
-    """Do not promote system-voice / crowd / NONE to a new CHAR/SCENE card."""
+def skip_cast_row(row: dict[str, Any], *, kind: str | None = None) -> bool:
+    """Do not promote system-voice / crowd / NONE / CHAR-dirt to a working card.
+
+    CHAR and SCENE use separate B-class buckets (023 F2). Spatial SCENE names
+    must not inherit CHAR clause/开源/length punches.
+    """
     ident = row.get("id") or ""
     name = row.get("name") or ""
     if is_none_id(ident) or ident in NONE_IDS:
         return True
+    scene = kind == "scene" or is_scene_id(ident)
+    if scene:
+        if is_scene_b_class(name):
+            return True
+        return not is_scene_id(ident)
     if is_system_speaker(name) or is_group_label(name) or is_b_class(name):
         return True
-    if not is_char_id(ident) and not is_scene_id(ident):
+    if not is_char_id(ident):
         return True
     return False
 
@@ -144,7 +158,7 @@ def materialize_cards(
         ident = row.get("id")
         if ident in seen:
             continue
-        if skip_cast_row(row) or not is_char_id(ident):
+        if skip_cast_row(row, kind="character") or not is_char_id(ident):
             skipped.append(
                 {
                     "severity": "warn",
@@ -162,7 +176,7 @@ def materialize_cards(
         ident = row.get("id")
         if ident in seen:
             continue
-        if skip_cast_row(row) or not is_scene_id(ident):
+        if skip_cast_row(row, kind="scene") or not is_scene_id(ident):
             skipped.append(
                 {
                     "severity": "warn",

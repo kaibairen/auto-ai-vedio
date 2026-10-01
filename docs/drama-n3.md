@@ -28,7 +28,7 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 ## 人怎么走
 
 1. 先走完 D-N2，**门 G2 pass**。未锁时物化/attach/GET N3 → **409 `upstream_unlocked`**。
-2. **POST** `.../drama/n3/cards/materialize`：只从本集 cast 的 CHAR-*/SCENE-* 挂出工作副本。系统音/群杂不开 CHAR。
+2. **POST** `.../drama/n3/cards/materialize`：只从本集 cast 的 CHAR-*/SCENE-* 挂出工作副本。系统音/群杂/CHAR 脏名不开 CHAR。SCENE 与 CHAR **分桶**：合法空间短名（含 侧边栏奶茶时刻 / 开源避难所入口）不得因 CHAR 半截规则 `b_class_skipped`。禁以 cast 名手补丁当 G3 产品解。
 3. 故事板裁剪 **GET** `.../drama/n3/storyboard-crop` = 既有 D-N2 列只读投影（seq/shot_id/duration/shot_size/camera/action/char_ids/scene_id/dialogue/notes）。不扩 N2 schema。
 4. **门 G3**：`{ decision: pass|reject, actor, note? }`。
    - pass → cards `locked=true`，`next_edges=["D-N4"]`，**不**创建 D-N4 job。

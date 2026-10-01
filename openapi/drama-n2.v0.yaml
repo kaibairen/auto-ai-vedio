@@ -215,6 +215,8 @@ paths:
         硬：shot_cap、CAM 枚举、cast id（O5）、禁提示词、bridge_id 非空、shot_id 唯一、seq。
         软 warn：J1–J2、grid_strict 建议、tool_profile 未选。
         duration↔bucket：未选 tool_profile 时不硬拒 G2；选了则不一致 → error（挡 ready_for_n4）。
+        类 D 运镜（HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL）：生成默认+吸附 duration_s≥8；
+        已选 profile 且 allow 含 ≥8 仍 <8 → error `duration_below_camera_floor`；未选 profile → 薄 warn。
         O5-N（BRIEF-AIV-017a）：`named_cast_check=off|warn|error`（默认 **warn**）。
         专名对戏未入表 / 未入本镜 char_ids → issues `named_cast_*`。
         warn 不改 `valid`；error 使 `valid=false`。G2 pass 见 confirm。
@@ -605,6 +607,7 @@ components:
         - seq_invalid
         - cam_enum_invalid
         - duration_bucket_mismatch
+        - duration_below_camera_floor
         - episode_abandoned
         - force_pass_forbidden
         - provider
@@ -623,6 +626,7 @@ components:
         - named_cast_unreferenced
         - named_cast_row_gap
         - named_cast_auto_merged
+        - duration_below_camera_floor
     ErrorBody:
       type: object
       required: [code, message]

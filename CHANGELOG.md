@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.6 — AIV-023 named_cast Acc#3 banlist + SCENE bucket + Class-D ≥8 (docs≠PASS)
+
+Engineering fix on PR#14 tip `39ce9c10`. ForcePass=never. Does **not** merge to main. Does not rewrite eng-015/019/020*/021-live. OpenAPI stays **0.1.x**. **docs≠PASS** · ≠ product / G2 / G3 / LOOP-PASS.
+
+- **P0-A Banlist**: named_cast open / auto_merge / sidecar / N1 generate reject B-ACT/B-TAG/B-FRAG/B-GEN (`吐槽两位王子` / `技术王子` / `幕里两位王子` / 两位·两侧·幕里…王子 family) and bare CURSOR/CODEX. Merge-time prune of dirty CHAR rows. Not a post-hoc dogfood delete. ALLOW keeps 程序员/豆包 and A-tier `GPT(CODEX)王子` / `Opus5.5(CURSOR)王子` (and outline-equivalent titled princes).
+- **P1-1 SCENE**: CHAR vs SCENE B-class split. Spatial short names (侧边栏空间 / 避难所门厅 / 侧边栏奶茶时刻 / 开源避难所入口) are not `b_class_skipped`. Generate prefers spatial aliases. Not a cast-name card patch.
+- **P1-3 Class-D**: HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL generate default + adsorb duration ≥8. Selected profile and still below 8 → `duration_below_camera_floor` hard; unset profile → thin warn.
+- Tests: `tests/drama/test_023_hygiene.py`. Acc#1/#2 / ForcePass=never kept.
+
 ## 0.2.5 — AIV-021a/021b/021c N3-unit cards + G3 thin + library stubs + Screen H (docs≠PASS)
 
 Based on main tip `2b6385ad` (PR#13 GAP-COPY already merged; this PR does **not** re-port banners/catalog). ForcePass=never. Does not merge to main. Does not rewrite eng-015/019/020*. OpenAPI stays **0.1.x**.

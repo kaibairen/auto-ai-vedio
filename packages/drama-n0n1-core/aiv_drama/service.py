@@ -68,7 +68,17 @@ from aiv_drama.validate import (
     require_shot_cap,
     validate_ep,
 )
-from aiv_drama_n2.named_cast import CAST_CHANGED_HINT, SIDECAR_ONE_LINE, normalize_name
+from aiv_drama_n2.named_cast import (
+    CAST_CHANGED_HINT,
+    SIDECAR_ONE_LINE,
+    is_a_tier_prince_name,
+    is_banlist_name,
+    is_bare_brand,
+    is_protected_lead,
+    is_registerable_name,
+    prefer_spatial_scene_name,
+    normalize_name,
+)
 from aiv_drama_n2.ops import DramaN2Ops
 from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
 from aiv_drama_n3.ops import DramaN3Ops
@@ -1023,6 +1033,11 @@ class DramaService(DramaN3Ops, DramaN2Ops):
 
         for row in draft.characters:
             name = (row.get("name") or "").strip() or "未命名"
+            if name != "未命名" and is_banlist_name(name) and not is_protected_lead(name) and not is_a_tier_prince_name(name):
+                msg = f"skipped banlist CHAR {name!r} (B-ACT/B-TAG/B-FRAG/B-GEN)"
+                logger.warning(msg)
+                notes.append(msg)
+                continue
             one_line = (row.get("one_line") or "").strip() or "待补一句话"
             key = normalize_cast_name(name)
             if key and key in used_names:
@@ -1058,10 +1073,11 @@ class DramaService(DramaN3Ops, DramaN2Ops):
         for row in draft.scenes:
             ident = self._alloc_scene(rec)
             prev = existing_scenes.get(ident)
+            scene_name = prefer_spatial_scene_name(row.get("name") or "未命名场景")
             scenes.append(
                 {
                     "id": ident,
-                    "name": row.get("name") or "未命名场景",
+                    "name": scene_name or "未命名场景",
                     "one_line": row.get("one_line") or "待补一句话",
                     "library_ref": deepcopy(prev.get("library_ref")) if prev and prev.get("library_ref") else None,
                 }
@@ -1227,6 +1243,21 @@ class DramaService(DramaN3Ops, DramaN2Ops):
         for row in rows:
             if not (row.name or "").strip() or not (row.one_line or "").strip():
                 raise AppError(422, "validation", f"{kind} name and one_line are required")
+            if kind == "CHAR":
+                char_name = normalize_name(row.name)
+                if (
+                    (is_banlist_name(char_name) or is_bare_brand(char_name))
+                    and not is_protected_lead(char_name)
+                    and not is_a_tier_prince_name(char_name)
+                    and not is_registerable_name(char_name)
+                ):
+                    raise AppError(
+                        422,
+                        "validation",
+                        "B-class / banlist name cannot open CHAR",
+                        name=char_name,
+                        node=NODE_DN1,
+                    )
             known = require_known_or_omit(row.id, allocated, kind)
             if known is None:
                 ident = self._alloc_char(rec) if kind == "CHAR" else self._alloc_scene(rec)
@@ -1394,6 +1425,18 @@ class DramaService(DramaN3Ops, DramaN2Ops):
         name = normalize_name(body.name)
         if not name:
             raise AppError(422, "validation", "name is required", node=NODE_DN1)
+        if (
+            (is_banlist_name(name) or is_bare_brand(name))
+            and not is_protected_lead(name)
+            and not is_a_tier_prince_name(name)
+        ):
+            raise AppError(
+                422,
+                "validation",
+                "B-class / banlist name cannot open CHAR",
+                name=name,
+                node=NODE_DN1,
+            )
         existing = next(
             (
                 c
