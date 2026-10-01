@@ -119,9 +119,14 @@ GROUP_LABELS = frozenset(
         "两个开源王子",
         "幕里两位王子",
         "幕里两王子",
+        "幕外两位王子",
+        "门外两位王子",
         "屏幕里两位王子",
         "画面里两位王子",
         "镜头里两位王子",
+        "弹幕里两位王子",
+        "双窗两位王子",
+        "IDE里两位王子",
         "AI王子",
         "王国王子",
         "公主们",
@@ -159,6 +164,62 @@ BARE_TITLES = frozenset(
     }
 )
 
+# LK-Q4: unnamed 王子 folds to 03/04; never opens a fifth CHAR.
+BARE_PRINCE_LABELS = frozenset({"王子", "那位王子", "这个王子", "那个王子"})
+# LK-Q1: short form without A-tier parody structure — fold if 03/04 exist, else DENY.
+SHORT_PRINCE_NEAR_DENY = frozenset({"opus王子"})
+
+# LK-01/02 + PRD B-TAG stems. A-tier whitelist is checked first.
+B_TAG_TITLE_PREFIXES = frozenset(
+    {
+        "技术",
+        "正统",
+        "体验",
+        "重构",
+        "回滚",
+        "弹窗",
+        "破防",
+        "联猎",
+        "双屏",
+        "窗口",
+        "爽点",
+    }
+)
+# NAME slot only. Prose in one_line/outline is not classified.
+B_TAG_EXACT = frozenset(
+    {
+        "最优解",
+        "最贵解",
+        "联猎",
+        "默认助手",
+        "爽点爆发",
+        "非技术型AI",
+        "技术型AI",
+        "联猎非技术型AI",
+        "奶蛙",
+        "奶蛙脸",
+        "双窗AI",
+        "CODEX窗口",
+        "CURSOR窗口",
+        "神秘ID",
+        "神秘ID消息",
+        "深处神秘ID",
+    }
+)
+B_FRAG_EXACT = frozenset(
+    {
+        "代码库已冻结",
+        "倒计时开始",
+        "清除非技术型AI",
+        "谁更懂他",
+        "先喝口水再吵",
+        "选你自己",
+    }
+)
+B_ACT_INFIX = ("吐槽", "端水", "争宠", "调侃", "嘲讽", "拆穿", "追杀")
+B_TAG_EXACT_FOLDED = frozenset(item.casefold().replace(" ", "") for item in B_TAG_EXACT)
+B_FRAG_EXACT_FOLDED = frozenset(item.casefold().replace(" ", "") for item in B_FRAG_EXACT)
+
 TITLES = ("王子", "公主", "女王", "国王", "将军", "大人", "小姐", "少爷", "殿下")
 
 VERB_LEADERS = (
@@ -187,6 +248,8 @@ VERB_LEADERS = (
     "调侃",
     "嘲讽",
     "吐槽了",
+    "拆穿",
+    "追杀",
 )
 
 # Cut from questions/narration: 「你被双王子联猎了？」 / 「不是追杀，而是两王子同时…」
@@ -243,10 +306,23 @@ GENERIC_TITLE_PREFIXES = frozenset(
         "技术",
         "正统",
         "体验",
+        "重构",
+        "回滚",
+        "弹窗",
+        "破防",
+        "联猎",
+        "双屏",
+        "窗口",
+        "奶蛙",
         "幕里",
+        "幕外",
+        "门外",
         "屏幕里",
         "画面里",
         "镜头里",
+        "弹幕里",
+        "双窗",
+        "IDE里",
     }
 )
 GENERIC_LATIN_PREFIXES = frozenset({"ai", "npc", "ui", "os", "vo", "a.i", "a.i."})
@@ -265,12 +341,25 @@ GENERIC_TITLE_STARTS = (
     "闭源",
     "开源",
     "幕里",
+    "幕外",
+    "门外",
     "屏幕里",
     "画面里",
     "镜头里",
+    "弹幕里",
+    "双窗",
+    "IDE里",
     "技术",
     "正统",
     "体验",
+    "重构",
+    "回滚",
+    "弹窗",
+    "破防",
+    "联猎",
+    "双屏",
+    "窗口",
+    "王国",
 )
 
 # Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
@@ -289,13 +378,16 @@ PROPER_NAME_RE = re.compile(
 GROUP_RE = re.compile("|".join(sorted((re.escape(g) for g in GROUP_LABELS), key=len, reverse=True)))
 # 两侧王子 / 两个闭源王子 / 两大AI王国王子 — quantity+title, never a CHAR slot.
 GROUP_GENERIC_RE = re.compile(
-    r"(?:幕里|屏幕里|画面里|镜头里)?(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|闭源|开源|王国)*王子"
+    r"(?:幕里|幕外|门外|屏幕里|画面里|镜头里|弹幕里|双窗|IDE里)?"
+    r"(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|闭源|开源|王国)*王子"
 )
-# 幕里…王子 family (方位+集合), including 幕里两位王子 / 幕里的王子.
-GROUP_LOCATED_RE = re.compile(r"(?:幕里|屏幕里|画面里|镜头里).{0,8}王子")
+# 幕里/弹幕里/门外…王子 family (方位+集合). Do not pin only「幕里」.
+GROUP_LOCATED_RE = re.compile(
+    r"(?:幕里|幕外|门外|屏幕里|画面里|镜头里|弹幕里|双窗|IDE里).{0,8}王子"
+)
 
 DIRTY_PREFIX_RE = re.compile(r"^[\s/\\|#@*>\-–—·•、,，.。;；'\"“”‘’\[\]【】()（）]+")
-HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|目标")
+HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|已冻结|倒计时|清除非技术|目标")
 CLAUSE_MARKERS = (
     "当众",
     "拆穿",
@@ -337,6 +429,8 @@ CLAUSE_VERBS = (
     "争宠",
     "调侃",
     "嘲讽",
+    "拆穿",
+    "追杀",
 )
 CLAUSE_INFIX = frozenset("的地得和与或把被让给在对从向到并")
 
@@ -547,6 +641,22 @@ def is_a_tier_prince_name(name: str) -> bool:
     return bool(A_TIER_PRINCE_RE.fullmatch(key))
 
 
+def _folded_token(name: str) -> str:
+    return strip_dirty_prefix(normalize_name(name)).casefold().replace(" ", "")
+
+
+def is_bare_prince_label(name: str) -> bool:
+    """Unnamed 王子 / 那位王子 — fold onto 03/04, never a new CHAR."""
+    return strip_dirty_prefix(normalize_name(name)) in BARE_PRINCE_LABELS
+
+
+def is_short_prince_near_deny(name: str) -> bool:
+    """Opus王子 etc. without 5.5 / parody wrap — 准 DENY as a fifth slot."""
+    if is_a_tier_prince_name(name) or is_protected_lead(name):
+        return False
+    return _folded_token(name) in SHORT_PRINCE_NEAR_DENY
+
+
 def is_b_act(name: str) -> bool:
     """B-ACT: sentence-level action phrase pretending to be a CHAR name."""
     key = strip_dirty_prefix(normalize_name(name))
@@ -554,29 +664,38 @@ def is_b_act(name: str) -> bool:
         return False
     if is_verb_phrase(key):
         return True
-    if any(verb in key for verb in ("吐槽", "端水", "争宠", "调侃", "嘲讽")):
+    if any(verb in key for verb in B_ACT_INFIX):
         return True
     return False
 
 
 def is_b_tag(name: str) -> bool:
-    """B-TAG: 爽点/设定 tag such as 技术王子 / 正统王子 / 体验王子."""
+    """B-TAG: 爽点/设定 tag. NAME slot only — not one_line/outline prose."""
     key = strip_dirty_prefix(normalize_name(name))
     if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
         return False
+    folded = _folded_token(key)
+    if folded in B_TAG_EXACT_FOLDED or key in B_TAG_EXACT:
+        return True
     split = _split_title(key)
     if not split:
         return False
-    prefix, _title = split
-    folded = prefix.casefold().replace(" ", "")
-    return folded in {"技术", "正统", "体验", "爽点"} or prefix in {"技术", "正统", "体验", "爽点"}
+    prefix, title = split
+    folded_prefix = prefix.casefold().replace(" ", "")
+    if folded_prefix in B_TAG_TITLE_PREFIXES or prefix in B_TAG_TITLE_PREFIXES:
+        return True
+    if title == "王子" and any(stem in prefix for stem in B_TAG_TITLE_PREFIXES):
+        return True
+    return False
 
 
 def is_b_gen(name: str) -> bool:
-    """B-GEN: collection generics 两位/两侧/幕里…王子."""
+    """B-GEN: collection generics 两位/两侧/幕里…王子 + bare 王子 fold."""
     key = strip_dirty_prefix(normalize_name(name))
     if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
         return False
+    if is_bare_prince_label(key) or is_short_prince_near_deny(key):
+        return True
     if is_group_label(key) or is_generic_title(key):
         return True
     if GROUP_LOCATED_RE.search(key) or GROUP_GENERIC_RE.search(key):
@@ -585,14 +704,22 @@ def is_b_gen(name: str) -> bool:
 
 
 def is_b_frag(name: str) -> bool:
-    """B-FRAG: half-line dialogue / outline continuation slice."""
+    """B-FRAG: half-line dialogue / outline continuation / system-vo slice."""
     if is_a_tier_prince_name(name) or is_protected_lead(name):
         return False
+    key = strip_dirty_prefix(normalize_name(name))
+    if key in B_FRAG_EXACT or _folded_token(key) in B_FRAG_EXACT_FOLDED:
+        return True
     return is_dialogue_fragment(name) or is_clause_fragment(name) or is_half_line(name)
 
 
 def classify_char_banlist(name: str) -> str:
-    """ALLOW or B-ACT / B-TAG / B-FRAG / B-GEN / B-BARE (Acc#1)."""
+    """ALLOW or B-ACT / B-TAG / B-FRAG / B-GEN / B-BARE (Acc#1).
+
+    Hard scan is the CHAR **name** slot (open / merge / sidecar) only.
+    Do not run this on one_line / outline / dialogue prose — 「技术王子」
+    / 「两位王子」 in those fields must not delete ALLOW 01–04 rows.
+    """
     key = strip_dirty_prefix(normalize_name(name))
     if is_protected_lead(key) or is_a_tier_prince_name(key):
         return "ALLOW"
@@ -708,16 +835,17 @@ def is_spatial_scene_name(name: str) -> bool:
 def is_scene_b_class(name: str) -> bool:
     """SCENE skip bucket — must not reuse CHAR clause/开源/length punches.
 
-    Legal spatial nouns (侧边栏空间 / 避难所门厅 / 侧边栏奶茶时刻 / 开源避难所入口)
-    stay. True CHAR dirt / system / group used as a field name still skip.
+    Spatial place names (…空间 / …门厅 / …战场 and SCENE_SPATIAL_TOKENS)
+    pass through first so a system-speaker substring (弹窗空间) does not skip
+    the SCENE card. Bare 弹窗 / 系统音 and CHAR dirt still skip.
     """
     key = strip_dirty_prefix(normalize_name(name))
     if not key:
         return True
-    if is_system_speaker(key) or is_generic_ref(key):
-        return True
     if is_spatial_scene_name(key):
         return False
+    if is_system_speaker(key) or is_generic_ref(key):
+        return True
     if is_group_label(key) or is_banlist_name(key):
         return True
     if HALF_LINE_PUNCT_RE.search(key) and (_cjk_len(key) > 12 or "王子" in key):
@@ -1068,11 +1196,15 @@ def resolve_to_pool_name(name: str, pool: Iterable[str]) -> str | None:
         return key
     if cleaned in ordered:
         return cleaned
-    if is_b_class(key) and not is_group_label(key) and not is_bare_brand(key) and not is_bare_brand(cleaned):
-        return None
+    # Fold brand / short-prince aliases onto existing 03/04 before DENY.
     folded = fold_brand_to_pool(cleaned, ordered)
     if folded:
         return folded
+    if is_bare_prince_label(cleaned) or is_bare_prince_label(key):
+        members = expand_group("王子", ordered)
+        return members[0] if len(members) == 1 else None
+    if is_b_class(key) and not is_group_label(key) and not is_bare_brand(key) and not is_bare_brand(cleaned):
+        return None
     if not is_registerable_name(key) and cleaned not in ordered:
         for p in ordered:
             if names_are_aliases(cleaned, p) and is_registerable_name(p):
@@ -1239,6 +1371,8 @@ def collect_named_hits(
 
 def resolve_hit_names(name: str, individual_pool: Iterable[str]) -> list[str]:
     glued = glue_paren_name(name)
+    if is_bare_prince_label(glued):
+        return expand_group("王子", individual_pool)
     if is_group_label(glued) or is_generic_title(glued):
         return expand_group(glued, individual_pool)
     target = resolve_to_pool_name(glued, individual_pool)
