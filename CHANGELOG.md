@@ -2,6 +2,8 @@
 
 ## 0.2.7 — AIV-025 Class-D thicken SHOULD + named_cast leak patch (docs≠PASS)
 
+- **SCENE spatial first**: `is_scene_b_class` lets `…空间` / `…门厅` / `…战场` (and existing spatial tokens) pass through before `is_system_speaker`. Fixes live eng-025 `弹窗空间` `b_class_skipped` → G3 `card_missing_for_shot`. CHAR `弹窗王子` / bare `弹窗` still DENY.
+
 Engineering fix stacked on PR#15 tip `01f6c7dc`. ForcePass=never. Does **not** merge to main. Does not rewrite eng-015/019/020*/021/023-live. OpenAPI stays **0.1.x**. **docs≠PASS** · ≠ product / G2 / G3 / LOOP-PASS.
 
 - **Track A**: Class-D closed set unchanged; D≥8 hard floor kept. Storyboard Skill/guide + N2 LLM rules rotate WHIP_*/DOLLY_ZOOM/ROLL/HANDHELD/ORBIT with duration 8|10 on the same row. Validate emits SHOULD warns `class_d_count_below_suggest` / `class_d_kinds_below_suggest` / `class_d_monoculture` — never error, never alone block `ready_for_n4`.

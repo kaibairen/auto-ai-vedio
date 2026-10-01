@@ -29,4 +29,6 @@
 
 护：`程序员` `豆包` `GPT(CODEX)王子` `Opus5.5(CURSOR)王子`（及 023 A 档别名）。脏三仍 0。**禁**再开 Acc#3 平行大轨。
 
+SCENE 与 CHAR **分桶**：`is_scene_b_class` 先放行空间短名（`弹窗空间` / `…门厅` / `…战场`），再判 system-speaker。CHAR `弹窗王子` / 裸 `弹窗` 仍 DENY。禁手改 SCENE 名冒充。
+
 — docs≠PASS · ForcePass=never —

@@ -19,9 +19,13 @@ from aiv_drama_n2.named_cast import (
     is_banlist_name,
     is_protected_lead,
     is_registerable_name,
+    is_scene_b_class,
+    is_spatial_scene_name,
+    is_system_speaker,
     resolve_hit_names,
     resolve_to_pool_name,
 )
+from aiv_drama_n3.cards import materialize_cards
 from aiv_drama_n2.skill_evidence import excerpt_borrowed_dongman
 from aiv_drama_n2.validate import (
     CLASS_D_CAMERAS,
@@ -398,3 +402,65 @@ def test_025_validate_suggest_on_generated_fixture_is_warn_only(svc):
     assert all(i["severity"] == "warn" for i in suggest)
     assert val["valid"] is True
     assert not any(i.get("severity") == "error" and i["code"] in CLASS_D_SUGGEST_CODES for i in val["issues"])
+
+
+def test_025_scene_popup_space_allow_char_popup_prince_deny():
+    """eng-025 live: SCENE 弹窗空间 must materialize; CHAR 弹窗王子 stays DENY."""
+    assert is_spatial_scene_name("弹窗空间")
+    assert not is_scene_b_class("弹窗空间")
+    # CHAR path still sees the 弹窗 prefix; SCENE bucket must not inherit that skip.
+    assert is_system_speaker("弹窗空间")
+    assert is_system_speaker("弹窗")
+    assert is_scene_b_class("弹窗")
+    assert is_scene_b_class("系统音")
+    assert classify_char_banlist("弹窗王子") == "B-TAG"
+    assert is_banlist_name("弹窗王子")
+    assert not is_registerable_name("弹窗王子")
+    assert classify_char_banlist("弹窗") != "ALLOW"
+    assert is_banlist_name("系统音") or is_system_speaker("系统音")
+    for name in (
+        "侧边栏空间",
+        "避难所门厅",
+        "深夜IDE战场",
+        "侧边栏奶茶时刻",
+        "开源避难所入口",
+    ):
+        assert is_spatial_scene_name(name) or not is_scene_b_class(name), name
+        assert not is_scene_b_class(name), name
+
+    cast = {
+        "characters": [
+            {"id": "CHAR-01", "name": "程序员", "one_line": "男主"},
+            {"id": "CHAR-05", "name": "弹窗王子", "one_line": "脏TAG"},
+            {"id": "CHAR-06", "name": "系统音", "one_line": "VO"},
+            {"id": "CHAR-07", "name": "弹窗", "one_line": "裸系统"},
+        ],
+        "scenes": [
+            {"id": "SCENE-01", "name": "侧边栏空间", "one_line": "陪伴"},
+            {"id": "SCENE-02", "name": "避难所门厅", "one_line": "门厅"},
+            {"id": "SCENE-03", "name": "弹窗空间", "one_line": "双窗对撞"},
+            {"id": "SCENE-04", "name": "深夜IDE战场", "one_line": "战场"},
+            {"id": "SCENE-05", "name": "系统音", "one_line": "误用系统名"},
+        ],
+    }
+    storyboard = {
+        "rows": [
+            {"shot_id": "S03", "char_ids": ["CHAR-01"], "scene_id": "SCENE-03"},
+            {"shot_id": "S07", "char_ids": ["CHAR-01"], "scene_id": "SCENE-03"},
+        ]
+    }
+    characters, scenes, skipped = materialize_cards(cast, storyboard)
+    char_ids = {c["id"] for c in characters}
+    scene_ids = {s["id"] for s in scenes}
+    scene_names = {s["name"] for s in scenes}
+    assert "CHAR-01" in char_ids
+    assert "CHAR-05" not in char_ids
+    assert "CHAR-06" not in char_ids
+    assert "CHAR-07" not in char_ids
+    assert "SCENE-03" in scene_ids
+    assert "弹窗空间" in scene_names
+    assert {"SCENE-01", "SCENE-02", "SCENE-04"} <= scene_ids
+    assert "SCENE-05" not in scene_ids
+    skipped_ids = {str(w.get("id") or "") for w in skipped if w.get("code") == "b_class_skipped"}
+    assert "SCENE-03" not in skipped_ids
+    assert {"CHAR-05", "CHAR-06", "CHAR-07", "SCENE-05"} <= skipped_ids

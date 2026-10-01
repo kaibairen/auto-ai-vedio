@@ -835,16 +835,17 @@ def is_spatial_scene_name(name: str) -> bool:
 def is_scene_b_class(name: str) -> bool:
     """SCENE skip bucket — must not reuse CHAR clause/开源/length punches.
 
-    Legal spatial nouns (侧边栏空间 / 避难所门厅 / 侧边栏奶茶时刻 / 开源避难所入口)
-    stay. True CHAR dirt / system / group used as a field name still skip.
+    Spatial place names (…空间 / …门厅 / …战场 and SCENE_SPATIAL_TOKENS)
+    pass through first so a system-speaker substring (弹窗空间) does not skip
+    the SCENE card. Bare 弹窗 / 系统音 and CHAR dirt still skip.
     """
     key = strip_dirty_prefix(normalize_name(name))
     if not key:
         return True
-    if is_system_speaker(key) or is_generic_ref(key):
-        return True
     if is_spatial_scene_name(key):
         return False
+    if is_system_speaker(key) or is_generic_ref(key):
+        return True
     if is_group_label(key) or is_banlist_name(key):
         return True
     if HALF_LINE_PUNCT_RE.search(key) and (_cjk_len(key) > 12 or "王子" in key):
