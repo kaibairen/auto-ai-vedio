@@ -30,6 +30,7 @@ class JsonStore:
             "projects": {},
             "episodes": {},
             "library": {},
+            "library_scenes": {},
             "idempotency": {},
             "counters": {"project": 0},
         }
@@ -54,3 +55,9 @@ class JsonStore:
 
     def library_dir(self, project_id: str, character_id: str, version: int) -> Path:
         return self.project_root(project_id) / "libraries" / "characters" / character_id / f"v{version}"
+
+    def library_character_root(self, project_id: str, character_id: str) -> Path:
+        return self.project_root(project_id) / "libraries" / "characters" / character_id
+
+    def library_scene_root(self, project_id: str, scene_id: str) -> Path:
+        return self.project_root(project_id) / "libraries" / "scenes" / scene_id

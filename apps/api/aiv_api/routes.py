@@ -32,6 +32,14 @@ from aiv_drama_n2.models import (
     StoryboardWrite,
 )
 from aiv_drama_n2.validate import reject_force_keys_n2, reject_prompt_fields
+from aiv_drama_n3.models import (
+    LibrarySceneWrite,
+    N3AttachRequest,
+    N3ForkRequest,
+    N3MaterializeRequest,
+    N3PromoteRequest,
+)
+from aiv_drama_n3.validate import reject_force_keys_n3
 
 router = APIRouter(prefix="/api/v0")
 
@@ -60,6 +68,17 @@ async def _raw_n2(request: Request) -> dict[str, Any]:
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys_n2(data)
     reject_prompt_fields(data)
+    return data
+
+
+async def _raw_n3(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_n3(data)
     return data
 
 
@@ -417,6 +436,109 @@ async def confirm_gate_g2(
     return _svc(request).confirm_gate_g2(project_id, ep, raw, idempotency_key=idempotency_key)
 
 
+@router.get("/projects/{project_id}/library")
+def get_library(project_id: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_library(project_id)
+
+
+@router.get("/projects/{project_id}/library/policy")
+def get_library_policy(project_id: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_library_policy(project_id)
+
+
+@router.put("/projects/{project_id}/library/scenes/{scene_id}")
+def put_library_scene(
+    project_id: str,
+    scene_id: str,
+    body: LibrarySceneWrite,
+    request: Request,
+) -> dict[str, Any]:
+    return _svc(request).put_library_scene(project_id, scene_id, body)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n3")
+def get_n3(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n3(project_id, ep)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n3/cards")
+def get_n3_cards(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n3_cards(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/materialize")
+async def materialize_n3_cards(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    body = N3MaterializeRequest.model_validate(raw) if raw else N3MaterializeRequest()
+    return _svc(request).materialize_n3_cards(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n3/storyboard-crop")
+def get_n3_crop(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n3_crop(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/attach")
+async def attach_n3_card(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    body = N3AttachRequest.model_validate(raw)
+    return _svc(request).attach_n3_card(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/promote")
+async def promote_n3_card(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    body = N3PromoteRequest.model_validate(raw)
+    return _svc(request).promote_n3_card(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/fork")
+async def fork_n3_card(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    body = N3ForkRequest.model_validate(raw)
+    return _svc(request).fork_n3_card(project_id, ep, body, raw=raw)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/gates/g3")
+def get_gate_g3(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_gate_g3(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/gates/g3/confirm")
+async def confirm_gate_g3(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_actor: str | None = Header(default=None, alias="X-Actor"),
+) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    if x_actor and not raw.get("actor"):
+        raw = {**raw, "actor": x_actor}
+    return _svc(request).confirm_gate_g3(project_id, ep, raw, idempotency_key=idempotency_key)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n4-consumer")
+def get_dn4_consumer(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    """D-N4 consumer read. 409 if G3 unlocked. Does not start D-N4."""
+    return _svc(request).get_dn4_consumer(project_id, ep)
+
+
 def _koubo_isolated() -> JSONResponse:
     return JSONResponse(
         status_code=404,
@@ -461,3 +583,45 @@ def _bare_n2_isolated() -> JSONResponse:
 @router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n2", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def bare_n2_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
     return _bare_n2_isolated()
+
+
+def _bare_n3_isolated() -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={
+            "ok": False,
+            "error": {
+                "code": "not_found",
+                "message": "bare N3 is not served; use D-N3 /drama/n3 and gates/g3",
+                "details": {"pipeline_profile": "drama", "nodes": ["D-N3"], "gate": "g3"},
+            },
+        },
+    )
+
+
+@router.api_route("/projects/{project_id}/episodes/{ep}/n3/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n3/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/n3", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n3", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+def bare_n3_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
+    return _bare_n3_isolated()
+
+
+def _bare_n4_isolated() -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={
+            "ok": False,
+            "error": {
+                "code": "not_found",
+                "message": "D-N4 is not implemented; G3 pass is not auto-open N4",
+                "details": {"pipeline_profile": "drama", "auto_open_dn4": False},
+            },
+        },
+    )
+
+
+@router.api_route("/projects/{project_id}/episodes/{ep}/n4/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/n4", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+def bare_n4_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
+    return _bare_n4_isolated()

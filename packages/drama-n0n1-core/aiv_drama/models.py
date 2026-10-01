@@ -117,11 +117,13 @@ class SidecarAddCharacterRequest(BaseModel):
 
 
 class LibraryCharacterWrite(BaseModel):
-    """Dogfood seed (OpenAPI has no list/search). Not promote/fork."""
+    """Dogfood seed (OpenAPI has no list/search). Promote/fork stay N3 stubs."""
 
     name: str = Field(min_length=1)
     one_line: str = Field(min_length=1)
     version: int = Field(default=1, ge=1)
+    tags: list[str] = Field(default_factory=list)
+    refs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class GeneratedDraft(BaseModel):

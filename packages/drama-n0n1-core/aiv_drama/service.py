@@ -52,7 +52,6 @@ from aiv_drama.projection import (
     write_brief,
     write_cast,
     write_episode_json,
-    write_library_character,
     write_outline,
 )
 from aiv_drama.provider import get_provider
@@ -69,10 +68,24 @@ from aiv_drama.validate import (
     require_shot_cap,
     validate_ep,
 )
-from aiv_drama_n2.named_cast import CAST_CHANGED_HINT, SIDECAR_ONE_LINE, normalize_name
+from aiv_drama_n2.named_cast import (
+    CAST_CHANGED_HINT,
+    SIDECAR_ONE_LINE,
+    is_a_tier_prince_name,
+    is_banlist_name,
+    is_bare_brand,
+    is_protected_lead,
+    is_registerable_name,
+    prefer_spatial_scene_name,
+    normalize_name,
+)
 from aiv_drama_n2.ops import DramaN2Ops
 from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
-from aiv_schema.models import GATE_G1B, GATE_G2, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, PIPELINE_DRAMA
+from aiv_drama_n3.ops import DramaN3Ops
+from aiv_drama_n3.projection import write_episode_cards
+from aiv_drama_n3.templates import n3_observability
+from aiv_drama_n3.validate import usable_for_n4
+from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, PIPELINE_DRAMA
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +116,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN2Ops):
+class DramaService(DramaN3Ops, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -125,6 +138,7 @@ class DramaService(DramaN2Ops):
         if not rec:
             raise AppError(404, "not_found", "episode not found", project_id=project_id, episode_id=ep)
         self._ensure_n2_fields(rec)
+        self._ensure_n3_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -178,6 +192,7 @@ class DramaService(DramaN2Ops):
         rec["episode"]["versions"]["outline"] = (rec.get("outline") or {}).get("version") or 0
         rec["episode"]["versions"]["cast"] = (rec.get("cast") or {}).get("version") or 0
         rec["episode"]["versions"]["storyboard"] = (rec.get("storyboard") or {}).get("version") or 0
+        rec["episode"]["versions"]["cards"] = ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0
 
     def _project_disk(self, rec: dict[str, Any]) -> None:
         ep = rec["episode"]["episode_id"]
@@ -196,6 +211,7 @@ class DramaService(DramaN2Ops):
                 write_storyboard_md(episode_dir, ep, sb)
             gate = rec["gate"]
             g2 = rec.get("gate_g2") or {}
+            g3 = rec.get("gate_g3") or {}
             stale_nodes = rec["episode"].get("stale_downstream") or []
             meta = {
                 "episode_id": ep,
@@ -221,6 +237,15 @@ class DramaService(DramaN2Ops):
                         "actor": g2.get("actor"),
                         "note": g2.get("note"),
                         "updated_at": g2.get("decided_at"),
+                    },
+                    GATE_G3: {
+                        "status": g3.get("state"),
+                        "state": g3.get("state"),
+                        "locked": g3.get("locked"),
+                        "decision": g3.get("last_decision"),
+                        "actor": g3.get("actor"),
+                        "note": g3.get("note"),
+                        "updated_at": g3.get("decided_at"),
                     },
                 },
                 "next_edges": list(rec["episode"].get("next_edges") or []),
@@ -248,6 +273,17 @@ class DramaService(DramaN2Ops):
                     "tool_profile": sb.get("tool_profile"),
                     "skill_trace": deepcopy(sb.get("skill_trace") or rec.get("n2_request", {}).get("skill_trace") or {}),
                     "skill_excerpt": (sb.get("skill_excerpt") or "")[:2000],
+                }
+            if rec.get("n3"):
+                write_episode_cards(episode_dir, rec.get("n3"))
+                obs = n3_observability(self.settings.repo_root)
+                # F3: template_paths / prompt_paths only — never merge .prompt into skill_paths.
+                meta["n3_meta"] = {
+                    "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked"))),
+                    "template_paths": list(obs["template_paths"]),
+                    "prompt_paths": list(obs["prompt_paths"]),
+                    "cards_version": ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0,
+                    "scene_template": "deferred",
                 }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)
@@ -520,8 +556,8 @@ class DramaService(DramaN2Ops):
                 "status": "draft",
                 "aspect_ratio": body.aspect_ratio,
                 "target_duration_sec": body.target_duration_sec,
-                "locks": {"g1b": False, "g2": False},
-                "versions": {"brief": 0, "outline": 0, "cast": 0, "storyboard": 0, "episode": 1},
+                "locks": {"g1b": False, "g2": False, "g3": False},
+                "versions": {"brief": 0, "outline": 0, "cast": 0, "storyboard": 0, "cards": 0, "episode": 1},
                 "stale_downstream": [],
                 "next_edges": [],
                 "created_at": ts,
@@ -551,6 +587,19 @@ class DramaService(DramaN2Ops):
                 "actor": None,
                 "decided_at": None,
             },
+            "gate_g3": {
+                "gate_id": GATE_G3,
+                "state": "idle",
+                "locked": False,
+                "version": 0,
+                "last_decision": None,
+                "note": None,
+                "actor": None,
+                "decided_at": None,
+            },
+            "n3": None,
+            "d_n4_jobs": [],
+            "library_ops": [],
             "allocated_char_ids": [],
             "allocated_scene_ids": [],
             "char_counter": 0,
@@ -609,23 +658,7 @@ class DramaService(DramaN2Ops):
         self._commit(rec)
         return self.episode_envelope(project_id, ep)
 
-    # ----- library (dogfood seed; not list/search) ----------------------------------
-
-    def put_library_character(self, project_id: str, character_id: str, body: LibraryCharacterWrite) -> dict[str, Any]:
-        self._require_active_project(project_id)
-        key = f"{project_id}/{character_id}@{body.version}"
-        record = {
-            "id": character_id,
-            "version": body.version,
-            "name": body.name,
-            "one_line": body.one_line,
-            "project_id": project_id,
-            "updated_at": now_iso(),
-        }
-        self.store.state["library"][key] = record
-        write_library_character(self.store.library_dir(project_id, character_id, body.version), record)
-        self._save()
-        return {"ok": True, "character": record, "node": NODE_DN0}
+    # ----- library resolve (put/schema writes live on DramaN3Ops) --------------------
 
     def _resolve_library(self, project_id: str, character_id: str, version: int) -> dict[str, Any]:
         key = f"{project_id}/{character_id}@{version}"
@@ -1000,6 +1033,11 @@ class DramaService(DramaN2Ops):
 
         for row in draft.characters:
             name = (row.get("name") or "").strip() or "未命名"
+            if name != "未命名" and is_banlist_name(name) and not is_protected_lead(name) and not is_a_tier_prince_name(name):
+                msg = f"skipped banlist CHAR {name!r} (B-ACT/B-TAG/B-FRAG/B-GEN)"
+                logger.warning(msg)
+                notes.append(msg)
+                continue
             one_line = (row.get("one_line") or "").strip() or "待补一句话"
             key = normalize_cast_name(name)
             if key and key in used_names:
@@ -1035,10 +1073,11 @@ class DramaService(DramaN2Ops):
         for row in draft.scenes:
             ident = self._alloc_scene(rec)
             prev = existing_scenes.get(ident)
+            scene_name = prefer_spatial_scene_name(row.get("name") or "未命名场景")
             scenes.append(
                 {
                     "id": ident,
-                    "name": row.get("name") or "未命名场景",
+                    "name": scene_name or "未命名场景",
                     "one_line": row.get("one_line") or "待补一句话",
                     "library_ref": deepcopy(prev.get("library_ref")) if prev and prev.get("library_ref") else None,
                 }
@@ -1204,6 +1243,21 @@ class DramaService(DramaN2Ops):
         for row in rows:
             if not (row.name or "").strip() or not (row.one_line or "").strip():
                 raise AppError(422, "validation", f"{kind} name and one_line are required")
+            if kind == "CHAR":
+                char_name = normalize_name(row.name)
+                if (
+                    (is_banlist_name(char_name) or is_bare_brand(char_name))
+                    and not is_protected_lead(char_name)
+                    and not is_a_tier_prince_name(char_name)
+                    and not is_registerable_name(char_name)
+                ):
+                    raise AppError(
+                        422,
+                        "validation",
+                        "B-class / banlist name cannot open CHAR",
+                        name=char_name,
+                        node=NODE_DN1,
+                    )
             known = require_known_or_omit(row.id, allocated, kind)
             if known is None:
                 ident = self._alloc_char(rec) if kind == "CHAR" else self._alloc_scene(rec)
@@ -1371,6 +1425,18 @@ class DramaService(DramaN2Ops):
         name = normalize_name(body.name)
         if not name:
             raise AppError(422, "validation", "name is required", node=NODE_DN1)
+        if (
+            (is_banlist_name(name) or is_bare_brand(name))
+            and not is_protected_lead(name)
+            and not is_a_tier_prince_name(name)
+        ):
+            raise AppError(
+                422,
+                "validation",
+                "B-class / banlist name cannot open CHAR",
+                name=name,
+                node=NODE_DN1,
+            )
         existing = next(
             (
                 c

@@ -34,6 +34,8 @@
 | **020 P0-A** | B 档（`【系统音】`/弹窗/旁白/广播半截/动词短语/脏前缀）**不得**开 CHAR；A 档王子专名入表+挂镜；「两王子」解析到个体槽 |
 | **020 P0-B** | generate 时长默认吸附到 **{5,8,10}**（profile 空也吸附，bucket 仍 null）；选 `tool_profile` 后硬吸附且 duration↔bucket 同秒 |
 | **020 P0-C** | generate/GET/validate 落盘 `skill_paths` + `skill_excerpt` + `skill_trace`；`n2_request` 备证 |
+| **023 P0-A** | Banlist B-ACT/TAG/FRAG/GEN + 裸 CURSOR/CODEX **不得**开 CHAR；护 程序员/豆包 与 A 档王子专名。清零= classifier/merge，≠事后手删卡 |
+| **023 P1-3** | 类 D 运镜（HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL）生成默认+吸附 **duration_s≥8**；有 profile 仍低于 8 → `duration_below_camera_floor` |
 
 ---
 

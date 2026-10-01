@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.6 — AIV-023 named_cast Acc#3 banlist + SCENE bucket + Class-D ≥8 (docs≠PASS)
+
+Engineering fix on PR#14 tip `39ce9c10`. ForcePass=never. Does **not** merge to main. Does not rewrite eng-015/019/020*/021-live. OpenAPI stays **0.1.x**. **docs≠PASS** · ≠ product / G2 / G3 / LOOP-PASS.
+
+- **P0-A Banlist**: named_cast open / auto_merge / sidecar / N1 generate reject B-ACT/B-TAG/B-FRAG/B-GEN (`吐槽两位王子` / `技术王子` / `幕里两位王子` / 两位·两侧·幕里…王子 family) and bare CURSOR/CODEX. Merge-time prune of dirty CHAR rows. Not a post-hoc dogfood delete. ALLOW keeps 程序员/豆包 and A-tier `GPT(CODEX)王子` / `Opus5.5(CURSOR)王子` (and outline-equivalent titled princes).
+- **P1-1 SCENE**: CHAR vs SCENE B-class split. Spatial short names (侧边栏空间 / 避难所门厅 / 侧边栏奶茶时刻 / 开源避难所入口) are not `b_class_skipped`. Generate prefers spatial aliases. Not a cast-name card patch.
+- **P1-3 Class-D**: HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL generate default + adsorb duration ≥8. Selected profile and still below 8 → `duration_below_camera_floor` hard; unset profile → thin warn.
+- Tests: `tests/drama/test_023_hygiene.py`. Acc#1/#2 / ForcePass=never kept.
+
+## 0.2.5 — AIV-021a/021b/021c N3-unit cards + G3 thin + library stubs + Screen H (docs≠PASS)
+
+Based on main tip `2b6385ad` (PR#13 GAP-COPY already merged; this PR does **not** re-port banners/catalog). ForcePass=never. Does not merge to main. Does not rewrite eng-015/019/020*. OpenAPI stays **0.1.x**.
+
+- **021a**: per-episode CHAR/SCENE working cards from cast only; N3 storyboard crop = read-only D-N2 column projection; G3 confirm/reject; G2 unlocked → 409; no auto-open D-N4.
+- **F1**: missing ref → weak-binding warn, does not block G3; `usable_for_n4` is the hard gate. G3 pass ≠ usable_for_n4.
+- **F2**: SCENE thin stub / one_line; no invented KEEP SCENE template paths.
+- **F3**: N3 observability `template_paths` / `prompt_paths` only; `.prompt` never written into D-N1/D-N2 `skill_paths`.
+- **021c**: `libraries/` schema (characters first; scenes stub) + attach/promote stubs. attach ≠ skip G3; promote ≠ auto-pass G3. `project_scope` capability; D12–D15 hanging defaults reversible; no silent auto-promote.
+- Workbench Screen H: CHAR/SCENE card rows + `local` / `attached@version` / `none` chips; separate G3 locked vs `usable_for_n4` badges; F1 banner「视觉弱绑定 · 下游一致性自负」does **not** disable G3; G2 `locked`+`confirmed_by` gates materialize/write CTAs; `upstream_unlocked` copy distinguishes G2 vs G1b.
+- docs≠PASS · ≠ product / G2 / G3 PASS.
+
 ## 0.2.4 — 018d GAP-COPY 出片横幅 + ErrorCode sync (docs≠PASS)
 
 Port of closed PR #10 leftovers onto main tip after #12. ForcePass=never. OpenAPI stays **0.1.0**. Does not rewrite N0–N2 LLM body generation.

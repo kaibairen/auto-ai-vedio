@@ -13,7 +13,7 @@
     },
     "locks": {
       "type": "object",
-      "properties": { "g1b": { "type": "boolean" } }
+      "properties": { "g1b": { "type": "boolean" }, "g2": { "type": "boolean" }, "g3": { "type": "boolean" } }
     },
     "intent": {
       "type": "object",
@@ -30,14 +30,16 @@
         "brief": { "type": "integer" },
         "outline": { "type": "integer" },
         "cast": { "type": "integer" },
-        "storyboard": { "type": "integer" }
+        "storyboard": { "type": "integer" },
+        "cards": { "type": "integer" }
       }
     },
     "gates": {
       "type": "object",
       "properties": {
         "g1b": { "type": "object" },
-        "g2": { "type": "object" }
+        "g2": { "type": "object" },
+        "g3": { "type": "object" }
       }
     },
     "storyboard_meta": {
@@ -49,6 +51,16 @@
         "skill_excerpt": { "type": "string" },
         "skill_trace": { "type": "object", "additionalProperties": true },
         "tool_profile": { "type": ["string", "null"] }
+      }
+    },
+    "n3_meta": {
+      "type": "object",
+      "properties": {
+        "usable_for_n4": { "type": "boolean" },
+        "template_paths": { "type": "array", "items": { "type": "string" } },
+        "prompt_paths": { "type": "array", "items": { "type": "string" } },
+        "cards_version": { "type": "integer" },
+        "scene_template": { "type": "string" }
       }
     },
     "projection_dirty": { "type": "boolean" },

@@ -106,7 +106,9 @@ GROUP_LABELS = frozenset(
         "两王子",
         "两个王子",
         "双王子",
+        "双王",
         "指出两王子",
+        "指出两位王子",
         "两大王子",
         "两大AI王子",
         "两侧王子",
@@ -115,6 +117,11 @@ GROUP_LABELS = frozenset(
         "两端王子",
         "两个闭源王子",
         "两个开源王子",
+        "幕里两位王子",
+        "幕里两王子",
+        "屏幕里两位王子",
+        "画面里两位王子",
+        "镜头里两位王子",
         "AI王子",
         "王国王子",
         "公主们",
@@ -123,6 +130,17 @@ GROUP_LABELS = frozenset(
         "两名公主",
         "两公主",
     }
+)
+
+# Acc#1/#2 + leads that banlist must never kill.
+PROTECTED_LEAD_NAMES = frozenset({"程序员", "豆包"})
+A_TIER_PRINCE_RE = re.compile(
+    r"(?ix)^(?:"
+    r"GPT(?:\s*[\(（]\s*CODEX\s*[\)）])?|"
+    r"CODEX(?:\s*[\(（]\s*GPT\s*[\)）])?|"
+    r"Opus\s*5\.5(?:\s*[\(（]\s*CURSOR\s*[\)）])?|"
+    r"CURSOR(?:\s*[\(（]\s*Opus\s*5\.5\s*[\)）])?"
+    r")王子$"
 )
 
 BARE_TITLES = frozenset(
@@ -163,6 +181,12 @@ VERB_LEADERS = (
     "抓住",
     "拉住",
     "推开",
+    "吐槽",
+    "端水",
+    "争宠",
+    "调侃",
+    "嘲讽",
+    "吐槽了",
 )
 
 # Cut from questions/narration: 「你被双王子联猎了？」 / 「不是追杀，而是两王子同时…」
@@ -216,6 +240,13 @@ GENERIC_TITLE_PREFIXES = frozenset(
         "开源",
         "两个闭源",
         "两个开源",
+        "技术",
+        "正统",
+        "体验",
+        "幕里",
+        "屏幕里",
+        "画面里",
+        "镜头里",
     }
 )
 GENERIC_LATIN_PREFIXES = frozenset({"ai", "npc", "ui", "os", "vo", "a.i", "a.i."})
@@ -233,6 +264,13 @@ GENERIC_TITLE_STARTS = (
     "俩",
     "闭源",
     "开源",
+    "幕里",
+    "屏幕里",
+    "画面里",
+    "镜头里",
+    "技术",
+    "正统",
+    "体验",
 )
 
 # Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
@@ -251,8 +289,10 @@ PROPER_NAME_RE = re.compile(
 GROUP_RE = re.compile("|".join(sorted((re.escape(g) for g in GROUP_LABELS), key=len, reverse=True)))
 # 两侧王子 / 两个闭源王子 / 两大AI王国王子 — quantity+title, never a CHAR slot.
 GROUP_GENERIC_RE = re.compile(
-    r"(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|闭源|开源|王国)*王子"
+    r"(?:幕里|屏幕里|画面里|镜头里)?(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|闭源|开源|王国)*王子"
 )
+# 幕里…王子 family (方位+集合), including 幕里两位王子 / 幕里的王子.
+GROUP_LOCATED_RE = re.compile(r"(?:幕里|屏幕里|画面里|镜头里).{0,8}王子")
 
 DIRTY_PREFIX_RE = re.compile(r"^[\s/\\|#@*>\-–—·•、,，.。;；'\"“”‘’\[\]【】()（）]+")
 HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|目标")
@@ -292,6 +332,11 @@ CLAUSE_VERBS = (
     "打开",
     "进入",
     "离开",
+    "吐槽",
+    "端水",
+    "争宠",
+    "调侃",
+    "嘲讽",
 )
 CLAUSE_INFIX = frozenset("的地得和与或把被让给在对从向到并")
 
@@ -484,12 +529,104 @@ def is_group_label(name: str) -> bool:
         return True
     if GROUP_GENERIC_RE.fullmatch(key) or GROUP_GENERIC_RE.fullmatch(stripped):
         return True
+    if GROUP_LOCATED_RE.fullmatch(key) or GROUP_LOCATED_RE.fullmatch(stripped):
+        return True
     return False
 
 
+def is_protected_lead(name: str) -> bool:
+    key = strip_dirty_prefix(normalize_name(name))
+    return key in PROTECTED_LEAD_NAMES
+
+
+def is_a_tier_prince_name(name: str) -> bool:
+    """F2 / Acc#2 parody proper names. White before「凡含王子即杀」."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key:
+        return False
+    return bool(A_TIER_PRINCE_RE.fullmatch(key))
+
+
+def is_b_act(name: str) -> bool:
+    """B-ACT: sentence-level action phrase pretending to be a CHAR name."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
+        return False
+    if is_verb_phrase(key):
+        return True
+    if any(verb in key for verb in ("吐槽", "端水", "争宠", "调侃", "嘲讽")):
+        return True
+    return False
+
+
+def is_b_tag(name: str) -> bool:
+    """B-TAG: 爽点/设定 tag such as 技术王子 / 正统王子 / 体验王子."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
+        return False
+    split = _split_title(key)
+    if not split:
+        return False
+    prefix, _title = split
+    folded = prefix.casefold().replace(" ", "")
+    return folded in {"技术", "正统", "体验", "爽点"} or prefix in {"技术", "正统", "体验", "爽点"}
+
+
+def is_b_gen(name: str) -> bool:
+    """B-GEN: collection generics 两位/两侧/幕里…王子."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
+        return False
+    if is_group_label(key) or is_generic_title(key):
+        return True
+    if GROUP_LOCATED_RE.search(key) or GROUP_GENERIC_RE.search(key):
+        return True
+    return False
+
+
+def is_b_frag(name: str) -> bool:
+    """B-FRAG: half-line dialogue / outline continuation slice."""
+    if is_a_tier_prince_name(name) or is_protected_lead(name):
+        return False
+    return is_dialogue_fragment(name) or is_clause_fragment(name) or is_half_line(name)
+
+
+def classify_char_banlist(name: str) -> str:
+    """ALLOW or B-ACT / B-TAG / B-FRAG / B-GEN / B-BARE (Acc#1)."""
+    key = strip_dirty_prefix(normalize_name(name))
+    if is_protected_lead(key) or is_a_tier_prince_name(key):
+        return "ALLOW"
+    if is_bare_brand(key):
+        return "B-BARE"
+    if is_b_act(key):
+        return "B-ACT"
+    if is_b_tag(key):
+        return "B-TAG"
+    if is_b_gen(key):
+        return "B-GEN"
+    if is_b_frag(key):
+        return "B-FRAG"
+    if is_b_class(key):
+        return "B-FRAG"
+    return "ALLOW"
+
+
+def is_banlist_name(name: str) -> bool:
+    """True when named_cast must not open a CHAR row (DESIGN-023 F1)."""
+    return classify_char_banlist(name) != "ALLOW"
+
+
 def is_b_class(name: str) -> bool:
-    """F1: system-vo / popup / VO / half-line / verb phrase / dirty leftover."""
+    """F1 / 023: system-vo / popup / VO / half-line / verb / banlist leftover.
+
+    CHAR-only. SCENE materialize must call is_scene_b_class — do not reuse this
+    for place names (021-live 侧边栏奶茶时刻 / 开源避难所入口 mis-skip).
+    """
+    if is_protected_lead(name) or is_a_tier_prince_name(name):
+        return False
     if is_system_speaker(name) or is_generic_ref(name):
+        return True
+    if is_b_act(name) or is_b_tag(name) or is_b_gen(name):
         return True
     if is_group_label(name) or is_generic_title(name):
         return True
@@ -504,7 +641,88 @@ def is_b_class(name: str) -> bool:
         or is_dialogue_fragment(stripped)
         or is_verb_phrase(stripped)
         or is_half_line(stripped)
+        or is_b_act(stripped)
+        or is_b_tag(stripped)
+        or is_b_gen(stripped)
     ):
+        return True
+    return False
+
+
+# Spatial SCENE short names (DIR S1–S3). Events belong in one_line, not name.
+SCENE_SPATIAL_ALIASES = {
+    "侧边栏奶茶时刻": "侧边栏空间",
+    "开源避难所入口": "避难所门厅",
+}
+SCENE_SPATIAL_TOKENS = (
+    "IDE",
+    "侧边栏",
+    "避难所",
+    "门厅",
+    "工位",
+    "战场",
+    "营帐",
+    "校场",
+    "茶水间",
+    "城墙",
+    "办公室",
+    "工位",
+    "空间",
+)
+
+
+def prefer_spatial_scene_name(name: str) -> str:
+    """Generate-side spatial short name. Not a post-hoc dogfood card patch."""
+    key = normalize_name(name)
+    if not key:
+        return key
+    if key in SCENE_SPATIAL_ALIASES:
+        return SCENE_SPATIAL_ALIASES[key]
+    if key.endswith("时刻") and _cjk_len(key) >= 4:
+        stem = key[: -len("时刻")]
+        if any(tok in stem for tok in ("侧边栏", "IDE", "工位", "茶水间", "营帐")):
+            return stem if stem.endswith("空间") else f"{stem}空间"
+    if key.endswith("入口") and _cjk_len(key) >= 4:
+        stem = key[: -len("入口")]
+        if "避难所" in stem:
+            return "避难所门厅"
+        return stem or key
+    return key
+
+
+def is_spatial_scene_name(name: str) -> bool:
+    key = normalize_name(name)
+    if not key:
+        return False
+    if key in SCENE_SPATIAL_ALIASES or prefer_spatial_scene_name(key) != key:
+        return True
+    lowered = key.casefold()
+    for tok in SCENE_SPATIAL_TOKENS:
+        if tok.isascii() and tok.casefold() in lowered:
+            return True
+        if not tok.isascii() and tok in key:
+            return True
+    return False
+
+
+def is_scene_b_class(name: str) -> bool:
+    """SCENE skip bucket — must not reuse CHAR clause/开源/length punches.
+
+    Legal spatial nouns (侧边栏空间 / 避难所门厅 / 侧边栏奶茶时刻 / 开源避难所入口)
+    stay. True CHAR dirt / system / group used as a field name still skip.
+    """
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key:
+        return True
+    if is_system_speaker(key) or is_generic_ref(key):
+        return True
+    if is_spatial_scene_name(key):
+        return False
+    if is_group_label(key) or is_banlist_name(key):
+        return True
+    if HALF_LINE_PUNCT_RE.search(key) and (_cjk_len(key) > 12 or "王子" in key):
+        return True
+    if _cjk_len(key) > 16:
         return True
     return False
 
@@ -540,9 +758,11 @@ def is_registerable_name(name: str) -> bool:
     key = strip_dirty_prefix(name)
     if not key or len(key) < 2:
         return False
+    if is_protected_lead(key) or is_a_tier_prince_name(key):
+        return True
     if is_bare_brand(key):
         return False
-    if is_b_class(name) or is_b_class(key):
+    if is_banlist_name(key) or is_b_class(name) or is_b_class(key):
         return False
     if key in BARE_TITLES:
         return False
@@ -717,6 +937,11 @@ def extract_group_labels(text: str) -> list[str]:
             seen.add(name)
             hits.append(name)
     for match in GROUP_GENERIC_RE.finditer(body):
+        name = normalize_name(match.group(0))
+        if name and name not in seen:
+            seen.add(name)
+            hits.append(name)
+    for match in GROUP_LOCATED_RE.finditer(body):
         name = normalize_name(match.group(0))
         if name and name not in seen:
             seen.add(name)
@@ -1239,8 +1464,11 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
 
 
 def _is_dirty_cast_name(name: str) -> bool:
+    if is_protected_lead(name) or is_a_tier_prince_name(name):
+        return False
     return (
-        is_dialogue_fragment(name)
+        is_banlist_name(name)
+        or is_dialogue_fragment(name)
         or is_clause_fragment(name)
         or is_generic_title(name)
         or is_group_label(name)
@@ -1251,12 +1479,40 @@ def _is_dirty_cast_name(name: str) -> bool:
 
 
 def _is_a_class_prince(name: str) -> bool:
-    if not is_registerable_name(name) or is_bare_brand(name):
+    if is_bare_brand(name):
+        return False
+    if is_a_tier_prince_name(name):
+        return True
+    if not is_registerable_name(name):
         return False
     key = normalize_name(name)
     if "王子" in key:
         return True
     return brand_family(key) is not None
+
+
+def prune_dirty_cast_characters(cast: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Merge-time reject: drop B-class CHAR rows. Not a post-hoc dogfood edit.
+
+    Protects 程序员/豆包 and A-tier princes / library-backed rows.
+    """
+    if not isinstance(cast, dict):
+        return []
+    chars = list(cast.get("characters") or [])
+    kept: list[dict[str, Any]] = []
+    removed: list[dict[str, Any]] = []
+    for row in chars:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "")
+        if row.get("library_ref") or is_protected_lead(name) or is_a_tier_prince_name(name) or is_registerable_name(name):
+            kept.append(row)
+            continue
+        removed.append({"id": row.get("id"), "name": name})
+    if removed:
+        cast["characters"] = kept
+        cast["version"] = (cast.get("version") or 0) + 1
+    return removed
 
 
 def _shot_prince_signal(row: dict[str, Any]) -> bool:
@@ -1358,6 +1614,7 @@ def auto_merge_named_cast(
     cast = rec.get("cast")
     if not isinstance(cast, dict):
         return rows, []
+    prune_dirty_cast_characters(cast)
     outline_body = (rec.get("outline") or {}).get("body_md")
     hits = collect_named_hits(rows, cast=cast, outline_body=outline_body)
     by_name, _ = _cast_name_index(cast)

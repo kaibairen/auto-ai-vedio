@@ -1,0 +1,421 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N3 Unit Cards + Library stubs API
+  version: 0.1.0
+  description: |
+    单元剧 `pipeline_profile=drama` 的 **D-N3（本集 CHAR/SCENE 工作副本卡）** 与 **门 G3** 薄接口 +
+    `libraries/` schema / attach / promote stub（021a + 021c）。
+
+    ## 权威
+    - ACCEPT-AIV-021-DESIGN-v0 冻结条 **F1–F3**
+    - DESIGN-021-PRD / DIR / CAM / LEARN · LIBRARY-SPEC-v0
+    - OpenAPI **0.1.0** 诚实增量（不升 0.2.0）
+    - docs≠PASS；ForcePass=never；ACCEPT≠实施；≠产品/G2/G3 PASS
+
+    ## 冻结条
+    - **F1**：G3 允许无图薄确认；缺 ref → warn「视觉弱绑定 · 下游一致性自负」，**不挡** confirm/reject。
+      `usable_for_n4` 才是缺 CHAR/SCENE ref 的硬门。G3 pass ≠ usable_for_n4。
+    - **F2**：SCENE = thin stub / one_line；不发明虚假 KEEP SCENE 模板路径。
+    - **F3**：N3 可观测字段只有 `template_paths` / `prompt_paths`。**.prompt 不得写入** D-N1/D-N2 `skill_paths`。不重开 018b。
+
+    ## 硬规则
+    - G2 未锁 → D-N3 写路径 **409 `upstream_unlocked`**
+    - 单门锁：`POST .../gates/g3/confirm`；force_pass / force / skip_gate → **400 `force_pass_forbidden`**
+    - G3 pass → locked；`next_edges:["D-N4"]`；**不自动开 D-N4**
+    - attach / promote **不**跳过本集 G3；promote **不**自动标 G3 pass
+    - D12–D15 只挂起面；`project_scope` 可表达；chosen=null；无静默 auto-promote
+  x-assign: AIV-021a-021c
+  x-date: '2026-09-30'
+servers:
+  - url: /api/v0
+tags:
+  - name: N3Cards
+  - name: Gates
+  - name: Library
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/n3:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N3Cards]
+      operationId: getDramaN3
+      summary: 读 D-N3 卡投影 + 故事板裁剪 + G3（工作台 JSON dump）
+      description: G2 未锁 → 409 `upstream_unlocked`。不自动物化卡。
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N3Cards]
+      operationId: getN3Cards
+      summary: 读本集工作副本卡
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/materialize:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N3Cards]
+      operationId: materializeN3Cards
+      summary: 自 cast 物化本集 CHAR/SCENE 工作副本
+      description: |
+        仅从本集 cast 的 CHAR-* / SCENE-* 派生；禁止自由发明 ID；
+        系统音/群杂/B 档不开 CHAR。G2 须锁定。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3MaterializeRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/storyboard-crop:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N3Cards]
+      operationId: getN3StoryboardCrop
+      summary: N3 故事板裁剪（只读投影既有 D-N2 列）
+      description: 不扩 D-N2 schema；不改写 G2 分镜规格。
+      responses:
+        '200':
+          description: OK
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/attach:
+    post:
+      tags: [Library]
+      operationId: attachN3Card
+      summary: attach CHAR@version / SCENE@version → 本集工作副本
+      description: attach ≠ 跳过 G3。若 G3 已锁则清锁重审。
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3AttachRequest'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/promote:
+    post:
+      tags: [Library]
+      operationId: promoteN3Card
+      summary: 显式 promote stub（写入库新 version）
+      description: promote 不自动把本集 G3 标为 locked/pass。禁 auto_promote。
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3PromoteRequest'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /projects/{project_id}/episodes/{ep}/gates/g3:
+    get:
+      tags: [Gates]
+      operationId: getGateG3
+      summary: 读门 G3
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateG3Envelope'
+
+  /projects/{project_id}/episodes/{ep}/gates/g3/confirm:
+    post:
+      tags: [Gates]
+      operationId: confirmGateG3
+      summary: 确认/驳回门 G3（唯一锁入口）
+      description: |
+        前置 G2 locked；否则 409 `upstream_unlocked`。
+        pass → locked；next_edges=["D-N4"]；不创建 D-N4 job。
+        reject → 回改。
+        force_pass/force/skip_gate → 400 `force_pass_forbidden`。
+        缺 ref 仅 warn，不挡 pass；usable_for_n4 仍可为 false。
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GateConfirmRequest'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/library:
+    get:
+      tags: [Library]
+      operationId: getProjectLibrary
+      summary: 项目内 libraries/ 投影（角色优先；场景薄 stub）
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+
+  /projects/{project_id}/library/policy:
+    get:
+      tags: [Library]
+      operationId: getLibraryPolicy
+      summary: D12–D15 挂起面（chosen=null，可逆默认）
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+
+components:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, pattern: '^EP\\d{2,}$' }
+  responses:
+    BadRequest:
+      description: 400
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: force_pass_forbidden, message: ForcePass=never，禁止跳过 G3 }
+    Conflict:
+      description: 409
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            upstream_unlocked:
+              value:
+                ok: false
+                error: { code: upstream_unlocked, message: D-N2 G2 未锁定，禁止写入 D-N3 }
+            locked:
+              value:
+                ok: false
+                error: { code: locked, message: G3 已锁定；改卡须 unlock_edit }
+    Unprocessable:
+      description: 422
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - validation
+        - not_found
+        - conflict
+        - locked
+        - upstream_unlocked
+        - stale_upstream
+        - version_conflict
+        - episode_abandoned
+        - force_pass_forbidden
+        - wrong_profile
+        - cards_empty
+        - card_id_not_in_cast
+        - card_incomplete
+        - card_missing_for_shot
+        - invented_scene_template
+        - auto_promote_forbidden
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        messages:
+          type: object
+          properties:
+            zh: { type: string }
+            en: { type: string }
+        details: { type: object, additionalProperties: true }
+    ErrorEnvelope:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { $ref: '#/components/schemas/ErrorBody' }
+    GateConfirmRequest:
+      type: object
+      required: [decision, actor]
+      additionalProperties: false
+      description: additionalProperties=false 拒绝 force_pass/force/skip_gate
+      properties:
+        decision: { type: string, enum: [pass, reject] }
+        note: { type: string }
+        actor: { type: string, minLength: 1 }
+        idempotency_key: { type: string }
+    N3MaterializeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actor: { type: string }
+        unlock_edit: { type: boolean, default: false }
+    N3AttachRequest:
+      type: object
+      required: [id, version]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        version: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [character, scene] }
+        actor: { type: string }
+    N3PromoteRequest:
+      type: object
+      required: [id]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [character, scene] }
+        actor: { type: string }
+        note: { type: string }
+    WorkingCard:
+      type: object
+      required: [id, kind, name]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [character, scene] }
+        name: { type: string }
+        one_line: { type: string }
+        origin: { type: string, enum: [local, attached] }
+        binding: { type: string }
+        library_ref:
+          type: object
+          nullable: true
+        refs: { type: array, items: { type: object } }
+        missing_ref: { type: boolean }
+        weak_binding: { type: boolean }
+        template_status: { type: string, nullable: true }
+        template_path: { type: string, nullable: true }
+    N3Cards:
+      type: object
+      properties:
+        characters:
+          type: array
+          items: { $ref: '#/components/schemas/WorkingCard' }
+        scenes:
+          type: array
+          items: { $ref: '#/components/schemas/WorkingCard' }
+        version: { type: integer }
+        locked: { type: boolean }
+        usable_for_n4: { type: boolean }
+        materialized: { type: boolean }
+    N3Envelope:
+      type: object
+      required: [ok, node]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N3] }
+        cards: { $ref: '#/components/schemas/N3Cards' }
+        storyboard_crop: { type: object }
+        gate: { $ref: '#/components/schemas/GateG3Status' }
+        next_edges: { type: array, items: { type: string } }
+        usable_for_n4: { type: boolean }
+        template_paths: { type: array, items: { type: string } }
+        prompt_paths: { type: array, items: { type: string } }
+        warnings: { type: array, items: { type: object } }
+        auto_open_dn4: { type: boolean, enum: [false] }
+        docs_pass: { type: boolean, enum: [false] }
+    GateG3Status:
+      type: object
+      required: [gate_id, state, locked, version]
+      properties:
+        gate_id: { type: string, enum: [g3] }
+        state: { type: string, enum: [idle, ready, passed, rejected] }
+        locked: { type: boolean }
+        version: { type: integer }
+        last_decision: { type: string, enum: [pass, reject], nullable: true }
+        note: { type: string, nullable: true }
+        actor: { type: string, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+    GateG3Envelope:
+      type: object
+      required: [ok, gate]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N3] }
+        gate: { $ref: '#/components/schemas/GateG3Status' }
+        cards: { $ref: '#/components/schemas/N3Cards' }
+        usable_for_n4: { type: boolean }
+        next_edges: { type: array, items: { type: string } }
+        template_paths: { type: array, items: { type: string } }
+        prompt_paths: { type: array, items: { type: string } }
+        auto_open_dn4: { type: boolean, enum: [false] }

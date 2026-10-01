@@ -53,6 +53,8 @@ class LlmProvider:
             "Do NOT write 提示词, 宫格, Seedance, 分镜表, or 成稿台词",
             f"shot_cap hard cap {shot_cap}",
             "Ceiling is outline/beats only (D-N1), not D-N2",
+            "characters[].name must look like a person (程序员/豆包/GPT(CODEX)王子/Opus5.5(CURSOR)王子). Never open CHAR from 吐槽两位王子/技术王子/幕里两位王子/两位王子/两侧王子/幕里…王子 or bare CURSOR/CODEX",
+            "scenes[].name must be a spatial noun (侧边栏空间/避难所门厅/深夜IDE战场). Events/props/actions go in one_line. Avoid 侧边栏奶茶时刻 / 开源避难所入口 as the field name",
         ]
         if preattached:
             rules.extend(

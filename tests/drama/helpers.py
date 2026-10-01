@@ -10,6 +10,7 @@ from aiv_drama.models import (
     ProjectCreate,
 )
 from aiv_drama.service import DramaService
+from aiv_drama_n2.models import StoryboardGenerateRequest
 
 
 def seed_project_episode(
@@ -94,6 +95,17 @@ def generate_ready(svc: DramaService, pid: str, lane: str = "female"):
 def lock_g1b(svc: DramaService, pid: str, ep: str = "EP01", actor: str = "yangzhou"):
     generate_ready(svc, pid)
     return svc.confirm_gate(pid, ep, {"decision": "pass", "actor": actor})
+
+
+def lock_g2(svc: DramaService, pid: str, ep: str = "EP01", actor: str = "yangzhou"):
+    lock_g1b(svc, pid, ep=ep, actor=actor)
+    svc.generate_storyboard(
+        pid,
+        ep,
+        StoryboardGenerateRequest(provider="fixture"),
+        raw={"provider": "fixture"},
+    )
+    return svc.confirm_gate_g2(pid, ep, {"decision": "pass", "actor": actor})
 
 
 def sample_row(
