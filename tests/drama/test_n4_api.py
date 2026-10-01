@@ -59,7 +59,8 @@ def test_openapi_n4_copy_served(client):
     assert "usable_for_n4_false" in text
     assert "EP##-prompts.jsonl" in text or "EP01-prompts.jsonl" in text
     assert "force_pass_forbidden" in text
-    assert "D-N4 is not implemented" not in text
+    assert "/drama/n4" in text
+    assert "usable_for_n4=false" in text
 
 
 def test_http_assemble_and_consumer(client):
