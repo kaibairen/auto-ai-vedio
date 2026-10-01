@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7 — AIV-025 Class-D thicken SHOULD + named_cast leak patch (docs≠PASS)
+
+Engineering fix stacked on PR#15 tip `01f6c7dc`. ForcePass=never. Does **not** merge to main. Does not rewrite eng-015/019/020*/021/023-live. OpenAPI stays **0.1.x**. **docs≠PASS** · ≠ product / G2 / G3 / LOOP-PASS.
+
+- **Track A**: Class-D closed set unchanged; D≥8 hard floor kept. Storyboard Skill/guide + N2 LLM rules rotate WHIP_*/DOLLY_ZOOM/ROLL/HANDHELD/ORBIT with duration 8|10 on the same row. Validate emits SHOULD warns `class_d_count_below_suggest` / `class_d_kinds_below_suggest` / `class_d_monoculture` — never error, never alone block `ready_for_n4`.
+- **Track B**: NAME-slot banlist increment (LK-01…06 + PRD leak table). Protect 程序员/豆包 and A-tier princes. one_line/outline prose 技术王子/两位王子 is not a name deny. Bare「王子」folds to 03/04. Not an Acc#3 mega-track reopen.
+- Tests: `tests/drama/test_025_hygiene.py`. ForcePass still 400.
+
 ## 0.2.6 — AIV-023 named_cast Acc#3 banlist + SCENE bucket + Class-D ≥8 (docs≠PASS)
 
 Engineering fix on PR#14 tip `39ce9c10`. ForcePass=never. Does **not** merge to main. Does not rewrite eng-015/019/020*/021-live. OpenAPI stays **0.1.x**. **docs≠PASS** · ≠ product / G2 / G3 / LOOP-PASS.

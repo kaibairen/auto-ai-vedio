@@ -80,6 +80,9 @@ ISSUE_CODES: frozenset[str] = frozenset(
         "named_cast_row_gap",
         "named_cast_auto_merged",
         "duration_below_camera_floor",
+        "class_d_count_below_suggest",
+        "class_d_kinds_below_suggest",
+        "class_d_monoculture",
     }
 )
 
@@ -169,6 +172,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "duration_below_camera_floor": {
         "zh": "类 D 运镜（手持/急推急拉/环绕/滑动变焦/旋转）时长须 ≥8 秒。请升到 8 或 10，勿停留在 5 秒档。",
         "en": "Class-D camera moves (HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL) require duration_s ≥ 8.",
+    },
+    "class_d_count_below_suggest": {
+        "zh": "约 12 镜板上 Class-D 条数低于建议（目标 ≥5；短板 ≥3）。此为软建议，不单独挡分镜门审或出片就绪。",
+        "en": "Class-D shot count is below the SHOULD suggest. Warning only; does not alone block G2 or ready_for_n4.",
+    },
+    "class_d_kinds_below_suggest": {
+        "zh": "Class-D 相异枚举种类低于建议（目标 ≥4；短板 ≥3）。请轮换晃镜，勿只堆一种。软建议，不单独挡门。",
+        "en": "Class-D distinct kinds are below the SHOULD suggest. Rotate WHIP_*/DOLLY_ZOOM/ROLL/HANDHELD/ORBIT. Warning only.",
+    },
+    "class_d_monoculture": {
+        "zh": "单一 Class-D 枚举超过 ⌈条数/2⌉ 建议上限。勿用同一种晃镜填满条数。软建议，不单独挡门。",
+        "en": "One Class-D kind exceeds the ⌈count/2⌉ SHOULD cap. Warning only; does not alone block ready_for_n4.",
     },
     "ready_for_n4_requires_tool_profile": {
         "zh": "请先选择出片工具。未选工具时不能进入出片准备。",

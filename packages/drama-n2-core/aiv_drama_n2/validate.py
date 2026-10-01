@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import re
+from collections import Counter
 from typing import Any
 
 from aiv_drama.config import SHOT_CAP_HARD
@@ -112,6 +114,13 @@ COMPLEX_CAMERAS = frozenset({"WHIP_PUSH", "WHIP_PULL", "DOLLY_ZOOM", "ROLL", "HA
 CLASS_D_CAMERAS = COMPLEX_CAMERAS
 CLASS_D_DURATION_FLOOR = 8
 DURATION_BELOW_CAMERA_FLOOR = "duration_below_camera_floor"
+CLASS_D_COUNT_BELOW_SUGGEST = "class_d_count_below_suggest"
+CLASS_D_KINDS_BELOW_SUGGEST = "class_d_kinds_below_suggest"
+CLASS_D_MONOCULTURE = "class_d_monoculture"
+# PUSH/PULL/CRANE_*/STATIC_TO_MOVE are not Class-D (R-025-CAM-D0).
+CLASS_D_SUGGEST_CODES = frozenset(
+    {CLASS_D_COUNT_BELOW_SUGGEST, CLASS_D_KINDS_BELOW_SUGGEST, CLASS_D_MONOCULTURE}
+)
 STORYBOARD_SKILL_PATH = ".skill/writing/动态漫-转分镜/SKILL.md"
 SEEDANCE_SKILL_PATH = ".skill/generation/Seedance2.0-分镜"
 
@@ -212,6 +221,86 @@ def inherit_shot_cap(outline_cap: Any, override: int | None = None) -> int:
             node=NODE_DN2,
         )
     return cap
+
+
+def class_d_suggest_thresholds(shot_count: int) -> tuple[int, int]:
+    """SHOULD count/kinds for Class-D thicken. Not a hard gate.
+
+    ≤8 shots → ≥3 / ≥3; ~10–14 (incl. 12) → ≥5 / ≥4; ≥16 → ≥⌈n×0.35⌉ / ≥4.
+    """
+    n = max(0, int(shot_count or 0))
+    if n <= 8:
+        return 3, 3
+    if n >= 16:
+        return max(4, math.ceil(n * 0.35)), 4
+    return 5, 4
+
+
+def class_d_shot_cameras(rows: list[dict[str, Any]] | None) -> list[str]:
+    out: list[str] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        camera = str(row.get("camera") or "").strip().upper()
+        if camera in CLASS_D_CAMERAS:
+            out.append(camera)
+    return out
+
+
+def collect_class_d_suggest_issues(
+    rows: list[dict[str, Any]] | None,
+    *,
+    issue_fn=issue,
+) -> list[dict[str, Any]]:
+    """SHOULD density warns. Never severity=error; must not alone block N4."""
+    cameras = class_d_shot_cameras(rows)
+    shot_count = len(rows or [])
+    need_count, need_kinds = class_d_suggest_thresholds(shot_count)
+    d_count = len(cameras)
+    kinds = sorted(set(cameras))
+    issues: list[dict[str, Any]] = []
+    if d_count < need_count:
+        issues.append(
+            issue_fn(
+                "warn",
+                CLASS_D_COUNT_BELOW_SUGGEST,
+                "Class-D shot count below SHOULD suggest; rewrite guidance only — does not block ready_for_n4",
+                field="camera",
+                class_d_count=d_count,
+                suggest=need_count,
+                shot_count=shot_count,
+            )
+        )
+    if len(kinds) < need_kinds:
+        issues.append(
+            issue_fn(
+                "warn",
+                CLASS_D_KINDS_BELOW_SUGGEST,
+                "Class-D distinct kinds below SHOULD suggest; rotate WHIP_*/DOLLY_ZOOM/ROLL/HANDHELD/ORBIT",
+                field="camera",
+                class_d_kinds=kinds,
+                class_d_kind_count=len(kinds),
+                suggest=need_kinds,
+                shot_count=shot_count,
+            )
+        )
+    if d_count:
+        cap = math.ceil(d_count / 2)
+        top_kind, top_n = Counter(cameras).most_common(1)[0]
+        if top_n > cap:
+            issues.append(
+                issue_fn(
+                    "warn",
+                    CLASS_D_MONOCULTURE,
+                    "one Class-D kind exceeds ⌈count/2⌉ SHOULD cap; do not stack a single camera",
+                    field="camera",
+                    camera=top_kind,
+                    count=top_n,
+                    cap=cap,
+                    class_d_count=d_count,
+                )
+            )
+    return issues
 
 
 def extract_bridge_ids(body_md: str) -> list[str]:
@@ -534,6 +623,8 @@ def collect_issues(
                     field="notes",
                 )
             )
+
+    issues.extend(collect_class_d_suggest_issues(rows, issue_fn=issue))
 
     if not tool_profile:
         issues.append(

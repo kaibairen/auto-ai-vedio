@@ -28,4 +28,6 @@ CHAR / SCENE **分桶**。空间短名不出 `b_class_skipped`。生成侧可吸
 
 `HANDHELD` `WHIP_*` `ORBIT` `DOLLY_ZOOM` `ROLL`：默认+吸附 **≥8**。有 `tool_profile` 仍 &lt;8 → 硬 `duration_below_camera_floor`；未选 profile → 薄 warn。
 
+025 加厚软门与漏网扩表示例见 [`drama-025-hygiene.md`](drama-025-hygiene.md)。
+
 — docs≠PASS · ForcePass=never —
