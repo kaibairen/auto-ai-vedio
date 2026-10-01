@@ -11,6 +11,7 @@ IMPL on main tip `9477302b`. ForcePass=never. Does **not** merge to main. Does n
 - **SCENE 同名**: ID authoritative; warn `duplicate_scene_name`; does not hard-block G3; no silent ID merge.
 - **eng-029**: same `title_intent` fingerprint lineage as eng-027 → materialize → thicken → thickened card samples. SUCCESS ≠ green N4.
 - Tests: `tests/drama/test_n3_thicken.py` (happy path + hard bans). OpenAPI stays **0.1.x**. **docs≠PASS**.
+- **LOOP-CONTINUE**: SCENE `弹窗审判庭` (courtroom/space noun) materializes; `is_scene_b_class` no longer inherits CHAR `弹窗*` prefix skip. Bare `弹窗` / `弹窗字` / `系统音` and CHAR `弹窗王子` still DENY. Does not rewrite shot `scene_id` or dogfood cast names.
 
 ## 0.2.7 — AIV-025 Class-D thicken SHOULD + named_cast leak patch (docs≠PASS)
 
