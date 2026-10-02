@@ -7,9 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from aiv_drama.errors import AppError
-from aiv_drama_n3.cards import has_usable_ref
-from aiv_drama_n3.library import md5_file
 from aiv_drama_look.paths import CHAR_USABLE_ROLES, reject_hotlink_path
+from aiv_drama_n3.refs import has_usable_ref, md5_file, refresh_card_ref_flags
 from aiv_schema.models import NODE_DN3
 
 
@@ -57,8 +56,7 @@ def append_ref(card: dict[str, Any], ref: dict[str, Any]) -> dict[str, Any]:
     if not replaced:
         out.append(item)
     updated["refs"] = out
-    updated["missing_ref"] = not has_usable_ref(updated)
-    updated["weak_binding"] = updated["missing_ref"]
+    refresh_card_ref_flags(updated)
     updated.pop("usable_for_n4", None)
     return updated
 
@@ -68,8 +66,6 @@ def _same_look_slot(left: str | None, right: str | None) -> bool:
 
 
 def char_has_face_or_full(card: dict[str, Any]) -> bool:
-    if card.get("kind") != "character":
-        return has_usable_ref(card)
     return has_usable_ref(card)
 
 

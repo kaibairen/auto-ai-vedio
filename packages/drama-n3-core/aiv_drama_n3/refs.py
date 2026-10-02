@@ -99,6 +99,14 @@ def resolve_ref_file(
         if root is None:
             continue
         candidates.append(Path(root) / raw)
+    data_dir = getattr(settings, "data_dir", None)
+    if data_dir is not None:
+        # DESIGN path episodes/<ep>/n3/looks/... lives under data_dir/projects/<pid>/.
+        projects = Path(data_dir) / "projects"
+        if projects.is_dir():
+            for proj in projects.iterdir():
+                if proj.is_dir():
+                    candidates.append(proj / raw)
     seen: set[str] = set()
     for cand in candidates:
         key = str(cand)

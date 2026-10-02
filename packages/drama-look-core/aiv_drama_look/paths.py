@@ -1,11 +1,22 @@
-"""Looks tree + filename + hotlink guards. DESIGN-AIV-031-LOOK / ENG §1–§2."""
+"""Looks tree wrappers over BE aiv_drama_n3.looks (DESIGN-AIV-031-LOOK §1–§2).
+
+Authority string: episodes/<ep>/n3/looks/{char|scene}/<card_id>/{role}_{view}.png
+First-round dogfood: CHAR face_front · SCENE plate_empty.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlparse
 
 from aiv_drama.errors import AppError
+from aiv_drama_n3.looks import (
+    ensure_looks_card_dirs,
+    looks_card_dir,
+    looks_filename,
+    looks_relpath as be_looks_relpath,
+    looks_web_refs_dir,
+)
+from aiv_drama_n3.refs import is_hotlink_url, reject_hotlink_path as be_reject_hotlink_path
 from aiv_schema.models import NODE_DN3
 
 KIND_CHAR = "character"
@@ -16,8 +27,6 @@ SCENE_ROLES = frozenset({"plate", "look"})
 PROVENANCE_ROLES = frozenset({"style_ref", "web_source"})
 ALLOWED_ROLES = CHAR_USABLE_ROLES | SCENE_ROLES | PROVENANCE_ROLES
 ALLOWED_VIEWS = frozenset({"front", "side", "three_quarter", "empty", "ls"})
-
-HOTLINK_SCHEMES = frozenset({"http", "https", "data", "ftp"})
 
 
 def kind_bucket(kind: str) -> str:
@@ -35,52 +44,28 @@ def default_role(kind: str) -> str:
     return "plate" if kind == KIND_SCENE else "face"
 
 
-def looks_filename(role: str, view: str) -> str:
-    return f"{role}_{view}.png"
-
-
 def looks_relpath(episode_id: str, kind: str, card_id: str, role: str, view: str) -> str:
     """Canonical refs[].path (DESIGN example). Resolvable via normalize_refs."""
-    name = looks_filename(role, view)
-    return f"episodes/{episode_id}/n3/looks/{kind_bucket(kind)}/{card_id}/{name}"
+    return be_looks_relpath(episode_id, kind, card_id, filename=looks_filename(role, view))
 
 
 def looks_absdir(episode_dir: Path, kind: str, card_id: str) -> Path:
-    return Path(episode_dir) / "n3" / "looks" / kind_bucket(kind) / card_id
+    return looks_card_dir(episode_dir, kind, card_id)
 
 
 def looks_abspath(episode_dir: Path, kind: str, card_id: str, role: str, view: str) -> Path:
-    return looks_absdir(episode_dir, kind, card_id) / looks_filename(role, view)
+    return looks_card_dir(episode_dir, kind, card_id) / looks_filename(role, view)
 
 
 def web_refs_dir(episode_dir: Path, kind: str, card_id: str) -> Path:
-    return looks_absdir(episode_dir, kind, card_id) / "web_refs"
-
-
-def is_hotlink_url(path: str | None) -> bool:
-    text = (path or "").strip()
-    if not text:
-        return False
-    lowered = text.lower()
-    if lowered.startswith(("http://", "https://", "data:", "ftp://")):
-        return True
-    parsed = urlparse(text)
-    return parsed.scheme in HOTLINK_SCHEMES
+    return looks_web_refs_dir(episode_dir, kind, card_id)
 
 
 def reject_hotlink_path(path: str | None) -> str:
     text = (path or "").strip()
     if not text:
         raise AppError(422, "validation", "refs[].path 不可为空", node=NODE_DN3, field="path")
-    if is_hotlink_url(text):
-        raise AppError(
-            400,
-            "hotlink_url_forbidden",
-            "禁热链 URL 当 refs[].path；须先落盘本地文件再挂 md5",
-            node=NODE_DN3,
-            field="path",
-        )
-    return text
+    return be_reject_hotlink_path(text)
 
 
 def validate_role(kind: str, role: str) -> str:
@@ -99,3 +84,7 @@ def validate_view(view: str) -> str:
     if chosen not in ALLOWED_VIEWS:
         raise AppError(422, "validation", f"view 须为 {sorted(ALLOWED_VIEWS)}", view=chosen, node=NODE_DN3)
     return chosen
+
+
+def ensure_card_looks_dirs(episode_dir: Path, kind: str, card_id: str) -> Path:
+    return ensure_looks_card_dirs(episode_dir, kind, card_id)

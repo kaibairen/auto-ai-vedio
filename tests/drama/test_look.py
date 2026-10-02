@@ -77,6 +77,17 @@ def _materialize(svc, pid, *, tool_profile="seedance_2"):
 # ----- path / md5 / role -------------------------------------------------------
 
 
+def test_n3_image_providers_remain_hooks():
+    from aiv_drama_n3.image_providers import generate_look as hook
+
+    try:
+        hook("CHAR-01")
+    except RuntimeError as exc:
+        assert "drama-look-core" in str(exc)
+        return
+    raise AssertionError("image_providers.generate_look must stay a hook")
+
+
 def test_looks_relpath_matches_design():
     path = looks_relpath("EP01", "character", "CHAR-01", "face", "front")
     assert path == "episodes/EP01/n3/looks/char/CHAR-01/face_front.png"
@@ -90,9 +101,9 @@ def test_hotlink_url_rejected_as_ref_path():
     assert not is_hotlink_url("episodes/EP01/n3/looks/char/CHAR-01/face_front.png")
     exc = _err(lambda: reject_hotlink_path("https://cdn.example/face.png"))
     assert exc.status_code == 400
-    assert exc.code == "hotlink_url_forbidden"
+    assert exc.code == "hotlink_ref_forbidden"
     exc2 = _err(lambda: make_ref(path="https://evil/x.png", md5="abc", role="face"))
-    assert exc2.code == "hotlink_url_forbidden"
+    assert exc2.code == "hotlink_ref_forbidden"
 
 
 def test_md5_and_role_gate():

@@ -21,7 +21,7 @@
 
 ## 未做（ENG / 挂起面）
 
-- 真 Seedream / wan 客户端与狗粮出图（`aiv_drama_n3/image_providers.py` 仅 hook）。
+- 真 Seedream / wan 客户端与狗粮出图：ENG `packages/drama-look-core`（本分支已接线）。`aiv_drama_n3/image_providers.py` **仍只是 hook**。
 - STYLE-REF prompt 组装。
 - `usable_for_n4=true` 翻转 API（仅挂起面人审；本拍不实现）。N4 assemble 成功测用 **test-only** `mark_usable_for_n4_reviewed` 模拟挂起面，**不是**产品缝。
 

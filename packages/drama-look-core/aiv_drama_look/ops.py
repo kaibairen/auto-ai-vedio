@@ -13,6 +13,8 @@ from aiv_drama_look.provider.select import build_image_provider
 from aiv_drama_look.sku import DEFAULT_SKU
 from aiv_drama_n3.cards import all_cards, has_usable_ref
 from aiv_drama_n3.library import KIND_CHAR, parse_kind
+from aiv_drama_n3.looks import ensure_looks_card_dirs
+from aiv_drama_n3.refs import refresh_n3_ref_flags
 from aiv_drama_n3.validate import CARDS_EMPTY_MESSAGE, CAST_ONLY_MESSAGE, reject_force_keys_n3
 from aiv_schema.models import NODE_DN3
 
@@ -83,7 +85,9 @@ class DramaLookOps:
         cards["updated_at"] = now_iso()
         cards["updated_by"] = req.actor
         # Hang only. Do not compute-flip usable_for_n4 to true.
+        refresh_n3_ref_flags(rec.get("n3"))
         cards["usable_for_n4"] = False
+        ensure_looks_card_dirs(episode_dir, kind, req.id)
         rec["n3"]["look"] = result["look_state"]
         rec["episode"]["versions"]["cards"] = cards["version"]
         rec["episode"]["next_edges"] = [NODE_DN3]
