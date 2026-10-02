@@ -1,12 +1,12 @@
 # auto-ai-vedio
 
-KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 分镜表（门 G2）** and **D-N3 单元卡（门 G3）+ library 薄挂点** runtime for `pipeline_profile=drama`.
+KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 分镜表（门 G2）**、**D-N3 单元卡（门 G3）+ library 薄挂点** and **D-N4 确定性按镜拼装** runtime for `pipeline_profile=drama`.
 
 - `.skill/` — Skill packages (writing + generation). D-N1 **read-only** 女/男频编剧；D-N2 **read-only borrow** `.skill/writing/动态漫-转分镜`（`borrowed_dongman`）。不改教材正文。
 - `.prompt/` — Prompt / instruction documents (koubo, generation, consistency, seedance). **Not** used by this drama runtime.
-- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
-- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` — OpenAPI **0.1.0** copies
-- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` — humans + bots; koubo-N1 isolation
+- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
+- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` — OpenAPI **0.1.0** copies
+- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` — humans + bots; koubo-N1 isolation
 
 docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. 018c workbench ships Screen E/F/G (min table + G2 button state); not a product PASS.
 
@@ -52,6 +52,16 @@ aiv drama g3 confirm --project proj_01 --ep EP01 --decision pass --actor yangzho
 ```
 
 See [`docs/drama-n3.md`](docs/drama-n3.md). docs≠PASS. ForcePass=never.
+
+## Drama D-N4 assemble (026)
+
+After G2+G3 are locked **and** `ready_for_n4=true` **and** `usable_for_n4=true` (real CHAR/SCENE refs on disk), `POST .../drama/n4/assemble` fills DIR slots (not LLM) and writes `episodes/EP##/EP##-prompts.jsonl`. `usable_for_n4=false` returns **409** + a missing-ref list and **does not write**. Input alias `seedance_2_0` persists as `seedance_2`. Bare `/n4` is isolated; use `/drama/n4/...`. N5 is not opened.
+
+```bash
+aiv drama n4 assemble --project proj_01 --ep EP01 --tool-profile seedance_2_0 --actor yangzhou
+```
+
+See [`docs/drama-n4.md`](docs/drama-n4.md). docs≠PASS. ForcePass=never.
 
 **provisional (D-N0/D-N1):** D3 generate requires female\|male · D12 project-scoped library (no list/search) · D13–D15 no promote/fork · shot_cap hard 12.
 

@@ -81,11 +81,11 @@ from aiv_drama_n2.named_cast import (
 )
 from aiv_drama_n2.ops import DramaN2Ops
 from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
-from aiv_drama_n3.ops import DramaN3Ops
 from aiv_drama_n3.projection import write_episode_cards
 from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import usable_for_n4
-from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, PIPELINE_DRAMA
+from aiv_drama_n4.ops import DramaN4Ops
+from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN3Ops, DramaN2Ops):
+class DramaService(DramaN4Ops, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -139,6 +139,7 @@ class DramaService(DramaN3Ops, DramaN2Ops):
             raise AppError(404, "not_found", "episode not found", project_id=project_id, episode_id=ep)
         self._ensure_n2_fields(rec)
         self._ensure_n3_fields(rec)
+        self._ensure_n4_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -193,6 +194,7 @@ class DramaService(DramaN3Ops, DramaN2Ops):
         rec["episode"]["versions"]["cast"] = (rec.get("cast") or {}).get("version") or 0
         rec["episode"]["versions"]["storyboard"] = (rec.get("storyboard") or {}).get("version") or 0
         rec["episode"]["versions"]["cards"] = ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0
+        rec["episode"]["versions"]["prompts"] = (rec.get("n4") or {}).get("assemble_version") or 0
 
     def _project_disk(self, rec: dict[str, Any]) -> None:
         ep = rec["episode"]["episode_id"]
@@ -254,6 +256,7 @@ class DramaService(DramaN3Ops, DramaN2Ops):
                 "stale": {
                     "d_n2": NODE_DN2 in stale_nodes or bool((sb or {}).get("stale")),
                     "d_n3": NODE_DN3 in stale_nodes,
+                    "d_n4": NODE_DN4 in stale_nodes or bool((rec.get("n4") or {}).get("stale")),
                 },
                 "stale_downstream": list(stale_nodes),
                 "locks": deepcopy(rec["episode"]["locks"]),
@@ -293,6 +296,17 @@ class DramaService(DramaN3Ops, DramaN2Ops):
                     meta["n3_meta"]["thicken_prompt_paths"] = list(thicken.get("prompt_paths") or [])
                     meta["n3_meta"]["fixture_hits"] = int(thicken.get("fixture_hits") or 0)
                     meta["n3_meta"]["model"] = thicken.get("model")
+            n4 = rec.get("n4") or {}
+            if n4.get("started") or n4.get("assemble_version"):
+                meta["n4_meta"] = {
+                    "started": bool(n4.get("started")),
+                    "stale": bool(n4.get("stale")),
+                    "assemble_version": n4.get("assemble_version") or 0,
+                    "fingerprint": n4.get("fingerprint"),
+                    "tool_profile": n4.get("tool_profile"),
+                    "artifact": n4.get("artifact"),
+                    "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked"))),
+                }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)
             rec["projection_dirty"] = False
@@ -565,7 +579,7 @@ class DramaService(DramaN3Ops, DramaN2Ops):
                 "aspect_ratio": body.aspect_ratio,
                 "target_duration_sec": body.target_duration_sec,
                 "locks": {"g1b": False, "g2": False, "g3": False},
-                "versions": {"brief": 0, "outline": 0, "cast": 0, "storyboard": 0, "cards": 0, "episode": 1},
+                "versions": {"brief": 0, "outline": 0, "cast": 0, "storyboard": 0, "cards": 0, "prompts": 0, "episode": 1},
                 "stale_downstream": [],
                 "next_edges": [],
                 "created_at": ts,
@@ -606,6 +620,7 @@ class DramaService(DramaN3Ops, DramaN2Ops):
                 "decided_at": None,
             },
             "n3": None,
+            "n4": None,
             "d_n4_jobs": [],
             "library_ops": [],
             "allocated_char_ids": [],

@@ -31,7 +31,8 @@
         "outline": { "type": "integer" },
         "cast": { "type": "integer" },
         "storyboard": { "type": "integer" },
-        "cards": { "type": "integer" }
+        "cards": { "type": "integer" },
+        "prompts": { "type": "integer" }
       }
     },
     "gates": {
@@ -61,6 +62,18 @@
         "prompt_paths": { "type": "array", "items": { "type": "string" } },
         "cards_version": { "type": "integer" },
         "scene_template": { "type": "string" }
+      }
+    },
+    "n4_meta": {
+      "type": "object",
+      "properties": {
+        "started": { "type": "boolean" },
+        "stale": { "type": "boolean" },
+        "assemble_version": { "type": "integer" },
+        "fingerprint": { "type": ["string", "null"] },
+        "tool_profile": { "type": ["string", "null"] },
+        "artifact": { "type": ["string", "null"] },
+        "usable_for_n4": { "type": "boolean" }
       }
     },
     "projection_dirty": { "type": "boolean" },

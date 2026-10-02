@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.9 — AIV-026 D-N4 deterministic prompt assemble (docs≠PASS)
+
+Engineering on main tip `1c3b921d` (AIV-029 N3 thicken + 弹窗审判庭 already on main). ForcePass=never. Does **not** merge to main. Does not implement N5 / 补图 / Skill·MCP / FE UI. OpenAPI **0.1.0** increment (`openapi/drama-n4.v0.yaml`). **docs≠PASS**.
+
+- New `packages/drama-n4-core`: assemble / validate / tool adapter registry. Assembly is **not** stuffed into `drama-n3-core`.
+- API: `POST .../drama/n4/assemble` · `POST .../drama/n4/validate` · `GET .../drama/n4` · `GET .../drama/n4/status`. Bare `/n4` is 404 isolation (use `/drama/n4/...`), no longer `D-N4 is not implemented`.
+- Writes `episodes/EP##/EP##-prompts.jsonl` (one shot per line) plus sidecar `EP##-prompts.v{n}.jsonl`. Soft validate does not write.
+- **Hard gates** (PRD): `G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`. `usable_for_n4=false` → **409** + missing-ref/missing-file list, **no write**. `ready_for_n4=false` → **409** `not_ready_for_n4`. Missing bound card → **422** `missing_card`. `force_reassemble` may rewrite while stale.
+- DIR slot fill (非 LLM): `join_nonempty` ref_lead→主体特征→场锚→光色(有则拼，不造平光)→action→微表情→景别→运镜→时长。对白不进正词。CAM = DESIGN-026-CAM 中文短语；一镜一主运镜；Class-D ≥8. NEG_CORE 负面非空. CHAR-/SCENE- ID → 中文特征.
+- Tool adapter: BRIEF alias `seedance_2_0` persists as closed-set **`seedance_2`**. Durations {5,8,10}; aspects 9:16|16:9|2.35:1; `max_prompt_len=800`; ref_images≤9. Overwrite traces `assemble_version` + sidecar + history. Upstream bump → N4 stale (align N3).
+- Success envelope: `path` / `g2_fingerprint` / `card_fingerprint` / `first_shot_review`. After assemble, `n4-consumer` `started=true` and can read jsonl via `prompts_path`. Tests: `tests/drama/test_n4_*.py`.
+
 ## 0.2.8 — AIV-029 N3 card text thicken (docs≠PASS)
 
 IMPL on main tip `9477302b`. ForcePass=never. Does **not** merge to main. Does not call image-gen, write look refs/md5 as success, flip `usable_for_n4`, assemble N4 jsonl, or open N5 / bot-MCP.

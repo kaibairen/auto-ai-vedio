@@ -1,7 +1,7 @@
 [project]
 name = "aiv"
 version = "0.1.0"
-description = "Drama D-N0 / D-N1 (G1b) + D-N2 storyboard (G2) + D-N3 unit cards (G3) — drama-n0n1-core + drama-n2-core + drama-n3-core + api + cli"
+description = "Drama D-N0 / D-N1 (G1b) + D-N2 storyboard (G2) + D-N3 unit cards (G3) + D-N4 prompt assemble — drama-n0n1-core + drama-n2-core + drama-n3-core + drama-n4-core + api + cli"
 readme = "readme.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -24,9 +24,9 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "apps/api", "apps/cli"]
+where = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "packages/drama-n4-core", "apps/api", "apps/cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "apps/api", "apps/cli"]
+pythonpath = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "packages/drama-n4-core", "apps/api", "apps/cli"]
 addopts = "-q"

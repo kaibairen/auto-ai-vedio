@@ -117,6 +117,12 @@ HTTP_STATUS: dict[str, int] = {
     "version_conflict": 409,
     "episode_abandoned": 409,
     "ready_for_n4_requires_tool_profile": 422,
+    "usable_for_n4_false": 409,
+    "not_ready_for_n4": 409,
+    "missing_card": 422,
+    "validation_failed": 422,
+    "duration_out_of_profile": 422,
+    "prompt_too_long": 422,
 }
 
 CHIP_UNSET = "出片：未选工具"
@@ -192,6 +198,42 @@ MESSAGES: dict[str, dict[str, str]] = {
     "force_pass_forbidden": {
         "zh": "禁止强制通过（ForcePass=never）。",
         "en": "ForcePass=never",
+    },
+    "usable_for_n4_false": {
+        "zh": "usable_for_n4=false · 缺图/缺 ref，拒绝写盘。",
+        "en": "usable_for_n4 is false; missing refs/images — jsonl not written.",
+    },
+    "bare_id_in_prompt": {
+        "zh": "prompt 禁止只留裸 CHAR-/SCENE- ID，须替换为中文特征。",
+        "en": "Prompt must not keep bare CHAR-/SCENE- ids; replace with Chinese features.",
+    },
+    "empty_negative": {
+        "zh": "negative 不可为空（NEG_CORE）。",
+        "en": "negative must be non-empty (NEG_CORE).",
+    },
+    "unsupported_tool_profile": {
+        "zh": "本拍工具闭集只落盘 seedance_2（入参别名 seedance_2_0 可接受）。",
+        "en": "This shot persists only seedance_2 (seedance_2_0 is an input alias).",
+    },
+    "not_ready_for_n4": {
+        "zh": "ready_for_n4=false · 未选 tool_profile 或分镜硬检未过，拒绝写盘。",
+        "en": "ready_for_n4 is false; select a tool profile and pass N2 hard checks before assemble.",
+    },
+    "missing_card": {
+        "zh": "镜绑定 CHAR/SCENE 无卡，拒绝写盘。",
+        "en": "A bound CHAR/SCENE id has no card; jsonl not written.",
+    },
+    "validation_failed": {
+        "zh": "N4 硬规则校验失败，拒绝写盘。",
+        "en": "N4 hard validation failed; jsonl not written.",
+    },
+    "duration_out_of_profile": {
+        "zh": "duration_s 须落入 seedance_2 档 {5,8,10}。",
+        "en": "duration_s must be in seedance_2 set {5,8,10}.",
+    },
+    "prompt_too_long": {
+        "zh": "prompt 超过 adapter 上限。",
+        "en": "prompt exceeds the adapter max_prompt_len.",
     },
     "lane_required": {
         "zh": "生成大纲前必须选择女频或男频赛道。",

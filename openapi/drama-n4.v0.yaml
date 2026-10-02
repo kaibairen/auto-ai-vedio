@@ -1,0 +1,458 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N4 Deterministic Prompt Assemble API
+  version: 0.1.0
+  description: |
+    单元剧 `pipeline_profile=drama` 的 **D-N4（按镜提示词确定性拼装）**。
+    工程面填槽，**不是** LLM 写 prompt。真实能力走 `/drama/n4/...`。
+    裸 `/n4` 隔离为 404，不再返回 `D-N4 is not implemented`。
+
+    ## 权威
+    - BRIEF-AIV-026 · DESIGN 四席（冲突时优先 PRD 契约 + ENG adapter 边界）
+    - OpenAPI **0.1.0** 诚实增量（不升 0.2.0）
+    - docs≠PASS；ForcePass=never；ACCEPT≠实施；≠产品/N5 PASS
+
+    ## 冻结条
+    - **硬门**：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。`usable_for_n4=false` → **409** 且 **不写** `EP##-prompts.jsonl`，返回明确缺图/缺 ref 列表。`ready_for_n4=false` → **409** `not_ready_for_n4`。
+    - **拼装**：DIR `join_nonempty` 槽序（ref_lead→主体特征→场锚→光色有则拼→action→微表情→景别→运镜→时长）；不发明平光；对白不进正词；非 LLM。
+    - **CAM**：N2 闭集码 → 中文可执行短语；**一镜一主运镜**。Class-D 时长 ≥8。
+    - **负面**：`negative` 非空，必须含 NEG_CORE。
+    - **ID**：禁止 prompt 只留裸 `CHAR-` / `SCENE-` ID，须 ID→中文特征。缺卡 → 422 `missing_card`。
+    - **工具**：入参别名 `seedance_2_0` → 落盘闭集 **`seedance_2`**。时长 {5,8,10}；画幅 9:16|16:9|2.35:1；`max_prompt_len=800`；ref_images≤9。
+    - **stale**：上游 cards/分镜/cast 升版 → N4 stale，语义对齐 N3。覆盖写须 `assemble_version` + 旁路 `EP##-prompts.v{n}.jsonl`。`force_reassemble` 可在 stale 态重跑。
+    - **D11**：软 validate + `first_shot_review` 首镜抽查建议。无独立 G-N4。
+    - **N5 / 补图 / Skill·MCP / FE UI**：DEFER。不自动开 D-N5。
+  x-assign: AIV-026
+  x-date: '2026-10-02'
+servers:
+  - url: /api/v0
+tags:
+  - name: N4Assemble
+  - name: Consumer
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/n4:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N4Assemble]
+      operationId: getDramaN4
+      summary: 读 D-N4 拼装状态 + 已写 jsonl
+      description: G3 未锁 → 409 `upstream_unlocked`。未拼装时 started=false。
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N4Envelope'
+              example:
+                ok: true
+                node: D-N4
+                started: true
+                assemble_version: 1
+                tool_profile: seedance_2
+                artifact: episodes/EP01/EP01-prompts.jsonl
+                usable_for_n4: true
+                docs_pass: false
+                auto_open_dn5: false
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n4/status:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N4Assemble]
+      operationId: getDramaN4Status
+      summary: 薄状态（started / stale / assemble_version / missing_refs）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N4Status'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n4/validate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N4Assemble]
+      operationId: validateDramaN4
+      summary: 软校验（不写盘）
+      description: |
+        返回 issues / missing_refs / valid。缺图为 error，但不 422。
+        force_pass / force / skip_gate → 400 `force_pass_forbidden`。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N4ValidateRequest'
+            example:
+              tool_profile: seedance_2_0
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N4ValidateEnvelope'
+              example:
+                ok: true
+                valid: false
+                written: false
+                usable_for_n4: false
+                missing_refs:
+                  - {id: CHAR-01, kind: character, reason: missing_ref}
+                issues:
+                  - {severity: error, code: usable_for_n4_false, message: usable_for_n4=false · 缺图/缺 ref，拒绝写盘}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n4/assemble:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N4Assemble]
+      operationId: assembleDramaN4
+      summary: 确定性拼装并写 EP##-prompts.jsonl
+      description: |
+        写盘 iff G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4。
+        usable_for_n4=false → **409** 且不写盘，details.missing_refs 列出缺图/缺 ref。
+        ready_for_n4=false → **409** `not_ready_for_n4`。
+        成功 → 一镜一行 jsonl + 旁路 `v{n}`；覆盖写 bump `assemble_version` 并保留 history。
+        `seedance_2_0` 入参落盘 `seedance_2`。响应含 `path` / `g2_fingerprint` / `first_shot_review`。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N4AssembleRequest'
+            example:
+              tool_profile: seedance_2_0
+              aspect: '9:16'
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N4Envelope'
+              example:
+                ok: true
+                written: true
+                started: true
+                assemble_version: 1
+                tool_profile: seedance_2
+                artifact: episodes/EP01/EP01-prompts.jsonl
+                path: episodes/EP01/EP01-prompts.jsonl
+                first_shot_review:
+                  shot_id: S01
+                  message: 请人工抽查首镜
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/n4-consumer:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [Consumer]
+      operationId: getDramaN4Consumer
+      summary: N3→N4 消费面（assemble 成功后 started=true 可读 jsonl）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N4Consumer'
+              examples:
+                not_started:
+                  value:
+                    ok: true
+                    consumer: D-N4
+                    started: false
+                    usable_for_n4: false
+                assembled:
+                  value:
+                    ok: true
+                    consumer: D-N4
+                    started: true
+                    assemble_version: 1
+                    artifact: episodes/EP01/EP01-prompts.jsonl
+                    usable_for_n4: true
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, pattern: '^EP\\d{2,}$' }
+  responses:
+    BadRequest:
+      description: 400
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: force_pass_forbidden, message: ForcePass=never，禁止跳过 D-N4 硬门 }
+    Conflict:
+      description: 409
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            upstream_unlocked:
+              value:
+                ok: false
+                error: { code: upstream_unlocked, message: D-N3 G3 未锁定，禁止拼装 D-N4 }
+            stale_upstream:
+              value:
+                ok: false
+                error: { code: stale_upstream, message: 上游 cast/分镜/cards 已升版；请重新拼装 D-N4 }
+            usable_for_n4_false:
+              value:
+                ok: false
+                error:
+                  code: usable_for_n4_false
+                  message: usable_for_n4=false · 缺图/缺 ref，拒绝写盘
+                  details:
+                    written: false
+                    missing_refs:
+                      - {id: CHAR-01, kind: character, reason: missing_ref}
+                      - {id: SCENE-01, kind: scene, reason: missing_file, path: refs/SCENE-01.png}
+            not_ready_for_n4:
+              value:
+                ok: false
+                error: { code: not_ready_for_n4, message: ready_for_n4=false · 未选 tool_profile 或分镜硬检未过，拒绝写盘 }
+    Unprocessable:
+      description: 422
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            missing_card:
+              value:
+                ok: false
+                error: { code: missing_card, message: 镜绑定 CHAR/SCENE 无卡，拒绝写盘 }
+            validation_failed:
+              value:
+                ok: false
+                error: { code: validation_failed, message: N4 硬规则校验失败，拒绝写盘 }
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - validation
+        - not_found
+        - conflict
+        - locked
+        - upstream_unlocked
+        - stale_upstream
+        - version_conflict
+        - episode_abandoned
+        - force_pass_forbidden
+        - wrong_profile
+        - usable_for_n4_false
+        - missing_ref
+        - missing_file
+        - bare_id_in_prompt
+        - empty_negative
+        - empty_prompt
+        - unsupported_tool_profile
+        - storyboard_empty
+        - not_ready_for_n4
+        - missing_card
+        - validation_failed
+        - duration_out_of_profile
+        - duration_below_camera_floor
+        - prompt_too_long
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        messages:
+          type: object
+          properties:
+            zh: { type: string }
+            en: { type: string }
+        details: { type: object, additionalProperties: true }
+    ErrorEnvelope:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { $ref: '#/components/schemas/ErrorBody' }
+    N4AssembleRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actor: { type: string }
+        tool_profile:
+          type: string
+          description: 入参可为 seedance_2_0；落盘必须是 seedance_2
+          example: seedance_2_0
+        aspect:
+          type: string
+          example: '9:16'
+        unlock_edit: { type: boolean, default: false }
+        force_reassemble: { type: boolean, default: false }
+    N4ValidateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actor: { type: string }
+        tool_profile: { type: string, example: seedance_2_0 }
+        aspect: { type: string, example: '9:16' }
+    PromptLine:
+      type: object
+      required: [shot_id, duration_s, aspect, tool_profile, prompt, negative, camera, char_ids, scene_id]
+      properties:
+        shot_id: { type: string, example: S01 }
+        duration_s: { type: integer, example: 5 }
+        aspect: { type: string, example: '9:16' }
+        tool_profile: { type: string, enum: [seedance_2], example: seedance_2 }
+        prompt:
+          type: string
+          description: DIR 槽序填槽；不得只含裸 CHAR-/SCENE- ID
+        negative:
+          type: string
+          description: 必须非空且含 NEG_CORE
+        ref_images:
+          type: array
+          items: { type: string }
+        camera: { type: string, example: PUSH }
+        shot_size: { type: string, example: MS }
+        char_ids:
+          type: array
+          items: { type: string }
+        scene_id: { type: string, example: SCENE-01 }
+        char_versions: { type: object, additionalProperties: true }
+        scene_version: { type: integer, nullable: true }
+        card_versions: { type: object, additionalProperties: true }
+        cards_version: { type: integer }
+        assemble_version: { type: integer }
+        fingerprint: { type: string }
+        card_fingerprint: { type: string }
+        g2_fingerprint: { type: string }
+        storyboard_version: { type: integer }
+        skeleton_id: { type: string, example: dir-n4-skeleton-v0 }
+    N4State:
+      type: object
+      properties:
+        started: { type: boolean }
+        stale: { type: boolean }
+        assemble_version: { type: integer }
+        previous_assemble_version: { type: integer, nullable: true }
+        fingerprint: { type: string, nullable: true }
+        tool_profile: { type: string, nullable: true, enum: [seedance_2] }
+        tool_profile_input: { type: string, nullable: true, example: seedance_2_0 }
+        artifact: { type: string, nullable: true, example: episodes/EP01/EP01-prompts.jsonl }
+        shot_count: { type: integer }
+        history: { type: array, items: { type: object } }
+    N4Envelope:
+      type: object
+      required: [ok, node]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N4] }
+        n4: { $ref: '#/components/schemas/N4State' }
+        started: { type: boolean }
+        stale: { type: boolean }
+        assemble_version: { type: integer }
+        fingerprint: { type: string, nullable: true }
+        tool_profile: { type: string, nullable: true }
+        artifact: { type: string, nullable: true }
+        usable_for_n4: { type: boolean }
+        ready_for_n4: { type: boolean }
+        path: { type: string, nullable: true }
+        g2_fingerprint: { type: string, nullable: true }
+        card_fingerprint: { type: string, nullable: true }
+        first_shot_review: { type: object, additionalProperties: true }
+        missing_refs: { type: array, items: { type: object } }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/PromptLine' }
+        written: { type: boolean }
+        docs_pass: { type: boolean, enum: [false] }
+        auto_open_dn5: { type: boolean, enum: [false] }
+    N4Status:
+      type: object
+      required: [ok, node, started]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        project_id: { type: string }
+        episode_id: { type: string }
+        node: { type: string, enum: [D-N4] }
+        started: { type: boolean }
+        stale: { type: boolean }
+        assemble_version: { type: integer }
+        usable_for_n4: { type: boolean }
+        ready_for_n4: { type: boolean }
+        missing_refs: { type: array, items: { type: object } }
+        artifact: { type: string, nullable: true }
+        path: { type: string, nullable: true }
+        fingerprint: { type: string, nullable: true }
+        g2_fingerprint: { type: string, nullable: true }
+    N4ValidateEnvelope:
+      type: object
+      required: [ok, valid, written]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        valid: { type: boolean }
+        written: { type: boolean, enum: [false] }
+        usable_for_n4: { type: boolean }
+        missing_refs: { type: array, items: { type: object } }
+        issues: { type: array, items: { type: object } }
+        warnings: { type: array, items: { type: object } }
+        tool_profile: { type: string, example: seedance_2 }
+        tool_profile_input: { type: string, nullable: true, example: seedance_2_0 }
+    N4Consumer:
+      type: object
+      required: [ok, consumer, started]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        consumer: { type: string, enum: [D-N4] }
+        started: { type: boolean }
+        jobs: { type: array, items: { type: object } }
+        usable_for_n4: { type: boolean }
+        missing_refs: { type: array, items: { type: object } }
+        artifact: { type: string, nullable: true }
+        prompts_path: { type: string, nullable: true }
+        jsonl:
+          type: array
+          items: { $ref: '#/components/schemas/PromptLine' }
+        assemble_version: { type: integer }
+        stale: { type: boolean }
