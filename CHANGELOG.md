@@ -9,6 +9,7 @@ BRIEF-AIV-032. ForcePass=never. Does **not** merge to main. Does not flip `usabl
 - Face ref md5 bind **before** generate. Dry-run / recorded path when `ARK_API_KEY` is absent.
 - CLI: `aiv drama n3 generate-look`. HTTP: `POST …/drama/n3/cards/generate-look`. Screen H trigger (default dry-run).
 - Tests: `tests/drama/test_n3_look_generate.py`. Dogfood: [`docs/aiv-032-gold-sheet.md`](docs/aiv-032-gold-sheet.md).
+- **ENG-004**: post-assemble **L3 adapter default ON** (CAM-002 live-r1 FAIL 缺真背 → live-r2 sheet `6ea71bec6df9c5d2fb1a3d8aa4f279e7`). STYLE/RECIPE§4 一字不改. Disable: `AIV_LOOK_PROMPT_ADAPTER=off|0|empty`.
 
 ## 0.2.9 — AIV-026 D-N4 deterministic prompt assemble (docs≠PASS)
 

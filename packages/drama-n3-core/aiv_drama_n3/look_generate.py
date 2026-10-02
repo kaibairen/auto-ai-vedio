@@ -7,6 +7,7 @@ Does not flip usable_for_n4. Does not attach the sheet as face/full.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,38 @@ from aiv_drama_n3.seedream import (
     recorded_ark_request,
 )
 from aiv_schema.models import NODE_DN3
+
+# Post-assemble only (STYLE终句 + RECIPE§4 frozen). Default ON for gold sheet / generate-look.
+# Disable: AIV_LOOK_PROMPT_ADAPTER=off|0|false|no or empty-explicit (set but blank).
+# Custom non-empty value (not on/l3/1/true/yes) is appended as-is.
+L3_FULLBODY_BACK_ADAPTER = (
+    "【L3硬约束】左侧全身条必须并排三全身站姿：正视、90°侧视、90°真背（完整后脑至鞋跟的全身背影）；"
+    "禁止只用右侧后脑头槽顶替左区背视；禁止缺背。"
+    "Left strip MUST include full-body back view standing (head-to-toe rear), not head-only."
+)
+_ADAPTER_OFF = frozenset({"0", "false", "off", "no"})
+_ADAPTER_L3 = frozenset({"1", "true", "yes", "on", "l3"})
+
+
+def resolve_look_prompt_adapter(raw: str | None | object = ...) -> str | None:
+    """Return suffix text or None. Unset env → L3 (default ON)."""
+    if raw is ...:
+        raw = os.environ.get("AIV_LOOK_PROMPT_ADAPTER")
+    if raw is None:
+        return L3_FULLBODY_BACK_ADAPTER
+    text = str(raw).strip()
+    if not text or text.lower() in _ADAPTER_OFF:
+        return None
+    if text.lower() in _ADAPTER_L3:
+        return L3_FULLBODY_BACK_ADAPTER
+    return text
+
+
+def _maybe_append_prompt_adapter(prompt: str, *, raw: str | None | object = ...) -> str:
+    suffix = resolve_look_prompt_adapter(raw)
+    if not suffix:
+        return prompt
+    return prompt.rstrip("\n") + "\n\n" + suffix + "\n"
 
 
 def _write_bytes(path: Path, data: bytes) -> None:
@@ -72,7 +105,8 @@ def generate_gold_a_sheet(
         expected_md5=normalize_md5(expected_md5),
         card=card,
     )
-    prompt = assemble_gold_a_sheet_prompt(card)
+    prompt = _maybe_append_prompt_adapter(assemble_gold_a_sheet_prompt(card))
+    adapter = resolve_look_prompt_adapter()
     dest = Path(out_dir)
     dest.mkdir(parents=True, exist_ok=True)
     prompt_path = dest / f"{ident}-doubao-sheet-prompt.txt"
@@ -99,6 +133,7 @@ def generate_gold_a_sheet(
         "prompt_path": str(prompt_path),
         "prompt_md5": prompt_md5,
         "prompt_chars": len(prompt),
+        "prompt_adapter": "l3" if adapter == L3_FULLBODY_BACK_ADAPTER else ("custom" if adapter else None),
         "face_ref_path": bind["path"],
         "face_ref_md5": bind["md5"],
         "sheet_path": None,

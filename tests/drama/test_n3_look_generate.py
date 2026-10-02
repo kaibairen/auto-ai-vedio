@@ -23,7 +23,11 @@ from aiv_drama_n3.gold_sheet import (
     md5_text,
     verify_face_ref_md5,
 )
-from aiv_drama_n3.look_generate import generate_gold_a_sheet
+from aiv_drama_n3.look_generate import (
+    L3_FULLBODY_BACK_ADAPTER,
+    _maybe_append_prompt_adapter,
+    generate_gold_a_sheet,
+)
 from aiv_drama_n3.models import N3GenerateLookRequest, N3MaterializeRequest
 from aiv_drama_n3.seedream import (
     ARK_IMAGES_URL,
@@ -39,6 +43,8 @@ from tests.drama.helpers import lock_g2, seed_project_episode
 ROOT = Path(__file__).resolve().parents[2]
 GOLD_PROMPT = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-doubao-sheet-r1-prompt.txt"
 GOLD_CARD = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-card.yaml"
+GOLD_PROMPT_MD5 = "4cd224525bdf108b020756ea665be8dc"
+LIVE_R2_PROMPT_MD5 = "3260df75170ea5a5cbc3f0cc8dc331e7"
 runner = CliRunner()
 
 
@@ -122,6 +128,55 @@ def test_assemble_matches_eng031_gold_prompt():
     assert prompt.index(EN_IDENTITY_ANCHOR) < prompt.index(OUTPUT_SHEET_LINE)
     names = [n for n, _ in assemble_sections(_gold_card())]
     assert names == list(PROMPT_ORDER)
+    assert md5_text(prompt) == GOLD_PROMPT_MD5
+
+
+def test_adapter_off_matches_gold_prompt_md5(monkeypatch):
+    """AIV_LOOK_PROMPT_ADAPTER=off|0|empty-explicit → baseline gold assemble md5."""
+    base = assemble_gold_a_sheet_prompt(_gold_card())
+    assert md5_text(base) == GOLD_PROMPT_MD5
+    for raw in ("off", "0", "false", "no", ""):
+        monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", raw)
+        prompt = _maybe_append_prompt_adapter(base)
+        assert prompt == base
+        assert md5_text(prompt) == GOLD_PROMPT_MD5
+        assert "【L3硬约束】" not in prompt
+
+
+def test_adapter_on_default_appends_l3_and_differs_from_gold(monkeypatch):
+    """Gold sheet path default ON: L3 真背 sentence; md5 ≠ baseline. STYLE/RECIPE unchanged."""
+    monkeypatch.delenv("AIV_LOOK_PROMPT_ADAPTER", raising=False)
+    base = assemble_gold_a_sheet_prompt(_gold_card())
+    assert md5_text(base) == GOLD_PROMPT_MD5
+    prompt = _maybe_append_prompt_adapter(base)
+    assert "【L3硬约束】" in prompt
+    assert "90°真背" in prompt
+    assert "完整后脑至鞋跟的全身背影" in prompt
+    assert "Left strip MUST include full-body back view standing" in prompt
+    assert prompt.endswith(L3_FULLBODY_BACK_ADAPTER + "\n") or prompt.endswith(L3_FULLBODY_BACK_ADAPTER)
+    assert L3_FULLBODY_BACK_ADAPTER in prompt
+    assert md5_text(prompt) != GOLD_PROMPT_MD5
+    assert md5_text(prompt) == LIVE_R2_PROMPT_MD5
+    assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "97cd5c4fae718fac65e1a81174c00e1d"
+    monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", "l3")
+    assert md5_text(_maybe_append_prompt_adapter(base)) == LIVE_R2_PROMPT_MD5
+
+
+def test_generate_look_adapter_off_writes_gold_prompt(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", "off")
+    face = _face(tmp_path)
+    look = generate_gold_a_sheet(
+        card=_sheet_card(),
+        face_ref=face,
+        out_dir=tmp_path / "looks",
+        api_key=None,
+        dry_run=True,
+    )
+    written = Path(look["prompt_path"]).read_text(encoding="utf-8")
+    assert look.get("prompt_adapter") is None
+    assert md5_text(written) == GOLD_PROMPT_MD5
+    assert written == GOLD_PROMPT.read_text(encoding="utf-8")
 
 
 def test_assemble_does_not_invent_wardrobe():
@@ -207,7 +262,8 @@ def test_sku_fallback_then_success():
     assert "doubao-seedream-5-0-pro-260628" in posts
 
 
-def test_dry_run_writes_prompt_not_sheet(tmp_path):
+def test_dry_run_writes_prompt_not_sheet(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIV_LOOK_PROMPT_ADAPTER", raising=False)
     face = _face(tmp_path)
     look = generate_gold_a_sheet(
         card=_sheet_card(),
@@ -222,7 +278,11 @@ def test_dry_run_writes_prompt_not_sheet(tmp_path):
     assert look["sequential_image_generation"] is False
     prompt_path = Path(look["prompt_path"])
     assert prompt_path.is_file()
-    assert prompt_path.read_text(encoding="utf-8") == GOLD_PROMPT.read_text(encoding="utf-8")
+    written = prompt_path.read_text(encoding="utf-8")
+    assert "【L3硬约束】" in written
+    assert "90°真背" in written
+    assert md5_text(written) != GOLD_PROMPT_MD5
+    assert look.get("prompt_adapter") == "l3"
     recorded = json.loads(Path(look["recorded_path"]).read_text(encoding="utf-8"))
     assert recorded["endpoint"] == ARK_IMAGES_URL
     assert recorded["size"] == "2048x1365"
@@ -308,6 +368,7 @@ def test_http_generate_look_force_and_sequential(client, tmp_path):
 def test_cli_standalone_dry_run(tmp_path, monkeypatch):
     monkeypatch.setenv("AIV_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.delenv("ARK_API_KEY", raising=False)
+    monkeypatch.delenv("AIV_LOOK_PROMPT_ADAPTER", raising=False)
     face = _face(tmp_path)
     digest = hashlib.md5(face.read_bytes()).hexdigest()
     card_path = tmp_path / "CHAR-01-card.yaml"
@@ -334,7 +395,11 @@ def test_cli_standalone_dry_run(tmp_path, monkeypatch):
     payload = json.loads(res.output)
     assert payload["usable_for_n4"] is False
     assert payload["dry_run"] is True
-    assert Path(payload["prompt_path"]).read_text(encoding="utf-8") == GOLD_PROMPT.read_text(encoding="utf-8")
+    written = Path(payload["prompt_path"]).read_text(encoding="utf-8")
+    assert "【L3硬约束】" in written
+    assert "90°真背" in written
+    assert md5_text(written) != GOLD_PROMPT_MD5
+    assert payload.get("prompt_adapter") == "l3"
     assert "sk-" not in res.output
 
 
