@@ -223,7 +223,6 @@ def scene_look_envelope_fields(
         fields[SCENE_LOOK_EXEMPT_KEY] = policy.exempt_machine_value
         fields["scene_look_note"] = policy.note_id or EXEMPT_NOTE_ID
         fields["scene_look_copy"] = SCENE_LOOK_EXEMPT_COPY_ZH
-        fields["char_look_copy"] = CHAR_HARD_COPY_ZH
     if scene_missing_refs:
         fields["scene_missing_refs"] = list(scene_missing_refs)
     return fields

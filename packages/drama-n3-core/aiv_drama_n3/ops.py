@@ -260,16 +260,15 @@ class DramaN3Ops:
             "scene_look": env.get("scene_look"),
             "scene_look_source": env.get("scene_look_source"),
             "scene_look_scope": env.get("scene_look_scope"),
+            "char_look_mode": env.get("char_look_mode"),
+            "char_look_copy": env.get("char_look_copy"),
         }
         if "SCENE-LOOK-EXEMPT" in env:
             out["SCENE-LOOK-EXEMPT"] = env["SCENE-LOOK-EXEMPT"]
             out["scene_look_note"] = env.get("scene_look_note")
             out["scene_look_copy"] = env.get("scene_look_copy")
-            out["char_look_copy"] = env.get("char_look_copy")
         if env.get("CHAR-LOOK-MODE"):
             out["CHAR-LOOK-MODE"] = env["CHAR-LOOK-MODE"]
-            out["char_look_mode"] = env.get("char_look_mode")
-            out["char_look_copy"] = env.get("char_look_copy")
         if env.get("scene_missing_refs"):
             out["scene_missing_refs"] = env["scene_missing_refs"]
         return out

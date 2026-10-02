@@ -97,7 +97,13 @@ def _rec(*, project_id: str, episode_id: str, n3: dict, scene_look: str | None =
             "tool_profile": "seedance_2",
             "rows": [{"shot_id": "S01", "camera": "PUSH", "shot_size": "MS", "notes": ""}],
         },
-        "n3": n3,
+        "n3": {
+            **n3,
+            "cards": {
+                **(n3.get("cards") or {}),
+                "locked": True,
+            },
+        },
     }
 
 

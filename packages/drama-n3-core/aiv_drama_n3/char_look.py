@@ -38,7 +38,7 @@ MODE_A_ALIASES = frozenset({"a", "mode_a", "mode-a", "face", "full"})
 LOOK_USABLE_FALSE_MESSAGE = "usable_for_n4=false · Mode B 合板未人审（look.usable_for_n4≠true），拒绝写盘"
 LOOK_USABLE_FALSE_REASON = "look_usable_for_n4_false"
 MODE_B_COPY_ZH = "Mode B 卡文/合板路径：P-CHAR=人审合板 usable_for_n4，不因缺 face 文件单独拦截。"
-MODE_A_COPY_ZH = "Mode A 脸图路径：须 face/full usable；缺脸仍拦截。"
+MODE_A_COPY_ZH = "须本集目标人物定妆 usable 通过；缺脸或未人审仍拦截。"
 
 
 @dataclass(frozen=True)

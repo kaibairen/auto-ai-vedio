@@ -64,7 +64,7 @@ def test_mode_b_reviewed_sheet_usable_without_face_file(tmp_path):
             "tool_profile": "seedance_2",
             "rows": [{"shot_id": "S01"}],
         },
-        "n3": n3,
+        "n3": {**n3, "cards": {**(n3.get("cards") or {}), "locked": True}},
     }
     assert has_reviewed_look_sheet(card, n3) is True
     assert has_usable_char(card, n3) is True
@@ -104,7 +104,7 @@ def test_mode_b_does_not_409_on_missing_face_file_when_sheet_reviewed(tmp_path):
             "tool_profile": "seedance_2",
             "rows": [{"shot_id": "S01"}],
         },
-        "n3": n3,
+        "n3": {**n3, "cards": {**(n3.get("cards") or {}), "locked": True}},
     }
     missing = collect_missing_refs(n3, rec=rec)
     assert missing == []
@@ -125,7 +125,7 @@ def test_mode_b_without_reviewed_sheet_still_blocks_but_not_as_missing_face():
             "tool_profile": "seedance_2",
             "rows": [{"shot_id": "S01"}],
         },
-        "n3": n3,
+        "n3": {**n3, "cards": {**(n3.get("cards") or {}), "locked": True}},
     }
     assert has_usable_char(card, n3) is False
     missing = collect_missing_refs(n3, rec=rec)
@@ -152,7 +152,7 @@ def test_mode_a_missing_face_still_409():
             "tool_profile": "seedance_2",
             "rows": [{"shot_id": "S01"}],
         },
-        "n3": n3,
+        "n3": {**n3, "cards": {**(n3.get("cards") or {}), "locked": True}},
     }
     missing = collect_missing_refs(n3, rec=rec)
     assert any(item.get("reason") == "missing_ref" for item in missing)

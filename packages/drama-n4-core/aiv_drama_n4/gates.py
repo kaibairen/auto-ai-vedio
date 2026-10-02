@@ -116,6 +116,8 @@ def require_assemble_gates(
         else:
             msg = USABLE_FALSE_MESSAGE
             en = "usable_for_n4 is false; missing refs/images — jsonl not written"
+        details = scene_look_envelope_fields(policy, scene_missing_refs=scene_missing)
+        details.update(char_look_envelope_fields(rec))
         raise AppError(
             409,
             "usable_for_n4_false",
@@ -125,8 +127,7 @@ def require_assemble_gates(
             missing_refs=missing,
             written=False,
             node=NODE_DN4,
-            **scene_look_envelope_fields(policy, scene_missing_refs=scene_missing),
-            **char_look_envelope_fields(rec),
+            **details,
         )
     cards = ((rec.get("n3") or {}).get("cards") or {})
     if cards.get("stale") and not force_reassemble:
