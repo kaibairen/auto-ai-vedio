@@ -4,7 +4,7 @@
 |----|----|
 | BRIEF | BRIEF-AIV-031-LOOK-IMPL · AIV-031-IMPL-ENG-001 |
 | 性质 | 工程狗粮笔记骨架 · **≠PASS** · **≠绿 N4** · ForcePass=never |
-| tip | `4bd1aa2` (look impl) · pytest green on this branch |
+| tip | `9c405f3` · pytest green on this branch |
 
 ## 环境（密钥隔离）
 
