@@ -44,9 +44,10 @@ from aiv_drama_n3.models import (
 )
 from aiv_drama_n3.seedream import ARK_IMAGES_URL
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
+from aiv_drama_n5a.models import N5aGenerateRequest
 
-app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
-drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / D-N4")
+app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 / D-N5a CLI. JSON envelope on stdout. Isolated from koubo-N1.")
+drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / D-N4 / D-N5a")
 project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
@@ -61,6 +62,8 @@ g2_app = typer.Typer(help="Gate G2")
 n3_app = typer.Typer(help="D-N3 unit cards + crop")
 g3_app = typer.Typer(help="Gate G3")
 n4_app = typer.Typer(help="D-N4 deterministic prompt assemble")
+n5a_app = typer.Typer(help="D-N5a 宫格 generate-grid + 门 G4")
+n5a_gate_app = typer.Typer(help="门 G4 pass|rework")
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
@@ -77,6 +80,8 @@ drama.add_typer(g2_app, name="g2")
 drama.add_typer(n3_app, name="n3")
 drama.add_typer(g3_app, name="g3")
 drama.add_typer(n4_app, name="n4")
+drama.add_typer(n5a_app, name="n5a")
+n5a_app.add_typer(n5a_gate_app, name="gate")
 
 _PRETTY = False
 
@@ -668,6 +673,51 @@ def n4_assemble(
         force_reassemble=force_reassemble,
     )
     _print(_guard(lambda: _service().assemble_n4(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n5a_app.command("generate-grid")
+def n5a_generate_grid(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    layout: int = typer.Option(9, "--layout", help="Dogfood default 9; 16 allowed; 25 deferred"),
+    shots: Optional[str] = typer.Option(None, "--shots", help="Comma-separated S01,S02,…"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Record Ark contract only; do not write a grid PNG"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    """N5a: read EP##-prompts.jsonl → real image API → grids/EP##_grid_{9|16}_vN.png. ForcePass=never."""
+    shot_list = [s.strip() for s in (shots or "").split(",") if s.strip()]
+    body = N5aGenerateRequest(actor=actor, layout=layout, shots=shot_list, dry_run=dry_run)
+    _print(_guard(lambda: _service().generate_n5a_grid(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n5a_app.command("status")
+def n5a_status(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n5a_status(project_id, ep)))
+
+
+@n5a_app.command("get")
+def n5a_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n5a(project_id, ep)))
+
+
+@n5a_gate_app.command("g4")
+def n5a_gate_g4(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: str = typer.Option(..., "--actor"),
+    verdict: str = typer.Option(..., "--verdict", help="pass|rework"),
+    note: Optional[str] = typer.Option(None, "--note"),
+) -> None:
+    raw = {"verdict": verdict, "actor": actor}
+    if note is not None:
+        raw["note"] = note
+    _print(_guard(lambda: _service().confirm_gate_g4(project_id, ep, raw)))
 
 
 @g3_app.command("confirm")

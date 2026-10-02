@@ -1,0 +1,205 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N5a Grid + Gate G4 API
+  version: 0.1.0
+  description: |
+    单元剧 `pipeline_profile=drama` 的 **D-N5a（宫格 + 门 G4）** 最小闭环。
+    读已写盘 `EP##-prompts.jsonl` → **真图 API** → `grids/EP##_grid_{9|16}_vN.png`
+    + 检项记录 + `gates/g4` pass|rework。
+
+    ## 冻结钉
+    - **P-CHAR**：`usable_for_n4=true` = 人审 look 合板，**不是**必须有 face 文件。
+    - **Mode B**：厚卡文案定妆即可；**禁止**把「缺 face 文件」写成 N5a 硬挡。
+    - **SCENE EXEMPT (EP01)**：检 G4 场项 **N/A**；CHAR 身份项仍硬。
+    - **ForcePass=never**（`force_pass` / `force` / `skip_gate` → **400**）。
+    - **禁假像素**：无钥 / API 全败 → 结构化 **BLOCK**（`provider`），不写彩条/占位格，不记 PASS。
+    - ≥7/9 **未硬钉**（文档/检项记录 only）。
+    - 门序：非空 jsonl → generate → **门 G4** → N5b（**本 PR 不做 N5b Job**）。
+    - docs≠PASS；≠合 main；≠翻 `usable_for_n4`。
+  x-assign: AIV-036-ENG-N5A-IMPL
+  x-date: '2026-10-03'
+servers:
+  - url: /api/v0
+tags:
+  - name: N5aGrid
+  - name: GateG4
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/n5a:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N5aGrid]
+      operationId: getDramaN5a
+      summary: 读 N5a 宫格 + 检项 + 门 G4
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N5aEnvelope'
+  /projects/{project_id}/episodes/{ep}/drama/n5a/status:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N5aGrid]
+      operationId: getDramaN5aStatus
+      summary: 薄状态（path / md5 / g4_locked）
+      responses:
+        '200':
+          description: OK
+  /projects/{project_id}/episodes/{ep}/drama/n5a/generate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N5aGrid]
+      operationId: generateDramaN5aGrid
+      summary: 真图 API 出宫格
+      description: |
+        缺/空 `EP##-prompts.jsonl` → **409** `missing_prompts_jsonl`。
+        无 ARK 钥且非 dry_run → **422** `provider` **BLOCK**（不写假格）。
+        Mode B 不要求 face 文件。force_pass → **400**.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N5aGenerateRequest'
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: force_pass_forbidden
+        '409':
+          description: missing_prompts_jsonl
+        '422':
+          description: provider BLOCK（无钥）
+  /projects/{project_id}/episodes/{ep}/gates/g4:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [GateG4]
+      operationId: getGateG4
+      summary: 读门 G4
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [GateG4]
+      operationId: confirmGateG4
+      summary: 人点门 G4 pass|rework
+      description: ForcePass 键 → 400。无真格 → 409 missing_grid。≥7/9 未硬钉。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N5aGateRequest'
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: force_pass_forbidden
+        '409':
+          description: missing_grid / g4_veto_blocked
+  /projects/{project_id}/episodes/{ep}/gates/g4/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [GateG4]
+      operationId: confirmGateG4Alias
+      summary: G4 confirm 别名（对齐 g3/confirm）
+      responses:
+        '200':
+          description: OK
+  /projects/{project_id}/episodes/{ep}/drama/n5b/jobs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N5aGrid]
+      operationId: submitDramaN5bRejected
+      summary: N5b 本 PR 不做
+      description: G4 未锁 → 409 upstream_unlocked。已锁 → 404 n5b_not_implemented。
+      responses:
+        '409':
+          description: G4 unlocked
+        '404':
+          description: n5b_not_implemented
+components:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, example: EP01 }
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - force_pass_forbidden
+        - missing_prompts_jsonl
+        - missing_grid
+        - g4_veto_blocked
+        - provider
+        - fake_pixels_forbidden
+        - n5b_not_implemented
+        - upstream_unlocked
+        - validation
+        - not_found
+    N5aGenerateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actor: { type: string }
+        layout:
+          type: integer
+          enum: [9, 16]
+          default: 9
+          description: 狗粮默认 9；25 后置
+        shots:
+          type: array
+          items: { type: string }
+        dry_run:
+          type: boolean
+          default: false
+          description: 只记 Ark 合同；不写 PNG；不得当 G4 PASS
+    N5aGateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, verdict]
+      properties:
+        actor: { type: string }
+        verdict:
+          type: string
+          enum: [pass, rework]
+        note: { type: string }
+    N5aEnvelope:
+      type: object
+      required: [ok, node]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        node: { type: string, enum: [D-N5a] }
+        path:
+          type: string
+          nullable: true
+          example: episodes/EP01/grids/EP01_grid_9_v1.png
+        md5: { type: string, nullable: true }
+        g4_locked: { type: boolean }
+        scene_exempt: { type: boolean }
+        fake_pixels: { type: boolean, enum: [false] }
+        mode_b_face_required: { type: boolean, enum: [false] }
+        threshold_hard_gated: { type: boolean, enum: [false] }
+        auto_open_dn5b: { type: boolean, enum: [false] }
+        docs_pass: { type: boolean, enum: [false] }
+        usable_for_n4_flipped: { type: boolean, enum: [false] }

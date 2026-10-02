@@ -1,12 +1,12 @@
 # auto-ai-vedio
 
-KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 分镜表（门 G2）**、**D-N3 单元卡（门 G3）+ library 薄挂点** and **D-N4 确定性按镜拼装** runtime for `pipeline_profile=drama`.
+KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 分镜表（门 G2）**、**D-N3 单元卡（门 G3）+ library 薄挂点**、**D-N4 确定性按镜拼装** and **D-N5a 宫格（门 G4）** runtime for `pipeline_profile=drama`.
 
 - `.skill/` — Skill packages (writing + generation). D-N1 **read-only** 女/男频编剧；D-N2 **read-only borrow** `.skill/writing/动态漫-转分镜`（`borrowed_dongman`）。不改教材正文。
 - `.prompt/` — Prompt / instruction documents (koubo, generation, consistency, seedance). **Not** used by this drama runtime.
-- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
-- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` — OpenAPI **0.1.0** copies
-- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` · `docs/aiv-032-gold-sheet.md` — humans + bots; koubo-N1 isolation
+- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/drama-n5a-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
+- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` · `openapi/drama-n5a.v0.yaml` — OpenAPI **0.1.0** copies
+- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` · `docs/drama-n5a.md` · `docs/aiv-032-gold-sheet.md` — humans + bots; koubo-N1 isolation
 
 docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. 018c workbench ships Screen E/F/G (min table + G2 button state); not a product PASS.
 
@@ -64,6 +64,17 @@ aiv drama n4 assemble --project proj_01 --ep EP01 --tool-profile seedance_2_0 --
 ```
 
 See [`docs/drama-n4.md`](docs/drama-n4.md). docs≠PASS. ForcePass=never.
+
+## Drama D-N5a / G4 (036)
+
+After a non-empty `EP##-prompts.jsonl` exists, `POST .../drama/n5a/generate` calls the real image API (Ark/Seedream) and writes `grids/EP##_grid_{9|16}_vN.png` + checklist. Missing/empty jsonl → **409**. Missing `ARK_API_KEY` (and not `dry_run`) → **422 BLOCK** — no placeholder grid. **Mode B** does not require a face file. EP01 SCENE EXEMPT → 检 G4 = N/A. Gate **G4** is `POST .../gates/g4` `{verdict: pass|rework}`. N5b Job is **not** opened. ForcePass=never.
+
+```bash
+aiv drama n5a generate-grid --project proj_01 --ep EP01 --layout 9 --actor yangzhou
+aiv drama n5a gate g4 --project proj_01 --ep EP01 --actor yangzhou --verdict pass
+```
+
+See [`docs/drama-n5a.md`](docs/drama-n5a.md) and [`docs/EVIDENCE-AIV-036-ENG-N5A-IMPL.md`](docs/EVIDENCE-AIV-036-ENG-N5A-IMPL.md). docs≠PASS.
 
 **provisional (D-N0/D-N1):** D3 generate requires female\|male · D12 project-scoped library (no list/search) · D13–D15 no promote/fork · shot_cap hard 12.
 

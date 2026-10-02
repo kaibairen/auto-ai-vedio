@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.11 — AIV-036 N5a min loop (grid + gate G4 · docs≠PASS)
+
+BRIEF-AIV-036-P2 N5a. ForcePass=never. Draft PR only — **does not merge to main**. Does not implement N5b Job / G5 / N6. Does not flip `usable_for_n4`. Does not write colorbars/placeholder grids as success.
+
+- New `packages/drama-n5a-core`: generate-grid (Ark/Seedream SKU chain, Mode A optional face / Mode B t2i) + CAM 检 G1–G10 checklist + **门 G4** `pass|rework`.
+- Hard: non-empty `EP##-prompts.jsonl` or **409**; missing key → **422 `provider` BLOCK** (`blocked=true`, no PNG); fake-pixel bytes rejected.
+- Mode B: missing face file is **not** an N5a hard block. EP01 SCENE EXEMPT → 检 G4 = N/A; CHAR identity items stay hard. ≥7/9 documented, not hard-gated.
+- CLI: `aiv drama n5a generate-grid` · `aiv drama n5a gate g4`. HTTP: `POST .../drama/n5a/generate` · `POST .../gates/g4`. N5b submit → 409/404.
+- Tests: `tests/drama/test_n5a_gates.py` (contracts + mocks; no live image required). Evidence: [`docs/EVIDENCE-AIV-036-ENG-N5A-IMPL.md`](docs/EVIDENCE-AIV-036-ENG-N5A-IMPL.md).
+
 ## 0.2.10 — AIV-032 gold-A 3:2 CHAR turnaround look-generate (docs≠PASS)
 
 BRIEF-AIV-032. ForcePass=never. Does **not** merge to main. Does not flip `usable_for_n4` or green N4. STYLE终句 + RECIPE§4 一字不改. No orphan generate scripts.
