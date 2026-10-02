@@ -119,26 +119,39 @@ def lock_g2(
 
 
 def attach_real_refs(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01") -> None:
-    """Write on-disk ref files so usable_for_n4 can be true. No fake missing_file=false."""
+    """Write looks-tree files + path+md5+role. Does NOT set usable_for_n4=true."""
+    from aiv_drama_n3.refs import md5_file, refresh_card_ref_flags
+    from aiv_drama_n3.looks import dest_looks_file
+
     rec = svc._rec(pid, ep)
+    episode_dir = svc.store.episode_dir(pid, ep)
     cards = (rec.get("n3") or {}).get("cards") or {}
     for card in list(cards.get("characters") or []) + list(cards.get("scenes") or []):
         ident = card["id"]
-        role = "face" if card.get("kind") == "character" else "plate"
-        path = data_dir / "refs" / f"{ident}.png"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(f"ref-{ident}".encode("utf-8"))
-        card["refs"] = [{"path": str(path), "md5": "abc123", "role": role, "missing_file": False}]
-        card["missing_ref"] = False
-        card["weak_binding"] = False
+        kind = card.get("kind") or "character"
+        role = "face" if kind == "character" else "plate"
+        dest, rel = dest_looks_file(episode_dir, ep, kind, ident, role, "front")
+        dest.write_bytes(f"ref-{ident}".encode("utf-8"))
+        card["refs"] = [{"path": rel, "md5": md5_file(dest), "role": role, "missing_file": False}]
+        refresh_card_ref_flags(card)
     svc._commit(rec)
+
+
+def mark_usable_for_n4_reviewed(svc: DramaService, pid: str, *, ep: str = "EP01") -> None:
+    """Test-only 挂起面 fixture. Not a production flip API. ForcePass=never."""
+    rec = svc._rec(pid, ep)
+    if rec.get("n3") and rec["n3"].get("cards"):
+        rec["n3"]["cards"]["usable_for_n4"] = True
+        svc._commit(rec)
 
 
 def lock_g3_usable(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01", actor: str = "yangzhou"):
     lock_g2(svc, pid, ep=ep, actor=actor, tool_profile="seedance_2")
     svc.materialize_n3_cards(pid, ep, N3MaterializeRequest(actor=actor))
     attach_real_refs(svc, pid, data_dir, ep=ep)
-    return svc.confirm_gate_g3(pid, ep, {"decision": "pass", "actor": actor})
+    env = svc.confirm_gate_g3(pid, ep, {"decision": "pass", "actor": actor})
+    mark_usable_for_n4_reviewed(svc, pid, ep=ep)
+    return env
 
 
 def sample_row(

@@ -34,6 +34,7 @@ from aiv_drama_n2.models import (
 from aiv_drama_n2.validate import reject_force_keys_n2, reject_prompt_fields
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
+    N3AttachRefRequest,
     N3AttachRequest,
     N3ForkRequest,
     N3MaterializeRequest,
@@ -520,6 +521,18 @@ async def attach_n3_card(
     raw = await _raw_n3(request)
     body = N3AttachRequest.model_validate(raw)
     return _svc(request).attach_n3_card(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/attach-ref")
+async def attach_n3_look_ref(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    body = N3AttachRefRequest.model_validate(raw)
+    return _svc(request).attach_n3_look_ref(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 @router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/promote")

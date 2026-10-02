@@ -67,6 +67,10 @@ class Settings:
     openai_base_url: str
     openai_model: str
     named_cast_check: str = "warn"
+    # Image providers (AIV-031). Isolated from DeepSeek / AIV_OPENAI_API_KEY.
+    # BE tests must not require live Ark/DashScope. ENG owns live clients.
+    ark_api_key: str | None = None
+    dashscope_api_key: str | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -91,6 +95,8 @@ class Settings:
             ).rstrip("/"),
             openai_model=os.environ.get("AIV_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
             named_cast_check=named_cast,
+            ark_api_key=os.environ.get("ARK_API_KEY") or os.environ.get("AIV_ARK_API_KEY"),
+            dashscope_api_key=os.environ.get("DASHSCOPE_API_KEY") or os.environ.get("AIV_DASHSCOPE_API_KEY"),
         )
 
     def skill_relpath(self, lane: str) -> str:

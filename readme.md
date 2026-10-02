@@ -42,7 +42,7 @@ See [`docs/drama-n2.md`](docs/drama-n2.md). Frozen O1–O9: outline+cast→story
 
 ## Drama D-N3 / G3 (021a + 021c)
 
-After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally **thicken** text slots (`appearance` / `immutable` / `light_anchor`) with `provider=llm`, optionally attach `CHAR@version` / `SCENE@version`, then confirm **gate G3**. Missing refs warn only (F1); `usable_for_n4` stays false without refs. Thicken does not call image-gen or assemble N4. Promote is an explicit stub and does not auto-pass G3. N3 uses `template_paths` / `prompt_paths` (F3). Screen H shows CHAR/SCENE rows + ref chips (021b minimal; docs≠PASS).
+After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally **thicken** text slots (`appearance` / `immutable` / `light_anchor`) with `provider=llm`, optionally attach `CHAR@version` / `SCENE@version` or **attach-ref** a local look file into `episodes/<ep>/n3/looks/...` (`refs[{path,md5,role}]`), then confirm **gate G3**. Missing refs warn only (F1). `has_usable_ref` does **not** flip `usable_for_n4`. Thicken does not call image-gen or assemble N4. Promote is an explicit stub and does not auto-pass G3. N3 uses `template_paths` / `prompt_paths` (F3). Screen H shows CHAR/SCENE rows + ref chips (021b minimal; docs≠PASS).
 
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou

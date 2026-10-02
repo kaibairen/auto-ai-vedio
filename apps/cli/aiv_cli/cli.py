@@ -34,6 +34,7 @@ from aiv_drama_n2.models import (
 )
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
+    N3AttachRefRequest,
     N3AttachRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
@@ -539,6 +540,28 @@ def n3_attach(
 ) -> None:
     body = N3AttachRequest(id=ident, version=version, kind=kind, actor=actor)  # type: ignore[arg-type]
     _print(_guard(lambda: _service().attach_n3_card(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n3_app.command("attach-ref")
+def n3_attach_ref(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    ident: str = typer.Option(..., "--id"),
+    role: str = typer.Option(..., "--role"),
+    source_path: str = typer.Option(..., "--source"),
+    view: str = typer.Option("front", "--view"),
+    kind: Optional[str] = typer.Option(None, "--kind"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = N3AttachRefRequest(
+        id=ident,
+        role=role,  # type: ignore[arg-type]
+        source_path=source_path,
+        view=view,
+        kind=kind,  # type: ignore[arg-type]
+        actor=actor,
+    )
+    _print(_guard(lambda: _service().attach_n3_look_ref(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @n3_app.command("promote")

@@ -10,7 +10,14 @@ from aiv_drama.errors import AppError
 from aiv_drama.validate import FORCE_KEYS
 from aiv_drama_n2.validate import CLASS_D_CAMERAS, CLASS_D_DURATION_FLOOR
 from aiv_drama_n3.cards import all_cards, has_usable_ref, is_char_id, is_none_id, is_scene_id
-from aiv_drama_n3.library import resolve_ref_file
+from aiv_drama_n3.refs import (
+    CHAR_MUST_ROLES,
+    CHAR_USABLE_ROLES,
+    PROVENANCE_ROLES,
+    is_hotlink_url,
+    md5_file,
+    resolve_ref_file,
+)
 from aiv_drama_n3.validate import usable_for_n4
 from aiv_drama_n4.camera import known_camera, static_fast_conflict
 from aiv_drama_n4.tools import lookup_adapter
@@ -115,36 +122,65 @@ def missing_ref_entry(
     return entry
 
 
-def collect_missing_refs(n3: dict[str, Any] | None, settings: Any | None = None) -> list[dict[str, Any]]:
-    """Honest missing-image / missing-ref list. Fake path+md5 without a file is BLOCK."""
+def _resolve_ref(settings: Any | None, path: str, episode_dir: Path | None) -> Path | None:
+    if not path or is_hotlink_url(path):
+        return None
+    if settings is not None:
+        return resolve_ref_file(settings, path, episode_dir=episode_dir)
+    raw = Path(path)
+    return raw if raw.is_file() else None
+
+
+def collect_missing_refs(
+    n3: dict[str, Any] | None,
+    settings: Any | None = None,
+    *,
+    episode_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Honest missing-image / missing-ref list. md5 drift or absent file is missing_file."""
     missing: list[dict[str, Any]] = []
     for card in all_cards(n3):
         refs = [r for r in (card.get("refs") or []) if isinstance(r, dict)]
-        usable_on_disk = False
         saw_missing_file = False
+        saw_must_face = False
+        saw_usable = False
+        kind = card.get("kind")
         for ref in refs:
             path = (ref.get("path") or "").strip()
             md5 = (ref.get("md5") or "").strip()
             role = (ref.get("role") or "").strip()
-            if card.get("kind") == "character" and role not in {"face", "full"}:
+            if role in PROVENANCE_ROLES:
                 continue
-            found: Path | None = None
-            if settings is not None and path:
-                found = resolve_ref_file(settings, path)
-            elif path:
-                raw = Path(path)
-                found = raw if raw.is_file() else None
+            if kind == "character" and role not in CHAR_USABLE_ROLES:
+                continue
+            if is_hotlink_url(path):
+                saw_missing_file = True
+                missing.append(missing_ref_entry(card, reason="missing_file", path=path))
+                continue
+            found = _resolve_ref(settings, path, episode_dir) if path else None
             if found and md5:
-                usable_on_disk = True
+                if md5_file(found) != md5:
+                    saw_missing_file = True
+                    missing.append(missing_ref_entry(card, reason="missing_file", path=path))
+                    continue
+                saw_usable = True
+                if kind != "character" or role in CHAR_MUST_ROLES:
+                    saw_must_face = True
             elif path and not found:
                 saw_missing_file = True
                 missing.append(missing_ref_entry(card, reason="missing_file", path=path))
-        if not usable_on_disk:
-            if not has_usable_ref(card) and not saw_missing_file:
+            elif found and not md5:
+                saw_missing_file = True
+                missing.append(missing_ref_entry(card, reason="missing_file", path=path))
+        if kind == "character":
+            if not saw_must_face and not saw_missing_file:
                 missing.append(missing_ref_entry(card, reason="missing_ref"))
-            elif saw_missing_file:
-                continue
-            elif not has_usable_ref(card):
+            elif not saw_must_face and saw_missing_file:
+                pass
+        elif not saw_usable:
+            if not saw_missing_file:
+                missing.append(missing_ref_entry(card, reason="missing_ref"))
+            elif not has_usable_ref(card) and not saw_missing_file:
                 missing.append(missing_ref_entry(card, reason="missing_ref"))
     seen: set[tuple[Any, Any, Any]] = set()
     out: list[dict[str, Any]] = []
@@ -179,6 +215,7 @@ def collect_n4_issues(
     *,
     settings: Any | None = None,
     for_write: bool = False,
+    episode_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     g2 = rec.get("gate_g2") or {}
@@ -187,7 +224,7 @@ def collect_n4_issues(
     n3 = rec.get("n3")
     cards = (n3 or {}).get("cards") or {}
     sb = rec.get("storyboard") or {}
-    missing = collect_missing_refs(n3, settings)
+    missing = collect_missing_refs(n3, settings, episode_dir=episode_dir)
     usable = usable_for_n4(n3, g3_locked=g3_locked) and not missing
     index = _index_cards(n3)
     n2_ids = {row.get("shot_id") for row in (sb.get("rows") or []) if row.get("shot_id")}

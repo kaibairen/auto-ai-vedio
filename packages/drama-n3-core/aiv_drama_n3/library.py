@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from aiv_drama_n3.cards import binding_label, has_usable_ref, infer_kind
+from aiv_drama_n3.cards import binding_label, infer_kind
 from aiv_drama_n3.policy import default_project_scope, project_scope_capability
+from aiv_drama_n3.refs import (
+    is_hotlink_url,
+    md5_file,
+    refresh_card_ref_flags,
+    resolve_ref_file,
+)
 
 KIND_CHAR = "character"
 KIND_SCENE = "scene"
@@ -28,24 +33,18 @@ def scene_store_key(project_id: str, scene_id: str, version: int) -> str:
     return f"{project_id}/SCENE/{scene_id}@{version}"
 
 
-def md5_file(path: Path) -> str:
-    return hashlib.md5(path.read_bytes()).hexdigest()
+def normalize_refs(
+    settings: Any,
+    refs: list[dict[str, Any]] | None,
+    *,
+    episode_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Library/legacy normalize. Hotlink paths are rejected, not stored.
 
-
-def resolve_ref_file(settings: Any, rel: str) -> Path | None:
-    raw = Path(rel)
-    if raw.is_absolute() and raw.is_file():
-        return raw
-    for root in (getattr(settings, "data_dir", None), getattr(settings, "repo_root", None)):
-        if root is None:
-            continue
-        cand = Path(root) / rel
-        if cand.is_file():
-            return cand
-    return None
-
-
-def normalize_refs(settings: Any, refs: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    Look-tree attach uses refs.normalize_look_refs / mount_local_file_as_ref
+    (path+md5+role MUST). This helper still fills md5 when a local file exists
+    so existing library seeds keep working.
+    """
     out: list[dict[str, Any]] = []
     for raw in refs or []:
         if not isinstance(raw, dict):
@@ -53,15 +52,30 @@ def normalize_refs(settings: Any, refs: list[dict[str, Any]] | None) -> list[dic
         path = (raw.get("path") or "").strip()
         if not path:
             continue
+        if is_hotlink_url(path):
+            from aiv_drama.errors import AppError
+
+            raise AppError(
+                400,
+                "hotlink_ref_forbidden",
+                "refs[].path 只允许 looks 树本地路径，禁止热链 URL",
+                field="path",
+                path=path,
+            )
         md5 = (raw.get("md5") or "").strip()
-        found = resolve_ref_file(settings, path)
-        if found and not md5:
-            md5 = md5_file(found)
+        found = resolve_ref_file(settings, path, episode_dir=episode_dir)
+        if found:
+            actual = md5_file(found)
+            if not md5:
+                md5 = actual
+            missing = actual != md5
+        else:
+            missing = True
         item = {
             "path": path,
             "md5": md5 or None,
             "role": raw.get("role"),
-            "missing_file": found is None,
+            "missing_file": missing,
         }
         out.append(item)
     return out
@@ -93,8 +107,8 @@ def apply_library_to_card(card: dict[str, Any], lib: dict[str, Any]) -> dict[str
         out["one_line"] = lib["one_line"]
     if lib.get("refs"):
         out["refs"] = deepcopy(lib["refs"])
-    out["missing_ref"] = not has_usable_ref(out)
-    out["weak_binding"] = out["missing_ref"]
+    refresh_card_ref_flags(out)
+    out.pop("usable_for_n4", None)
     out["decision"] = None
     return out
 
