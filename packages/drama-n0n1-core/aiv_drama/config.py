@@ -26,6 +26,7 @@ SKILL_REFERENCES_TOTAL_LIMIT = 2400
 SHOT_CAP_HARD = 12
 
 ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+N5B_LIVE_JOB_ENV = "AIV_N5B_ALLOW_LIVE_JOB"
 
 
 def read_ark_api_key() -> str | None:
@@ -93,6 +94,7 @@ class Settings:
     named_cast_check: str = "warn"
     ark_api_key: str | None = None
     ark_base_url: str = ARK_DEFAULT_BASE_URL
+    n5b_allow_live_job: bool = False
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -121,6 +123,8 @@ class Settings:
             ark_base_url=(
                 os.environ.get("ARK_BASE_URL") or os.environ.get("AIV_ARK_BASE_URL") or ARK_DEFAULT_BASE_URL
             ).rstrip("/"),
+            n5b_allow_live_job=(os.environ.get(N5B_LIVE_JOB_ENV) or "").strip().lower()
+            in {"1", "true", "yes", "on"},
         )
 
     def skill_relpath(self, lane: str) -> str:

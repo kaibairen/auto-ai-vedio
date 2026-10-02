@@ -84,8 +84,21 @@ from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
 from aiv_drama_n3.projection import write_episode_cards
 from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import usable_for_n4
-from aiv_drama_n4.ops import DramaN4Ops
-from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
+from aiv_drama_n5b.ops import DramaN5bOps
+from aiv_schema.models import (
+    GATE_G1B,
+    GATE_G2,
+    GATE_G3,
+    GATE_G4,
+    GATE_G5,
+    NODE_DN0,
+    NODE_DN1,
+    NODE_DN2,
+    NODE_DN3,
+    NODE_DN4,
+    NODE_DN5B,
+    PIPELINE_DRAMA,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +129,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN4Ops, DramaN2Ops):
+class DramaService(DramaN5bOps, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -140,6 +153,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         self._ensure_n2_fields(rec)
         self._ensure_n3_fields(rec)
         self._ensure_n4_fields(rec)
+        self._ensure_n5b_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -195,6 +209,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         rec["episode"]["versions"]["storyboard"] = (rec.get("storyboard") or {}).get("version") or 0
         rec["episode"]["versions"]["cards"] = ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0
         rec["episode"]["versions"]["prompts"] = (rec.get("n4") or {}).get("assemble_version") or 0
+        rec["episode"]["versions"]["clips"] = rec["episode"]["versions"].get("clips") or 0
 
     def _project_disk(self, rec: dict[str, Any]) -> None:
         ep = rec["episode"]["episode_id"]
@@ -214,6 +229,8 @@ class DramaService(DramaN4Ops, DramaN2Ops):
             gate = rec["gate"]
             g2 = rec.get("gate_g2") or {}
             g3 = rec.get("gate_g3") or {}
+            g4 = rec.get("gate_g4") or {}
+            g5 = rec.get("gate_g5") or {}
             stale_nodes = rec["episode"].get("stale_downstream") or []
             meta = {
                 "episode_id": ep,
@@ -249,6 +266,24 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                         "note": g3.get("note"),
                         "updated_at": g3.get("decided_at"),
                     },
+                    GATE_G4: {
+                        "status": g4.get("state"),
+                        "state": g4.get("state"),
+                        "locked": g4.get("locked"),
+                        "decision": g4.get("last_decision"),
+                        "actor": g4.get("actor"),
+                        "note": g4.get("note"),
+                        "updated_at": g4.get("decided_at"),
+                    },
+                    GATE_G5: {
+                        "status": g5.get("state"),
+                        "state": g5.get("state"),
+                        "locked": g5.get("locked"),
+                        "decision": g5.get("last_decision"),
+                        "actor": g5.get("actor"),
+                        "note": g5.get("note"),
+                        "updated_at": g5.get("decided_at"),
+                    },
                 },
                 "next_edges": list(rec["episode"].get("next_edges") or []),
                 "lane_preference": (rec.get("brief") or {}).get("lane_preference", "unset"),
@@ -257,6 +292,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                     "d_n2": NODE_DN2 in stale_nodes or bool((sb or {}).get("stale")),
                     "d_n3": NODE_DN3 in stale_nodes,
                     "d_n4": NODE_DN4 in stale_nodes or bool((rec.get("n4") or {}).get("stale")),
+                    "d_n5b": NODE_DN5B in stale_nodes,
                 },
                 "stale_downstream": list(stale_nodes),
                 "locks": deepcopy(rec["episode"]["locks"]),

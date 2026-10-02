@@ -44,6 +44,8 @@ from aiv_drama_n3.models import (
 from aiv_drama_n3.validate import reject_force_keys_n3, reject_image_gen_n3
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 from aiv_drama_n4.validate import reject_force_keys_n4
+from aiv_drama_n5b.models import N5bSubmitRequest
+from aiv_drama_n5b.validate import reject_force_keys_n5b
 from aiv_schema.models import NODE_DN3
 
 router = APIRouter(prefix="/api/v0")
@@ -116,6 +118,17 @@ async def _raw_n4(request: Request) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys_n4(data)
+    return data
+
+
+async def _raw_n5b(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_n5b(data)
     return data
 
 
@@ -629,6 +642,48 @@ async def assemble_n4(
     return _svc(request).assemble_n4(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n5b/jobs")
+async def submit_n5b(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    """N5b skeleton submit. Default BLOCK: g4_required / live_job_forbidden. Never POST Job."""
+    raw = await _raw_n5b(request)
+    body = N5bSubmitRequest.model_validate(raw) if raw else N5bSubmitRequest()
+    return _svc(request).submit_n5b(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n5b/jobs/{job_id}")
+def get_n5b_job(project_id: str, ep: str, job_id: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n5b_job(project_id, ep, job_id)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n5b/status")
+def get_n5b_status(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n5b_status(project_id, ep)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/gates/g5")
+def get_gate_g5(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_gate_g5(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/gates/g5/confirm")
+async def confirm_gate_g5(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_actor: str | None = Header(default=None, alias="X-Actor"),
+) -> dict[str, Any]:
+    raw = await _raw_n5b(request)
+    if x_actor and not raw.get("actor"):
+        raw = {**raw, "actor": x_actor}
+    return _svc(request).confirm_gate_g5(project_id, ep, raw, idempotency_key=idempotency_key)
+
+
 def _koubo_isolated() -> JSONResponse:
     return JSONResponse(
         status_code=404,
@@ -721,3 +776,29 @@ def _bare_n4_isolated() -> JSONResponse:
 @router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n4", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def bare_n4_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
     return _bare_n4_isolated()
+
+
+def _bare_n5b_isolated() -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={
+            "ok": False,
+            "error": {
+                "code": "not_found",
+                "message": "bare N5b is not served; use D-N5b /drama/n5b and gates/g5",
+                "details": {
+                    "pipeline_profile": "drama",
+                    "nodes": ["D-N5b"],
+                    "use": ["/drama/n5b/jobs", "/drama/n5b/status", "/gates/g5"],
+                },
+            },
+        },
+    )
+
+
+@router.api_route("/projects/{project_id}/episodes/{ep}/n5b/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n5b/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/n5b", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route("/projects/{project_id}/episodes/{ep}/nodes/n5b", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+def bare_n5b_paths_isolated(project_id: str, ep: str, rest: str = "") -> JSONResponse:
+    return _bare_n5b_isolated()

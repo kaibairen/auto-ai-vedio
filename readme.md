@@ -4,9 +4,9 @@ KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 �
 
 - `.skill/` — Skill packages (writing + generation). D-N1 **read-only** 女/男频编剧；D-N2 **read-only borrow** `.skill/writing/动态漫-转分镜`（`borrowed_dongman`）。不改教材正文。
 - `.prompt/` — Prompt / instruction documents (koubo, generation, consistency, seedance). **Not** used by this drama runtime.
-- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
-- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` — OpenAPI **0.1.0** copies
-- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` · `docs/aiv-032-gold-sheet.md` — humans + bots; koubo-N1 isolation
+- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/drama-n5b-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
+- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` · `openapi/drama-n5b.v0.yaml` — OpenAPI **0.1.0** copies
+- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` · `docs/drama-n5b.md` · `docs/aiv-032-gold-sheet.md` — humans + bots; koubo-N1 isolation
 
 docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. 018c workbench ships Screen E/F/G (min table + G2 button state); not a product PASS.
 
@@ -64,6 +64,19 @@ aiv drama n4 assemble --project proj_01 --ep EP01 --tool-profile seedance_2_0 --
 ```
 
 See [`docs/drama-n4.md`](docs/drama-n4.md). docs≠PASS. ForcePass=never.
+
+## Drama D-N5b skeleton (036)
+
+Ark Seedance 2.0 **client + map + clips contract + G5**. Default submit is **BLOCK** (`g4_required` / `live_job_forbidden`); never POSTs a paid Job. Mode B look review does not hard-block this path. N6 is out of scope.
+
+```bash
+aiv drama n5b status --project proj_01 --ep EP01
+aiv drama n5b submit --project proj_01 --ep EP01 --actor yangzhou
+# 409 expected unless G4 locked *and* AIV_N5B_ALLOW_LIVE_JOB — skeleton still n5b_impl_hold
+aiv drama n5b gate g5 --project proj_01 --ep EP01 --actor yangzhou --verdict rework
+```
+
+See [`docs/drama-n5b.md`](docs/drama-n5b.md). docs≠PASS. ForcePass=never.
 
 **provisional (D-N0/D-N1):** D3 generate requires female\|male · D12 project-scoped library (no list/search) · D13–D15 no promote/fork · shot_cap hard 12.
 
