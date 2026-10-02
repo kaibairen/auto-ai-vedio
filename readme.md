@@ -57,7 +57,7 @@ See [`docs/drama-n3.md`](docs/drama-n3.md) and [`docs/aiv-032-gold-sheet.md`](do
 
 ## Drama D-N4 assemble (026)
 
-After G2+G3 are locked **and** `ready_for_n4=true` **and** `usable_for_n4=true` (real CHAR/SCENE refs on disk), `POST .../drama/n4/assemble` fills DIR slots (not LLM) and writes `episodes/EP##/EP##-prompts.jsonl`. `usable_for_n4=false` returns **409** + a missing-ref list and **does not write**. Input alias `seedance_2_0` persists as `seedance_2`. Bare `/n4` is isolated; use `/drama/n4/...`. N5 is not opened.
+After G2+G3 are locked **and** `ready_for_n4=true` **and** `usable_for_n4=true`, `POST .../drama/n4/assemble` fills DIR slots (not LLM) and writes `episodes/EP##/EP##-prompts.jsonl`. Mode A: CHAR face/full on disk. Mode B: human-reviewed look sheet `usable_for_n4` (missing face file does not 409). SCENE look is optional on pinned `proj_01`/`EP01` (`SCENE-LOOK-EXEMPT=EP01`). `usable_for_n4=false` returns **409** + a missing-ref list and **does not write**. Input alias `seedance_2_0` persists as `seedance_2`. Bare `/n4` is isolated; use `/drama/n4/...`. N5 is not opened. ForcePass=never.
 
 ```bash
 aiv drama n4 assemble --project proj_01 --ep EP01 --tool-profile seedance_2_0 --actor yangzhou

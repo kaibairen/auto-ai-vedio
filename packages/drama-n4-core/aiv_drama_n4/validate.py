@@ -10,7 +10,19 @@ from aiv_drama.errors import AppError
 from aiv_drama.validate import FORCE_KEYS
 from aiv_drama_n2.validate import CLASS_D_CAMERAS, CLASS_D_DURATION_FLOOR
 from aiv_drama_n3.cards import all_cards, has_usable_ref, is_char_id, is_none_id, is_scene_id
+from aiv_drama_n3.char_look import (
+    LOOK_USABLE_FALSE_REASON,
+    has_reviewed_look_sheet,
+    has_usable_char,
+    resolve_char_look_policy,
+)
 from aiv_drama_n3.library import resolve_ref_file
+from aiv_drama_n3.scene_look import (
+    SCENE_OPTIONAL_WARN,
+    is_char_card,
+    is_scene_card,
+    resolve_scene_look_policy,
+)
 from aiv_drama_n3.validate import usable_for_n4
 from aiv_drama_n4.camera import known_camera, static_fast_conflict
 from aiv_drama_n4.tools import lookup_adapter
@@ -21,6 +33,7 @@ UPSTREAM_G2_MESSAGE = "D-N2 G2 未锁定，禁止拼装 D-N4"
 UPSTREAM_G3_MESSAGE = "D-N3 G3 未锁定，禁止拼装 D-N4"
 STALE_UPSTREAM_MESSAGE = "上游 cast/分镜/cards 已升版；请重新拼装 D-N4"
 USABLE_FALSE_MESSAGE = "usable_for_n4=false · 缺图/缺 ref，拒绝写盘"
+CHAR_USABLE_FALSE_MESSAGE = "usable_for_n4=false · 人物缺合格脸图或 usable=false，拒绝写盘"
 NOT_READY_MESSAGE = "ready_for_n4=false · 未选 tool_profile 或分镜硬检未过，拒绝写盘"
 BARE_ID_MESSAGE = "prompt 禁止只留裸 CHAR-/SCENE- ID，须替换为中文特征"
 EMPTY_NEGATIVE_MESSAGE = "negative 不可为空（NEG_CORE）"
@@ -115,37 +128,40 @@ def missing_ref_entry(
     return entry
 
 
-def collect_missing_refs(n3: dict[str, Any] | None, settings: Any | None = None) -> list[dict[str, Any]]:
-    """Honest missing-image / missing-ref list. Fake path+md5 without a file is BLOCK."""
+def _card_missing_entries(card: dict[str, Any], settings: Any | None = None) -> list[dict[str, Any]]:
+    """Honest missing-image / missing-ref rows for one card. Fake path+md5 without a file is BLOCK."""
     missing: list[dict[str, Any]] = []
-    for card in all_cards(n3):
-        refs = [r for r in (card.get("refs") or []) if isinstance(r, dict)]
-        usable_on_disk = False
-        saw_missing_file = False
-        for ref in refs:
-            path = (ref.get("path") or "").strip()
-            md5 = (ref.get("md5") or "").strip()
-            role = (ref.get("role") or "").strip()
-            if card.get("kind") == "character" and role not in {"face", "full"}:
-                continue
-            found: Path | None = None
-            if settings is not None and path:
-                found = resolve_ref_file(settings, path)
-            elif path:
-                raw = Path(path)
-                found = raw if raw.is_file() else None
-            if found and md5:
-                usable_on_disk = True
-            elif path and not found:
-                saw_missing_file = True
-                missing.append(missing_ref_entry(card, reason="missing_file", path=path))
-        if not usable_on_disk:
-            if not has_usable_ref(card) and not saw_missing_file:
-                missing.append(missing_ref_entry(card, reason="missing_ref"))
-            elif saw_missing_file:
-                continue
-            elif not has_usable_ref(card):
-                missing.append(missing_ref_entry(card, reason="missing_ref"))
+    refs = [r for r in (card.get("refs") or []) if isinstance(r, dict)]
+    usable_on_disk = False
+    saw_missing_file = False
+    for ref in refs:
+        path = (ref.get("path") or "").strip()
+        md5 = (ref.get("md5") or "").strip()
+        role = (ref.get("role") or "").strip()
+        if card.get("kind") == "character" and role not in {"face", "full"}:
+            continue
+        found: Path | None = None
+        if settings is not None and path:
+            found = resolve_ref_file(settings, path)
+        elif path:
+            raw = Path(path)
+            found = raw if raw.is_file() else None
+        if found and md5:
+            usable_on_disk = True
+        elif path and not found:
+            saw_missing_file = True
+            missing.append(missing_ref_entry(card, reason="missing_file", path=path))
+    if not usable_on_disk:
+        if not has_usable_ref(card) and not saw_missing_file:
+            missing.append(missing_ref_entry(card, reason="missing_ref"))
+        elif saw_missing_file:
+            return missing
+        elif not has_usable_ref(card):
+            missing.append(missing_ref_entry(card, reason="missing_ref"))
+    return missing
+
+
+def _dedupe_missing(missing: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[Any, Any, Any]] = set()
     out: list[dict[str, Any]] = []
     for item in missing:
@@ -155,6 +171,48 @@ def collect_missing_refs(n3: dict[str, Any] | None, settings: Any | None = None)
         seen.add(key)
         out.append(item)
     return out
+
+
+def collect_missing_refs(
+    n3: dict[str, Any] | None,
+    settings: Any | None = None,
+    *,
+    rec: dict[str, Any] | None = None,
+    scene_look: str | None = None,
+    include_optional_scenes: bool = False,
+) -> list[dict[str, Any]]:
+    """Hard missing-image / missing-ref list.
+
+    On SCENE-optional / EXEMPT episodes, SCENE plates are honesty-only unless
+    ``include_optional_scenes`` is true. Mode A CHAR face/full missing stays hard.
+    Mode B reviewed 合板: missing face file is not a hard missing_ref.
+    """
+    policy = resolve_scene_look_policy(rec, scene_look=scene_look, n3=n3)
+    missing: list[dict[str, Any]] = []
+    for card in all_cards(n3):
+        if is_scene_card(card) and policy.scene_optional and not include_optional_scenes:
+            continue
+        if is_char_card(card) and has_reviewed_look_sheet(card, n3):
+            continue
+        if is_char_card(card) and resolve_char_look_policy(rec, card, n3=n3).mode_b:
+            if not has_usable_char(card, n3):
+                missing.append(missing_ref_entry(card, reason=LOOK_USABLE_FALSE_REASON))
+            continue
+        missing.extend(_card_missing_entries(card, settings))
+    return _dedupe_missing(missing)
+
+
+def collect_scene_missing_refs(
+    n3: dict[str, Any] | None,
+    settings: Any | None = None,
+) -> list[dict[str, Any]]:
+    """Honesty list of SCENE plates. Never used alone to 409 assemble."""
+    missing: list[dict[str, Any]] = []
+    for card in all_cards(n3):
+        if not is_scene_card(card):
+            continue
+        missing.extend(_card_missing_entries(card, settings))
+    return _dedupe_missing(missing)
 
 
 def first_shot_review(lines: list[dict[str, Any]] | None) -> dict[str, Any] | None:
@@ -187,8 +245,10 @@ def collect_n4_issues(
     n3 = rec.get("n3")
     cards = (n3 or {}).get("cards") or {}
     sb = rec.get("storyboard") or {}
-    missing = collect_missing_refs(n3, settings)
-    usable = usable_for_n4(n3, g3_locked=g3_locked) and not missing
+    policy = resolve_scene_look_policy(rec, n3=n3)
+    missing = collect_missing_refs(n3, settings, rec=rec)
+    scene_missing = collect_scene_missing_refs(n3, settings) if policy.scene_optional else []
+    usable = usable_for_n4(n3, g3_locked=g3_locked, rec=rec) and not missing
     index = _index_cards(n3)
     n2_ids = {row.get("shot_id") for row in (sb.get("rows") or []) if row.get("shot_id")}
     row_by_id = {row.get("shot_id"): row for row in (sb.get("rows") or [])}
@@ -209,9 +269,10 @@ def collect_n4_issues(
             issue(
                 "error",
                 "usable_for_n4_false",
-                USABLE_FALSE_MESSAGE,
+                CHAR_USABLE_FALSE_MESSAGE if policy.scene_optional else USABLE_FALSE_MESSAGE,
                 field="refs",
                 missing_refs=missing,
+                scene_look=policy.mode,
             )
         )
         for item in missing:
@@ -224,6 +285,20 @@ def collect_n4_issues(
                     field="refs",
                     path=item.get("path"),
                     reason=item.get("reason"),
+                )
+            )
+    elif scene_missing:
+        for item in scene_missing:
+            issues.append(
+                issue(
+                    "warn",
+                    item.get("reason") or "missing_ref",
+                    SCENE_OPTIONAL_WARN,
+                    card_id=item.get("id"),
+                    field="refs",
+                    path=item.get("path"),
+                    reason=item.get("reason"),
+                    scene_look=policy.mode,
                 )
             )
 

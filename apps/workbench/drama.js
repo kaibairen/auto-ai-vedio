@@ -1069,10 +1069,13 @@ function isG3Locked(data) {
 function paintHBadges(data) {
   const g3 = $("h-g3-badge");
   const usable = $("usable-for-n4");
+  const sceneLook = $("scene-look-badge");
   const sum = $("h-g3-locked");
   const locked = isG3Locked(data);
   const confirmed = data?.cards?.confirmed_by || data?.gate?.actor || "";
   const ok = data?.usable_for_n4 === true;
+  const mode = data?.scene_look || "required";
+  const exempt = data?.["SCENE-LOOK-EXEMPT"];
   if (g3) {
     g3.textContent = locked ? "G3: locked" : "G3: 未锁定";
     g3.className = `badge ${locked ? "ok" : "muted"}`;
@@ -1080,6 +1083,10 @@ function paintHBadges(data) {
   if (usable) {
     usable.textContent = ok ? "usable_for_n4: true" : "usable_for_n4: false";
     usable.className = `badge ${ok ? "ok" : "muted"}`;
+  }
+  if (sceneLook) {
+    sceneLook.textContent = exempt ? `SCENE-LOOK-EXEMPT=${exempt}` : `scene_look: ${mode}`;
+    sceneLook.className = `badge ${mode === "exempt" || mode === "optional" ? "ok" : "muted"}`;
   }
   if (sum) {
     sum.textContent = locked
@@ -1090,8 +1097,28 @@ function paintHBadges(data) {
 function paintHWeak(data) {
   const el = $("g3-weak-bind-banner");
   if (!el) return;
-  const cards = [...(data?.cards?.characters || []), ...(data?.cards?.scenes || [])];
-  const weak = cards.some((c) => c.missing_ref || c.weak_binding);
+  const chars = data?.cards?.characters || [];
+  const scenes = data?.cards?.scenes || [];
+  const charWeak = chars.some((c) => c.missing_ref || c.weak_binding);
+  const sceneWeak = scenes.some((c) => c.missing_ref || c.weak_binding);
+  const exempt = data?.scene_look === "exempt" || data?.scene_look === "optional" || Boolean(data?.["SCENE-LOOK-EXEMPT"]);
+  const modeB = data?.char_look_mode === "B" || data?.["CHAR-LOOK-MODE"] === "B";
+  if (charWeak && modeB) {
+    el.hidden = false;
+    el.textContent = "Mode B 卡文/合板路径：P-CHAR=人审合板 usable_for_n4，不因缺 face 文件单独拦截。";
+    return;
+  }
+  if (charWeak) {
+    el.hidden = false;
+    el.textContent = "须本集目标人物定妆 usable 通过；缺脸或未人审仍拦截。";
+    return;
+  }
+  if (sceneWeak && exempt) {
+    el.hidden = false;
+    el.textContent = "本集已书面豁免场景 look：无定场图不挡开提示词拼装；场靠厚卡与分镜文案。";
+    return;
+  }
+  const weak = charWeak || sceneWeak;
   el.hidden = !weak;
   el.textContent = "视觉弱绑定 · 下游一致性自负";
 }

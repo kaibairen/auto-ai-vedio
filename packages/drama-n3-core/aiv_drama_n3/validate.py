@@ -11,6 +11,17 @@ from aiv_drama_n3.cards import (
     is_none_id,
     is_scene_id,
 )
+from aiv_drama_n3.char_look import (
+    LOOK_USABLE_FALSE_MESSAGE,
+    has_usable_char,
+    resolve_char_look_policy,
+)
+from aiv_drama_n3.scene_look import (
+    SCENE_OPTIONAL_WARN,
+    hard_usable_cards,
+    is_scene_card,
+    resolve_scene_look_policy,
+)
 from aiv_schema.models import GATE_G3, NODE_DN3
 
 WEAK_BINDING_MESSAGE = "视觉弱绑定 · 下游一致性自负"
@@ -89,14 +100,35 @@ def raise_hard(issues: list[dict[str, Any]]) -> None:
     )
 
 
-def usable_for_n4(n3: dict[str, Any] | None, *, g3_locked: bool) -> bool:
-    """F1: missing CHAR/SCENE refs hard-block usable_for_n4. G3 pass ≠ usable."""
+def usable_for_n4(
+    n3: dict[str, Any] | None,
+    *,
+    g3_locked: bool,
+    rec: dict[str, Any] | None = None,
+    scene_look: str | None = None,
+    project_id: str | None = None,
+    episode_id: str | None = None,
+) -> bool:
+    """F1: missing CHAR refs hard-block usable_for_n4.
+
+    SCENE refs hard-AND only when the episode is not on the SCENE-optional /
+    EXEMPT path (NOTE-AIV-036 · pinned ``proj_01``/``EP01``). G3 pass ≠ usable.
+    Does not invent per-card usable=true.
+    """
     if not g3_locked:
         return False
     cards = all_cards(n3)
     if not cards:
         return False
-    return all(has_usable_ref(card) for card in cards)
+    policy = resolve_scene_look_policy(
+        rec,
+        project_id=project_id,
+        episode_id=episode_id,
+        scene_look=scene_look,
+        n3=n3,
+    )
+    hard = hard_usable_cards(n3, policy)
+    return all(has_usable_char(card, n3) for card in hard)
 
 
 def collect_n3_issues(
@@ -109,6 +141,7 @@ def collect_n3_issues(
     cards = n3.get("cards") or {}
     characters = list(cards.get("characters") or [])
     scenes = list(cards.get("scenes") or [])
+    policy = resolve_scene_look_policy(rec, n3=n3)
     cast = rec.get("cast") or {}
     cast_char_ids = {c.get("id") for c in (cast.get("characters") or [])}
     cast_scene_ids = {s.get("id") for s in (cast.get("scenes") or [])}
@@ -143,16 +176,44 @@ def collect_n3_issues(
                     path=card.get("template_path"),
                 )
             )
-        if not has_usable_ref(card):
+        if is_scene_card(card) and not has_usable_ref(card):
+            scene_optional = policy.scene_optional
+            extra: dict[str, Any] = {}
+            if scene_optional:
+                extra["scene_look"] = policy.mode
             issues.append(
                 issue(
                     "warn",
                     "missing_ref",
-                    WEAK_BINDING_MESSAGE,
+                    SCENE_OPTIONAL_WARN if scene_optional else WEAK_BINDING_MESSAGE,
                     card_id=ident,
                     field="refs",
+                    **extra,
                 )
             )
+        elif kind == "character" and not has_usable_char(card, n3):
+            char_policy = resolve_char_look_policy(rec, card, n3=n3)
+            if char_policy.mode_b:
+                issues.append(
+                    issue(
+                        "warn",
+                        "look_usable_for_n4_false",
+                        LOOK_USABLE_FALSE_MESSAGE,
+                        card_id=ident,
+                        field="looks",
+                        look_mode=char_policy.mode,
+                    )
+                )
+            else:
+                issues.append(
+                    issue(
+                        "warn",
+                        "missing_ref",
+                        WEAK_BINDING_MESSAGE,
+                        card_id=ident,
+                        field="refs",
+                    )
+                )
 
     # Named storyboard CHAR/SCENE must have a card (NONE excluded).
     have = {c.get("id") for c in characters + scenes}

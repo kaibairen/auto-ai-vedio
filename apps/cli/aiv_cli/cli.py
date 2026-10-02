@@ -60,7 +60,13 @@ storyboard_app = typer.Typer(help="D-N2 storyboard")
 g2_app = typer.Typer(help="Gate G2")
 n3_app = typer.Typer(help="D-N3 unit cards + crop")
 g3_app = typer.Typer(help="Gate G3")
-n4_app = typer.Typer(help="D-N4 deterministic prompt assemble")
+n4_app = typer.Typer(
+    help=(
+        "D-N4 deterministic prompt assemble. "
+        "SCENE look optional only on SCENE-LOOK-EXEMPT (pinned proj_01/EP01). "
+        "CHAR usable stays hard. ForcePass=never."
+    )
+)
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
@@ -653,7 +659,7 @@ def n4_validate(
 
 
 @n4_app.command("assemble")
-def n4_assemble(
+def n4_assemble(  # SCENE-LOOK-EXEMPT=EP01: missing plate does not 409; missing CHAR face still 409.
     project_id: str = typer.Option(..., "--project"),
     ep: str = typer.Option(..., "--ep"),
     tool_profile: Optional[str] = typer.Option(None, "--tool-profile"),

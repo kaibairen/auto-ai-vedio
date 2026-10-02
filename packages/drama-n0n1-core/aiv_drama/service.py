@@ -285,7 +285,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                 assert_no_prompt_in_skill_paths(thicken_skills)
                 # F3: template_paths / prompt_paths only — never merge .prompt into skill_paths.
                 meta["n3_meta"] = {
-                    "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked"))),
+                    "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked")), rec=rec),
                     "template_paths": list(obs["template_paths"]),
                     "prompt_paths": list(obs["prompt_paths"]),
                     "cards_version": ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0,
@@ -305,7 +305,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                     "fingerprint": n4.get("fingerprint"),
                     "tool_profile": n4.get("tool_profile"),
                     "artifact": n4.get("artifact"),
-                    "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked"))),
+                    "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked")), rec=rec),
                 }
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)

@@ -13,7 +13,8 @@ info:
     - docs≠PASS；ForcePass=never；ACCEPT≠实施；≠产品/N5 PASS
 
     ## 冻结条
-    - **硬门**：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。`usable_for_n4=false` → **409** 且 **不写** `EP##-prompts.jsonl`，返回明确缺图/缺 ref 列表。`ready_for_n4=false` → **409** `not_ready_for_n4`。
+    - **硬门**：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。缺 **CHAR** face/full usable → **409** 且 **不写** `EP##-prompts.jsonl`。`ready_for_n4=false` → **409** `not_ready_for_n4`。
+    - **U-033 / SCENE-LOOK-EXEMPT**：钉 `proj_01`/`EP01`（NOTE-AIV-036）。本集 SCENE 卡不计入 usable 硬与；缺 SCENE plate **不**单独 409，信封标 `scene_look=exempt` 与 `SCENE-LOOK-EXEMPT=EP01`。CHAR 仍硬。非钉集 / 未标 EXEMPT 仍要 SCENE look。ForcePass=never。≠自绿 N4。
     - **拼装**：DIR `join_nonempty` 槽序（ref_lead→主体特征→场锚→光色有则拼→action→微表情→景别→运镜→时长）；不发明平光；对白不进正词；非 LLM。
     - **CAM**：N2 闭集码 → 中文可执行短语；**一镜一主运镜**。Class-D 时长 ≥8。
     - **负面**：`negative` 非空，必须含 NEG_CORE。
@@ -402,6 +403,9 @@ components:
         card_fingerprint: { type: string, nullable: true }
         first_shot_review: { type: object, additionalProperties: true }
         missing_refs: { type: array, items: { type: object } }
+        scene_look: { type: string, enum: [required, optional, exempt] }
+        SCENE-LOOK-EXEMPT: { type: string, example: EP01 }
+        scene_missing_refs: { type: array, items: { type: object } }
         lines:
           type: array
           items: { $ref: '#/components/schemas/PromptLine' }
