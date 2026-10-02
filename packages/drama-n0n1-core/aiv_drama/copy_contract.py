@@ -255,6 +255,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "金样 A 合板仅 CHAR；SCENE 另轨。",
         "en": "Gold-A sheet is CHAR-only; SCENE is a separate track.",
     },
+    "g4_required": {
+        "zh": "门 G4 未锁定（或书面子集未过审），禁止 N5b submit。",
+        "en": "Gate G4 is not locked (or written subset not approved); N5b submit blocked.",
+    },
+    "live_job_forbidden": {
+        "zh": "N5b skeleton：默认禁真 Job POST（未设 AIV_N5B_ALLOW_LIVE_JOB）。",
+        "en": "N5b skeleton forbids live Job POST unless AIV_N5B_ALLOW_LIVE_JOB is set.",
+    },
+    "n5b_impl_hold": {
+        "zh": "N5b IMPL HOLD：即便允许 live 标志，本骨架仍不 POST create task。",
+        "en": "N5b IMPL is HOLD; skeleton never POSTs create even if the live flag is set.",
+    },
+    "clips_required": {
+        "zh": "门 G5 pass 需要 clips/<shot_id>.mp4 + .meta.json（SKU/job_id/md5），且 md5 与字节一致。",
+        "en": "G5 pass needs clips/<shot_id>.mp4 + .meta.json (SKU/job_id/md5) with matching md5.",
+    },
+    "fake_pixels_forbidden": {
+        "zh": "禁假像素/彩条/静帧循环冒充 clips。",
+        "en": "Fake pixels / colorbars / still loops are forbidden as clips.",
+    },
+    "prompts_required": {
+        "zh": "缺 EP##-prompts.jsonl；N5b 只映射已拼装行，不发明镜头。",
+        "en": "EP##-prompts.jsonl is missing; N5b maps assembled lines only.",
+    },
 }
 
 

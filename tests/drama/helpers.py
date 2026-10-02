@@ -12,6 +12,7 @@ from aiv_drama.models import (
 from aiv_drama.service import DramaService
 from aiv_drama_n2.models import StoryboardGenerateRequest
 from aiv_drama_n3.models import N3MaterializeRequest
+from aiv_drama.validate import now_iso
 
 
 def seed_project_episode(
@@ -139,6 +140,60 @@ def lock_g3_usable(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01", a
     svc.materialize_n3_cards(pid, ep, N3MaterializeRequest(actor=actor))
     attach_real_refs(svc, pid, data_dir, ep=ep)
     return svc.confirm_gate_g3(pid, ep, {"decision": "pass", "actor": actor})
+
+
+def stamp_g4_locked(
+    svc: DramaService,
+    pid: str,
+    *,
+    ep: str = "EP01",
+    actor: str = "yangzhou",
+    written_subset=None,
+) -> None:
+    """Test-only G4 lock. N5a owns the real confirm; this PR only reads the record."""
+    rec = svc._rec(pid, ep)
+    rec["gate_g4"] = {
+        "gate_id": "g4",
+        "state": "passed",
+        "locked": True,
+        "version": 1,
+        "last_decision": "pass",
+        "note": "test stub — N5a not in this PR",
+        "actor": actor,
+        "decided_at": now_iso(),
+        "written_subset": written_subset,
+    }
+    rec["episode"]["locks"]["g4"] = True
+    svc._commit(rec)
+
+
+def write_n5b_jsonl(svc: DramaService, pid: str, lines: list, *, ep: str = "EP01") -> None:
+    from aiv_drama_n4.projection import write_prompts_jsonl
+
+    rec = svc._rec(pid, ep)
+    write_prompts_jsonl(svc.store.episode_dir(pid, rec["episode"]["episode_id"]), rec["episode"]["episode_id"], lines, version=1)
+    rec["n4"] = rec.get("n4") or {}
+    rec["n4"]["started"] = True
+    rec["n4"]["artifact"] = f"episodes/{ep}/{ep}-prompts.jsonl"
+    svc._commit(rec)
+
+
+def sample_n5b_line(
+    *,
+    shot_id: str = "S01",
+    aspect: str = "2.35:1",
+    duration_s: int = 5,
+    ref: str | None = "/tmp/n5b-local-ref.png",
+) -> dict:
+    return {
+        "shot_id": shot_id,
+        "prompt": "林晚推门入室环顾边关石阶",
+        "negative": "面部变形、多手、比例失调、低清",
+        "duration_s": duration_s,
+        "aspect": aspect,
+        "tool_profile": "seedance_2",
+        "ref_images": [ref] if ref else [],
+    }
 
 
 def sample_row(

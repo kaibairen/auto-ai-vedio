@@ -44,9 +44,10 @@ from aiv_drama_n3.models import (
 )
 from aiv_drama_n3.seedream import ARK_IMAGES_URL
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
+from aiv_drama_n5b.models import N5bSubmitRequest
 
-app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
-drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / D-N4")
+app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 / D-N5b CLI. JSON envelope on stdout. Isolated from koubo-N1.")
+drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / D-N4 / D-N5b")
 project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
@@ -61,6 +62,9 @@ g2_app = typer.Typer(help="Gate G2")
 n3_app = typer.Typer(help="D-N3 unit cards + crop")
 g3_app = typer.Typer(help="Gate G3")
 n4_app = typer.Typer(help="D-N4 deterministic prompt assemble")
+n5b_app = typer.Typer(help="D-N5b Seedance 2.0 skeleton (default: no live Job POST)")
+n5b_gate_app = typer.Typer(help="N5b gates")
+g5_app = typer.Typer(help="Gate G5")
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
@@ -77,6 +81,9 @@ drama.add_typer(g2_app, name="g2")
 drama.add_typer(n3_app, name="n3")
 drama.add_typer(g3_app, name="g3")
 drama.add_typer(n4_app, name="n4")
+drama.add_typer(n5b_app, name="n5b")
+n5b_app.add_typer(n5b_gate_app, name="gate")
+drama.add_typer(g5_app, name="g5")
 
 _PRETTY = False
 
@@ -668,6 +675,63 @@ def n4_assemble(
         force_reassemble=force_reassemble,
     )
     _print(_guard(lambda: _service().assemble_n4(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n5b_app.command("submit")
+def n5b_submit(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    shot: Optional[str] = typer.Option(None, "--shot"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    model: Optional[str] = typer.Option(None, "--model"),
+) -> None:
+    """Map jsonl → Ark body. Refuses unless G4 locked AND live flag; skeleton still never POSTs."""
+    body = N5bSubmitRequest(actor=actor, shot=shot, model=model)
+    _print(_guard(lambda: _service().submit_n5b(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
+@n5b_app.command("status")
+def n5b_status(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_n5b_status(project_id, ep)))
+
+
+@n5b_gate_app.command("g5")
+def n5b_gate_g5(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    actor: str = typer.Option(..., "--actor"),
+    verdict: str = typer.Option(..., "--verdict", help="pass|rework"),
+    note: Optional[str] = typer.Option(None, "--note"),
+) -> None:
+    raw = {"verdict": verdict, "actor": actor}
+    if note is not None:
+        raw["note"] = note
+    _print(_guard(lambda: _service().confirm_gate_g5(project_id, ep, raw)))
+
+
+@g5_app.command("get")
+def g5_get(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+) -> None:
+    _print(_guard(lambda: _service().get_gate_g5(project_id, ep)))
+
+
+@g5_app.command("confirm")
+def g5_confirm(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    decision: str = typer.Option(..., "--decision"),
+    actor: str = typer.Option(..., "--actor"),
+    note: Optional[str] = typer.Option(None, "--note"),
+) -> None:
+    raw = {"decision": decision, "actor": actor}
+    if note is not None:
+        raw["note"] = note
+    _print(_guard(lambda: _service().confirm_gate_g5(project_id, ep, raw)))
 
 
 @g3_app.command("confirm")
