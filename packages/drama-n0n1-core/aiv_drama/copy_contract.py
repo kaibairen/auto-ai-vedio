@@ -123,6 +123,12 @@ HTTP_STATUS: dict[str, int] = {
     "validation_failed": 422,
     "duration_out_of_profile": 422,
     "prompt_too_long": 422,
+    "missing_prompts_jsonl": 409,
+    "missing_grid": 409,
+    "g4_veto_blocked": 409,
+    "n5b_not_implemented": 404,
+    "fake_pixels_forbidden": 422,
+    "provider": 422,
 }
 
 CHIP_UNSET = "出片：未选工具"
@@ -254,6 +260,26 @@ MESSAGES: dict[str, dict[str, str]] = {
     "scene_look_forbidden": {
         "zh": "金样 A 合板仅 CHAR；SCENE 另轨。",
         "en": "Gold-A sheet is CHAR-only; SCENE is a separate track.",
+    },
+    "missing_prompts_jsonl": {
+        "zh": "本集缺少非空 EP##-prompts.jsonl，禁止生成宫格。",
+        "en": "Non-empty EP##-prompts.jsonl is required before N5a generate-grid.",
+    },
+    "missing_grid": {
+        "zh": "尚无真图宫格，禁止点门 G4 pass。",
+        "en": "No real grid image; gate G4 cannot pass.",
+    },
+    "g4_veto_blocked": {
+        "zh": "检项一票否决未清，G4 不得 pass。",
+        "en": "A G4 veto item is FAIL; gate cannot pass.",
+    },
+    "n5b_not_implemented": {
+        "zh": "N5b 出片 Job 本 PR 不做；须先锁门 G4。",
+        "en": "N5b Job is out of this PR; lock gate G4 first.",
+    },
+    "fake_pixels_forbidden": {
+        "zh": "禁假像素：不得用彩条/占位 PNG 冒充宫格。",
+        "en": "Fake pixels are forbidden; colorbars/placeholder grids cannot pass.",
     },
 }
 

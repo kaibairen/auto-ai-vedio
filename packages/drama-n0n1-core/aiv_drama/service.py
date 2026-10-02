@@ -84,8 +84,19 @@ from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
 from aiv_drama_n3.projection import write_episode_cards
 from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import usable_for_n4
-from aiv_drama_n4.ops import DramaN4Ops
-from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
+from aiv_drama_n5a.ops import DramaN5aOps
+from aiv_schema.models import (
+    GATE_G1B,
+    GATE_G2,
+    GATE_G3,
+    GATE_G4,
+    NODE_DN0,
+    NODE_DN1,
+    NODE_DN2,
+    NODE_DN3,
+    NODE_DN4,
+    PIPELINE_DRAMA,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +127,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN4Ops, DramaN2Ops):
+class DramaService(DramaN5aOps, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -140,6 +151,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         self._ensure_n2_fields(rec)
         self._ensure_n3_fields(rec)
         self._ensure_n4_fields(rec)
+        self._ensure_n5a_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -578,8 +590,17 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                 "status": "draft",
                 "aspect_ratio": body.aspect_ratio,
                 "target_duration_sec": body.target_duration_sec,
-                "locks": {"g1b": False, "g2": False, "g3": False},
-                "versions": {"brief": 0, "outline": 0, "cast": 0, "storyboard": 0, "cards": 0, "prompts": 0, "episode": 1},
+                "locks": {"g1b": False, "g2": False, "g3": False, "g4": False},
+                "versions": {
+                    "brief": 0,
+                    "outline": 0,
+                    "cast": 0,
+                    "storyboard": 0,
+                    "cards": 0,
+                    "prompts": 0,
+                    "grids": 0,
+                    "episode": 1,
+                },
                 "stale_downstream": [],
                 "next_edges": [],
                 "created_at": ts,
@@ -619,8 +640,19 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                 "actor": None,
                 "decided_at": None,
             },
+            "gate_g4": {
+                "gate_id": GATE_G4,
+                "state": "idle",
+                "locked": False,
+                "version": 0,
+                "last_decision": None,
+                "note": None,
+                "actor": None,
+                "decided_at": None,
+            },
             "n3": None,
             "n4": None,
+            "n5a": None,
             "d_n4_jobs": [],
             "library_ops": [],
             "allocated_char_ids": [],

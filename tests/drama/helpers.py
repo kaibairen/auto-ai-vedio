@@ -12,6 +12,7 @@ from aiv_drama.models import (
 from aiv_drama.service import DramaService
 from aiv_drama_n2.models import StoryboardGenerateRequest
 from aiv_drama_n3.models import N3MaterializeRequest
+from aiv_drama_n4.projection import write_prompts_jsonl
 
 
 def seed_project_episode(
@@ -169,3 +170,61 @@ def sample_row(
     }
     row.update(kw)
     return row
+
+
+# 1×1 PNG so mock API bytes pass the real-image container check (not a product grid).
+MINIMAL_PNG = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def plant_prompts_jsonl(svc, pid, *, ep: str = "EP01", n: int = 9, char_id: str = "CHAR-01") -> list[dict]:
+    """Write a non-empty EP##-prompts.jsonl without going through N4 usable/face gates."""
+    episode_dir = svc.store.episode_dir(pid, ep)
+    episode_dir.mkdir(parents=True, exist_ok=True)
+    lines = []
+    for i in range(1, n + 1):
+        lines.append(
+            {
+                "shot_id": f"S{i:02d}",
+                "prompt": f"林晚推门入室环顾 中景 镜头{i} 米色风衣 杏眼",
+                "negative": "面部变形、多手、比例失调、低清",
+                "char_ids": [char_id],
+                "scene_id": "SCENE-01",
+                "shot_size": "MS",
+                "camera": "PUSH",
+                "duration_s": 5,
+                "tool_profile": "seedance_2",
+                "aspect": "9:16",
+            }
+        )
+    write_prompts_jsonl(episode_dir, ep, lines, version=1)
+    rec = svc._rec(pid, ep)
+    rec["n4"] = rec.get("n4") or {}
+    rec["n4"]["started"] = True
+    rec["n4"]["stale"] = False
+    rec["n4"]["assemble_version"] = 1
+    rec["n4"]["artifact"] = f"episodes/{ep}/{ep}-prompts.jsonl"
+    rec["n4"]["upstream_cards_version"] = ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0
+    rec["n4"]["upstream_storyboard_version"] = (rec.get("storyboard") or {}).get("version") or 0
+    rec["n4"]["upstream_cast_version"] = (rec.get("cast") or {}).get("version") or 0
+    rec["episode"]["versions"]["prompts"] = 1
+    svc._commit(rec)
+    return lines
+
+
+def thicken_mode_b_char(svc, pid, *, ep: str = "EP01", char_id: str = "CHAR-01") -> None:
+    """Mode B: thick-card text only. No face/full ref."""
+    rec = svc._rec(pid, ep)
+    for card in ((rec.get("n3") or {}).get("cards") or {}).get("characters") or []:
+        if card.get("id") != char_id:
+            continue
+        card["appearance"] = "黑长直、杏眼、米色风衣、清冷气质"
+        card["immutable"] = ["右眉一颗痣", "身高1.68米"]
+        card["refs"] = []
+        card["missing_ref"] = True
+        card["weak_binding"] = True
+    svc._commit(rec)
