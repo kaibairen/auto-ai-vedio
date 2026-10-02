@@ -23,6 +23,10 @@
 
 `details.posted=false`。CI 只走 mock HTTP 单测 client；submit 路径不调用 `httpx.post`。
 
+## Tests (this tip)
+
+`pytest tests` → **280 passed**. N5b-specific: `test_n5b_map.py` (5) · `test_n5b_gates.py` (10) · `test_n5b_api.py` (6). No live Ark Job POST.
+
 ## 包
 
 `packages/drama-n5b-core/` · CLI `aiv drama n5b submit|status|gate g5` · API `/drama/n5b/jobs` · `/drama/n5b/status` · `/gates/g5`。
