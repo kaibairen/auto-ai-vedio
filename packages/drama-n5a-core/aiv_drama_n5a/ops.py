@@ -66,10 +66,6 @@ class DramaN5aOps(DramaN4Ops):
             rec["gate_g4"] = empty_gate_g4()
         self._refresh_n5a_stale(rec)
 
-    def _stale_n4(self, rec: dict[str, Any]) -> None:
-        super()._stale_n4(rec)
-        self._stale_n5a(rec)
-
     def _stale_n5a(self, rec: dict[str, Any]) -> None:
         n5a = rec.get("n5a")
         if not n5a:
