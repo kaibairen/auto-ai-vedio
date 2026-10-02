@@ -1,0 +1,98 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N3 Look materialize API
+  version: 0.1.0
+  description: |
+    D-N3 **look 落盘**（BRIEF-AIV-031-LOOK-IMPL）。Ark Seedream `images/generations`（`ARK_API_KEY`）主；
+    DashScope wan `multimodal-generation`（`DASHSCOPE_API_KEY`）备。与 `AIV_OPENAI_API_KEY` / DeepSeek **隔离**。
+
+    - 树：`episodes/<ep>/n3/looks/{char|scene}/<card_id>/` · `face_*.png` / `full_*.png` / `plate_*.png` · `web_refs/` · `meta.json`
+    - `refs[{path,md5,role}]`；**禁热链 URL**；CHAR 过门 `role∈{face,full}`
+    - **不**自动翻转 `usable_for_n4`；缺 face / usable=false → N4 assemble 仍 **409**
+    - 默认 SKU `doubao-seedream-5-0-flash-260915`；水印 OFF；同 CHAR 同 seed；SCENE 分种
+    - 升档 hooks：flash→pro→4.5 / wan2.7(-pro)；reason∈{identity_drift,api_fail,quality_gate}；**≠更好看**
+    - ForcePass=never。docs≠PASS。≠绿 N4。≠合 main。
+  x-assign: AIV-031-IMPL-ENG-001
+  x-date: '2026-10-02'
+servers:
+  - url: /api/v0
+tags:
+  - name: Look
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/n3/looks/generate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [Look]
+      operationId: generateDramaLook
+      summary: 为一张已加厚 CHAR/SCENE 卡出一张定妆/定场图并挂 refs
+      description: |
+        CHAR 默认 `face_front`（CU）；SCENE 默认 `plate_empty`（空镜 LS）。
+        只挂 path+md5+role，**不**设 `usable_for_n4=true`。
+        force_pass / force / skip_gate → 400 `force_pass_forbidden`。
+        watermark=true → 422。热链 URL → 400 `hotlink_url_forbidden`。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LookGenerateRequest'
+      responses:
+        '200':
+          description: 已落盘并挂 ref；usable_for_n4 仍为 false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LookEnvelope'
+        '400':
+          description: force_pass_forbidden / hotlink_url_forbidden / usable flip
+        '409':
+          description: upstream_unlocked / locked / look_cost_cap
+        '422':
+          description: look_incomplete / provider / watermark
+components:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    LookGenerateRequest:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: { type: string, description: CHAR-* / SCENE-* }
+        actor: { type: string }
+        provider: { type: string, enum: [auto, ark, seedream, dashscope, wan], default: auto }
+        sku: { type: string, example: doubao-seedream-5-0-flash-260915 }
+        view: { type: string, enum: [front, side, three_quarter, empty, ls] }
+        role: { type: string, enum: [face, full, plate, look, style_ref, web_source] }
+        style_ref: { type: string, description: 整句替换 STYLE-REF（可配置） }
+        unlock_edit: { type: boolean, default: false }
+        upgrade_reason: { type: string, enum: [identity_drift, api_fail, quality_gate] }
+        watermark: { type: boolean, default: false, description: 必须为 false }
+        seed: { type: integer, minimum: 0 }
+    LookEnvelope:
+      type: object
+      properties:
+        ok: { type: boolean }
+        usable_for_n4: { type: boolean, example: false }
+        look:
+          type: object
+          properties:
+            path: { type: string, example: episodes/EP01/n3/looks/char/CHAR-01/face_front.png }
+            md5: { type: string }
+            role: { type: string, example: face }
+            sku: { type: string }
+            seed: { type: integer }
+            usable_for_n4_flipped: { type: boolean, example: false }
+        cards: { type: object }
+        docs_pass: { type: boolean, example: false }

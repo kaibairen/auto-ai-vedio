@@ -15,7 +15,7 @@
 ## 人怎么走
 
 1. 先走完 D-N2 **G2 pass**（须已选 `tool_profile`，`ready_for_n4=true`）和 D-N3 **G3 pass**。未锁 → **409 `upstream_unlocked`**。
-2. 每张 CHAR/SCENE 工作副本须有真实 ref（path+md5，文件存在）。否则 `usable_for_n4=false` → assemble **409**。
+2. 每张 CHAR/SCENE 须有真实 ref（path+md5，文件存在）**且** `usable_for_n4=true`（仅挂起面人审可翻；挂 ref ≠ 自绿）。否则 assemble **409** `usable_for_n4_false`，不写 jsonl。
 3. 未选工具 / `ready_for_n4=false` → assemble **409 `not_ready_for_n4`**。
 4. **POST** `.../drama/n4/validate`：软校验，不写盘，返回 `missing_refs` / issues / `first_shot_review`。
 5. **POST** `.../drama/n4/assemble`：DIR `join_nonempty` 填槽。成功写 jsonl + `EP##-prompts.v{n}.jsonl`；`n4-consumer.started=true`。

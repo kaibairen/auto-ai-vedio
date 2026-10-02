@@ -84,6 +84,7 @@ from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
 from aiv_drama_n3.projection import write_episode_cards
 from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import usable_for_n4
+from aiv_drama_look.ops import DramaLookOps
 from aiv_drama_n4.ops import DramaN4Ops
 from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
 
@@ -116,7 +117,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN4Ops, DramaN2Ops):
+class DramaService(DramaLookOps, DramaN4Ops, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)

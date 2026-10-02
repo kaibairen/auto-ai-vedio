@@ -83,11 +83,20 @@ def write_library_character(lib_dir: Path, record: dict[str, Any]) -> Path:
 
 def assert_no_secrets(episode_dir: Path) -> None:
     """Guard: episode projection must not contain API keys."""
-    banned = ("OPENAI_API_KEY", "AIV_OPENAI_API_KEY", "sk-")
+    banned = (
+        "OPENAI_API_KEY",
+        "AIV_OPENAI_API_KEY",
+        "ARK_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "sk-",
+    )
+    skip_suffixes = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bin"}
     if not episode_dir.is_dir():
         return
     for path in episode_dir.rglob("*"):
         if not path.is_file():
+            continue
+        if path.suffix.lower() in skip_suffixes:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         for token in banned:

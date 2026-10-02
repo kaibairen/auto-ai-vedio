@@ -32,8 +32,10 @@ from aiv_drama_n2.models import (
     StoryboardResetRequest,
     StoryboardWrite,
 )
+from aiv_drama_look.models import LookGenerateRequest
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
+    N3AttachRefRequest,
     N3AttachRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
@@ -42,7 +44,7 @@ from aiv_drama_n3.models import (
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 
 app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
-drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / D-N4")
+drama = typer.Typer(help="短剧 D-N0 / D-N1 / D-N2 / D-N3 / look / D-N4")
 project_app = typer.Typer(help="Project stub")
 episode_app = typer.Typer(help="Episode (pipeline_profile=drama)")
 library_app = typer.Typer(help="Project-scoped character seed (not list/search)")
@@ -57,6 +59,7 @@ g2_app = typer.Typer(help="Gate G2")
 n3_app = typer.Typer(help="D-N3 unit cards + crop")
 g3_app = typer.Typer(help="Gate G3")
 n4_app = typer.Typer(help="D-N4 deterministic prompt assemble")
+look_app = typer.Typer(help="D-N3 look materialize (Seedream/wan · no usable flip)")
 
 app.add_typer(drama, name="drama")
 drama.add_typer(project_app, name="project")
@@ -73,6 +76,7 @@ drama.add_typer(g2_app, name="g2")
 drama.add_typer(n3_app, name="n3")
 drama.add_typer(g3_app, name="g3")
 drama.add_typer(n4_app, name="n4")
+drama.add_typer(look_app, name="look")
 
 _PRETTY = False
 
@@ -541,6 +545,28 @@ def n3_attach(
     _print(_guard(lambda: _service().attach_n3_card(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
+@n3_app.command("attach-ref")
+def n3_attach_ref(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    ident: str = typer.Option(..., "--id"),
+    role: str = typer.Option(..., "--role"),
+    source_path: str = typer.Option(..., "--source"),
+    view: str = typer.Option("front", "--view"),
+    kind: Optional[str] = typer.Option(None, "--kind"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    body = N3AttachRefRequest(
+        id=ident,
+        role=role,  # type: ignore[arg-type]
+        source_path=source_path,
+        view=view,
+        kind=kind,  # type: ignore[arg-type]
+        actor=actor,
+    )
+    _print(_guard(lambda: _service().attach_n3_look_ref(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
+
+
 @n3_app.command("promote")
 def n3_promote(
     project_id: str = typer.Option(..., "--project"),
@@ -559,6 +585,37 @@ def g3_get(
     ep: str = typer.Option(..., "--ep"),
 ) -> None:
     _print(_guard(lambda: _service().get_gate_g3(project_id, ep)))
+
+
+@look_app.command("generate")
+def look_generate(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    ident: str = typer.Option(..., "--id"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    provider: str = typer.Option("auto", "--provider"),
+    sku: Optional[str] = typer.Option(None, "--sku"),
+    view: Optional[str] = typer.Option(None, "--view"),
+    role: Optional[str] = typer.Option(None, "--role"),
+    style_ref: Optional[str] = typer.Option(None, "--style-ref"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+    upgrade_reason: Optional[str] = typer.Option(None, "--upgrade-reason"),
+    seed: Optional[int] = typer.Option(None, "--seed"),
+) -> None:
+    body = LookGenerateRequest(
+        id=ident,
+        actor=actor,
+        provider=provider,  # type: ignore[arg-type]
+        sku=sku,
+        view=view,  # type: ignore[arg-type]
+        role=role,  # type: ignore[arg-type]
+        style_ref=style_ref,
+        unlock_edit=unlock_edit,
+        upgrade_reason=upgrade_reason,  # type: ignore[arg-type]
+        seed=seed,
+        watermark=False,
+    )
+    _print(_guard(lambda: _service().generate_look(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @n4_app.command("get")

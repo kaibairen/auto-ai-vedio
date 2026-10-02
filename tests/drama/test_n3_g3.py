@@ -91,4 +91,5 @@ def test_usable_for_n4_true_only_with_refs_and_g3(svc, data_dir):
     assert svc.get_gate_g3(pid, "EP01")["usable_for_n4"] is False  # G3 not locked
     passed = svc.confirm_gate_g3(pid, "EP01", {"decision": "pass", "actor": "yangzhou"})
     assert passed["gate"]["locked"] is True
-    assert passed["usable_for_n4"] is True
+    # AIV-031: has_usable_ref / G3 pass must NOT imply usable_for_n4.
+    assert passed["usable_for_n4"] is False

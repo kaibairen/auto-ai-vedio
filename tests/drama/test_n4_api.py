@@ -4,25 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests.drama.helpers import attach_real_refs, mark_usable_for_n4_reviewed
 from tests.drama.test_n2_api import _setup_locked
 from tests.drama.test_n3_api import _setup_g2
 
 
 def _attach_refs_via_store(client, pid):
     svc = client.app.state.service
-    rec = svc._rec(pid, "EP01")
-    data_dir = Path(svc.settings.data_dir)
-    cards = rec["n3"]["cards"]
-    for card in list(cards.get("characters") or []) + list(cards.get("scenes") or []):
-        ident = card["id"]
-        role = "face" if card.get("kind") == "character" else "plate"
-        path = data_dir / "refs" / f"{ident}.png"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(f"ref-{ident}".encode("utf-8"))
-        card["refs"] = [{"path": str(path), "md5": "abc123", "role": role, "missing_file": False}]
-        card["missing_ref"] = False
-        card["weak_binding"] = False
-    svc._commit(rec)
+    attach_real_refs(svc, pid, Path(svc.settings.data_dir))
 
 
 def _setup_g3_usable(client):
@@ -48,7 +37,9 @@ def _setup_g3_usable(client):
         json={"decision": "pass", "actor": "yangzhou"},
     )
     assert g3.status_code == 200, g3.text
-    assert g3.json()["usable_for_n4"] is True
+    assert g3.json()["usable_for_n4"] is False
+    mark_usable_for_n4_reviewed(client.app.state.service, pid)
+    assert client.app.state.service.get_gate_g3(pid, "EP01")["usable_for_n4"] is True
     return pid
 
 

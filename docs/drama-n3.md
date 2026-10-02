@@ -37,6 +37,7 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
    - `force_pass` / `force` / `skip_gate` → **400 `force_pass_forbidden`**。
    - 同名 SCENE → warn `duplicate_scene_name`（ID 权威）；**不**硬挡 G3；禁静默并 ID。
 6. **attach** `CHAR@version` / `SCENE@version` → 本集 cards 工作副本；**仍须 G3**。
+6b. **attach-ref**（031 BE）`POST .../drama/n3/cards/attach-ref`：本地 fixture 落入 `episodes/<ep>/n3/looks/{char|scene}/<id>/face_<view>.png`（SCENE `plate_`），写 `refs[{path,md5,role}]`。禁热链。`has_usable_ref`（CHAR `face|full`）**不**推导 `usable_for_n4`。缺 MUST face → `missing_ref`/`weak_binding`。ForcePass=never。不接 Ark/DashScope。
 7. **promote** 显式 stub：写入 `libraries/` 新 version；**不**自动标 G3 pass。
 8. D12–D15：`GET .../library/policy` 只挂起面；`project_scope` 默认可覆盖假设 `project`，`chosen=null`。
 
@@ -47,8 +48,10 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
+aiv drama look generate --project proj_01 --ep EP01 --id CHAR-01 --actor eng-031
 aiv drama n3 get --project proj_01 --ep EP01
 aiv drama n3 attach --project proj_01 --ep EP01 --id CHAR-01 --version 3
+aiv drama n3 attach-ref --project proj_01 --ep EP01 --id CHAR-01 --role face --source ./fixtures/face.png
 aiv drama n3 promote --project proj_01 --ep EP01 --id CHAR-01
 aiv drama g3 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 ```

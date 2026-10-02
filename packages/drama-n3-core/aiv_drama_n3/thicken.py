@@ -274,9 +274,11 @@ def apply_patch_to_card(card: dict[str, Any], patch: dict[str, Any]) -> dict[str
         updated["template_status"] = "provisional_inline"
         updated["template_path"] = None
     # Hard: never accept look/ref/md5 / usable flips from the model.
+    from aiv_drama_n3.refs import refresh_card_ref_flags
+
     updated["refs"] = deepcopy(card.get("refs") or [])
-    updated["missing_ref"] = card.get("missing_ref")
-    updated["weak_binding"] = card.get("weak_binding")
+    refresh_card_ref_flags(updated)
+    updated.pop("usable_for_n4", None)
     updated["id"] = card.get("id")
     updated["kind"] = card.get("kind")
     return updated

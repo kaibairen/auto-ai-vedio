@@ -19,8 +19,10 @@ info:
       thicken 用 **provisional_inline**（工程内嵌短模板）；正式 KEEP 另 BRIEF。
     - **F3**：N3 可观测字段只有 `template_paths` / `prompt_paths`。**.prompt 不得写入** D-N1/D-N2 `skill_paths`。
       可选人物小传走独立 `thicken_skill_paths`。不重开 018b。
-    - **029**：`POST .../drama/n3/cards/thicken` 文字加厚（provider=llm）。禁生图 / look md5 / 绿 N4。
+      - **029**：`POST .../drama/n3/cards/thicken` 文字加厚（provider=llm）。禁生图 / look md5 / 绿 N4。
       狗粮默认 G3 **锁前** thicken。ForcePass=never。
+      - **031 BE**：`POST .../drama/n3/cards/attach-ref` 挂 looks 树 `refs[{path,md5,role}]`。
+      `has_usable_ref` ≠ `usable_for_n4`；挂 ref **不**自翻 usable。禁热链。ForcePass=never。
 
     ## 硬规则
     - G2 未锁 → D-N3 写路径 **409 `upstream_unlocked`**
@@ -174,6 +176,39 @@ paths:
       responses:
         '200':
           description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/attach-ref:
+    post:
+      tags: [N3Cards]
+      operationId: attachN3LookRef
+      summary: 把本地 fixture/文件挂到 looks 树并写 refs[{path,md5,role}]
+      description: |
+        权威路径 `episodes/<ep>/n3/looks/{char|scene}/<card_id>/face_<view>.png`（SCENE=`plate_`）。
+        落盘后重算 md5。禁热链 URL。`style_ref`/`web_source` 不计 `has_usable_ref`。
+        **不**翻转 `usable_for_n4`。force_pass/force/skip_gate → 400 `force_pass_forbidden`。
+        不接 Ark/DashScope 生图（ENG 另席）。
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3AttachRefRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
@@ -335,6 +370,8 @@ components:
         - auto_promote_forbidden
         - provider
         - thicken_incomplete
+        - hotlink_ref_forbidden
+        - ref_incomplete
     ErrorBody:
       type: object
       required: [code, message]
@@ -388,6 +425,18 @@ components:
       properties:
         id: { type: string }
         version: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [character, scene] }
+        actor: { type: string }
+    N3AttachRefRequest:
+      type: object
+      required: [id, role, source_path]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [face, full, plate, look, style_ref, web_source] }
+        view: { type: string, default: front }
+        source_path: { type: string, description: 本地 fixture/文件，禁止 http(s) 热链 }
+        path: { type: string, nullable: true }
         kind: { type: string, enum: [character, scene] }
         actor: { type: string }
     N3PromoteRequest:
