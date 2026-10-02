@@ -205,8 +205,12 @@ def plant_prompts_jsonl(svc, pid, *, ep: str = "EP01", n: int = 9, char_id: str 
     rec = svc._rec(pid, ep)
     rec["n4"] = rec.get("n4") or {}
     rec["n4"]["started"] = True
+    rec["n4"]["stale"] = False
     rec["n4"]["assemble_version"] = 1
     rec["n4"]["artifact"] = f"episodes/{ep}/{ep}-prompts.jsonl"
+    rec["n4"]["upstream_cards_version"] = ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0
+    rec["n4"]["upstream_storyboard_version"] = (rec.get("storyboard") or {}).get("version") or 0
+    rec["n4"]["upstream_cast_version"] = (rec.get("cast") or {}).get("version") or 0
     rec["episode"]["versions"]["prompts"] = 1
     svc._commit(rec)
     return lines
