@@ -5,7 +5,7 @@
 | ASSIGN | AIV-036-ENG-033-IMPL |
 | 基线 tip | `69eda17c778e2bb1b4b004b5647a788ffe68e283` |
 | 分支 | `cursor/u-033-scene-look-optional-a1c6` |
-| 本拍 tip | *(git rev-parse HEAD after this commit)* |
+| 本拍 tip | `1fd201426a801ee9b2663ed6adc6e19b3db7a35b` |
 | PR | https://github.com/kaibairen/auto-ai-vedio/pull/22 (**draft** · ≠ merge) |
 | ForcePass | never |
 | 合 main | **否** |
