@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from aiv_drama.errors import AppError
@@ -8,6 +9,7 @@ from aiv_drama.models import LibraryCharacterWrite
 from aiv_drama.validate import now_iso
 from aiv_drama_n3.cards import all_cards, is_scene_id, materialize_cards
 from aiv_drama_n3.crop import crop_view
+from aiv_drama_n3.looks import ensure_episode_looks_tree
 from aiv_drama_n3.library import (
     KIND_CHAR,
     KIND_SCENE,
@@ -20,11 +22,19 @@ from aiv_drama_n3.library import (
 )
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
+    N3AttachRefRequest,
     N3AttachRequest,
     N3ForkRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
     N3ThickenRequest,
+)
+from aiv_drama_n3.refs import (
+    has_usable_ref,
+    is_hotlink_url,
+    mount_local_file_as_ref,
+    refresh_n3_ref_flags,
+    upsert_card_ref,
 )
 from aiv_drama_n3.thicken import normalize_thicken_provider, thicken_cards
 from aiv_drama_n3.policy import default_project_scope, hanging_bundle, project_scope_capability
@@ -37,6 +47,7 @@ from aiv_drama_n3.validate import (
     UPSTREAM_G2_MESSAGE,
     collect_n3_issues,
     raise_hard,
+    refs_ready_for_n4,
     reject_force_keys_n3,
     reject_image_gen_n3,
     usable_for_n4,
@@ -154,10 +165,13 @@ class DramaN3Ops:
         return view
 
     def _refresh_usable(self, rec: dict[str, Any]) -> None:
+        """Honest false only. Never auto-set usable_for_n4=true (C5)."""
         n3 = rec.get("n3")
         if not n3 or not n3.get("cards"):
             return
-        n3["cards"]["usable_for_n4"] = usable_for_n4(n3, g3_locked=bool(rec["gate_g3"].get("locked")))
+        g3_locked = bool(rec["gate_g3"].get("locked"))
+        if not g3_locked or not refs_ready_for_n4(n3):
+            n3["cards"]["usable_for_n4"] = False
 
     def n3_envelope(
         self,
@@ -285,6 +299,8 @@ class DramaN3Ops:
         cards["updated_at"] = now_iso()
         cards["updated_by"] = req.actor
         rec["n3"] = {"cards": cards}
+        refresh_n3_ref_flags(rec.get("n3"))
+        ensure_episode_looks_tree(self.store.episode_dir(project_id, ep), all_cards(rec.get("n3")))
         rec["gate_g3"]["state"] = "ready" if (characters or scenes) else "idle"
         rec["gate_g3"]["locked"] = False
         rec["episode"]["locks"]["g3"] = False
@@ -477,6 +493,79 @@ class DramaN3Ops:
         return self._idem_put(
             idempotency_key,
             f"n3_attach:{project_id}:{ep}:{body.id}@{body.version}",
+            self.n3_envelope(rec, warnings=warns or None, extra=extra),
+        )
+
+    def attach_n3_look_ref(
+        self,
+        project_id: str,
+        ep: str,
+        body: N3AttachRefRequest,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Mount a local looks-tree ref. Never flips usable_for_n4. ForcePass=never."""
+        reject_force_keys_n3(raw)
+        reject_image_gen_n3(raw)
+        if is_hotlink_url(body.source_path) or is_hotlink_url(body.path):
+            raise AppError(
+                400,
+                "hotlink_ref_forbidden",
+                "refs[].path 只允许 looks 树本地路径，禁止热链 URL",
+                field="source_path",
+                node=NODE_DN3,
+            )
+        cached = self._idem_get(idempotency_key, f"n3_attach_ref:{project_id}:{ep}:{body.id}:{body.role}:{body.view}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, ep)
+        self._require_g2_for_n3(rec)
+        self._require_writable_episode(rec)
+        cards = (rec.get("n3") or {}).get("cards")
+        if not cards or not cards.get("materialized"):
+            raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)
+        kind = parse_kind(body.id, body.kind)
+        card = self._find_card(rec, body.id, kind)
+        if card is None:
+            raise AppError(422, "card_id_not_in_cast", CAST_ONLY_MESSAGE, id=body.id, node=NODE_DN3)
+        source = Path(body.source_path)
+        mounted = mount_local_file_as_ref(
+            self.store.episode_dir(project_id, ep),
+            rec["episode"]["episode_id"],
+            card,
+            source,
+            role=body.role,
+            view=body.view,
+        )
+        upsert_card_ref(card, mounted)
+        cards["version"] = (cards.get("version") or 0) + 1
+        cards["updated_at"] = now_iso()
+        cards["updated_by"] = body.actor
+        rec["episode"]["versions"]["cards"] = cards["version"]
+        refresh_n3_ref_flags(rec.get("n3"))
+        # HARD: never write usable_for_n4=true. _refresh_usable only forces False.
+        self._refresh_usable(rec)
+        self._touch_episode(rec)
+        self._commit(rec)
+        issues = collect_n3_issues(rec)
+        warns = [i for i in issues if i.get("severity") == "warn"]
+        extra = {
+            "attached_ref": {
+                "id": body.id,
+                "kind": kind,
+                "role": mounted["role"],
+                "path": mounted["path"],
+                "md5": mounted["md5"],
+                "missing_file": mounted["missing_file"],
+            },
+            "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(rec["gate_g3"].get("locked"))),
+            "has_usable_ref": has_usable_ref(card),
+            "note": "attach-ref 只挂 path+md5+role；has_usable_ref ≠ usable_for_n4；禁自翻 usable",
+        }
+        return self._idem_put(
+            idempotency_key,
+            f"n3_attach_ref:{project_id}:{ep}:{body.id}:{body.role}:{body.view}",
             self.n3_envelope(rec, warnings=warns or None, extra=extra),
         )
 

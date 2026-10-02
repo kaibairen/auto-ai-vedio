@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 from aiv_drama.ids import CHAR_RE, SCENE_RE
+from aiv_drama_n3.refs import has_usable_ref, refresh_card_ref_flags
 from aiv_drama_n2.named_cast import (
     is_b_class,
     is_group_label,
@@ -48,21 +49,7 @@ def binding_label(library_ref: dict[str, Any] | None) -> str:
     return "attached"
 
 
-def has_usable_ref(card: dict[str, Any]) -> bool:
-    kind = card.get("kind")
-    for ref in card.get("refs") or []:
-        if not isinstance(ref, dict):
-            continue
-        path = (ref.get("path") or "").strip()
-        md5 = (ref.get("md5") or "").strip()
-        if not path or not md5:
-            continue
-        role = (ref.get("role") or "").strip()
-        if kind == "character" and role not in {"face", "full"}:
-            continue
-        if not ref.get("missing_file", False):
-            return True
-    return False
+# has_usable_ref lives in refs.py (AIV-031): CHAR face|full only; style_ref/web_source never count.
 
 
 def skip_cast_row(row: dict[str, Any], *, kind: str | None = None) -> bool:
@@ -111,7 +98,8 @@ def card_from_cast_row(
     lib = deepcopy(row.get("library_ref")) if row.get("library_ref") else None
     prev = previous or {}
     refs = deepcopy(prev.get("refs") or [])
-    missing = not has_usable_ref({"kind": kind, "refs": refs})
+    flags = refresh_card_ref_flags({"kind": kind, "refs": refs})
+    missing = bool(flags.get("missing_ref"))
     tags = list(prev.get("status_tags") or [])
     if ident not in used and "预挂未上场" not in tags:
         tags.append("预挂未上场")

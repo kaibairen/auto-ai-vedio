@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.10 — AIV-031 BE look refs / md5 / N4 409 (docs≠PASS)
+
+BE slice on main tip `4d651a6c` (N3 thicken + N4 assemble already on main). ForcePass=never. Does **not** merge to main. Does **not** flip `usable_for_n4`. Does **not** claim LOOP-PASS or green N4. Live Seedream/wan clients are ENG.
+
+- Looks tree authority: `episodes/<ep>/n3/looks/{char|scene}/<card_id>/` + `face_<view>.png` / `plate_<view>.png`; mkdir helpers.
+- `refs[{path,md5,role}]` mount: path+md5+role MUST; reject hotlink URLs; recompute md5 on write; `missing_file` on absent path or md5 drift.
+- CHAR `has_usable_ref`: path+md5+`role∈{face,full}`+`missing_file≠true`. `style_ref`/`web_source` do **not** count. Empty refs or missing MUST face → `missing_ref`/`weak_binding`.
+- `has_usable_ref` must **not** imply `usable_for_n4`. Attach/look/generate/G3 confirm never auto-set usable true. N4 assemble still **409** `usable_for_n4_false` with `details.missing_refs[{id,kind,name,reason}]` (`missing_ref`|`missing_file`), `written=false`. ForcePass/force/skip_gate → **400**.
+- Image keys: `ARK_API_KEY` / `DASHSCOPE_API_KEY` isolated from DeepSeek `AIV_OPENAI_API_KEY`. BE tests use local fixtures only.
+- API/CLI: `POST .../drama/n3/cards/attach-ref` · `aiv drama n3 attach-ref`. Tests: `tests/drama/test_n3_look_refs.py`. **docs≠PASS**.
+
 ## 0.2.9 — AIV-026 D-N4 deterministic prompt assemble (docs≠PASS)
 
 Engineering on main tip `1c3b921d` (AIV-029 N3 thicken + 弹窗审判庭 already on main). ForcePass=never. Does **not** merge to main. Does not implement N5 / 补图 / Skill·MCP / FE UI. OpenAPI **0.1.0** increment (`openapi/drama-n4.v0.yaml`). **docs≠PASS**.

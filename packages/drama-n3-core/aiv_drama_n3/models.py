@@ -33,6 +33,20 @@ class N3AttachRequest(BaseModel):
     actor: str | None = None
 
 
+class N3AttachRefRequest(BaseModel):
+    """Mount a local looks-tree file onto a working card. Never flips usable_for_n4."""
+
+    model_config = {"extra": "forbid"}
+
+    id: str = Field(min_length=1)
+    role: Literal["face", "full", "plate", "look", "style_ref", "web_source"]
+    view: str = "front"
+    source_path: str = Field(min_length=1)
+    path: str | None = None
+    kind: Literal["character", "scene"] | None = None
+    actor: str | None = None
+
+
 class N3PromoteRequest(BaseModel):
     model_config = {"extra": "forbid"}
 

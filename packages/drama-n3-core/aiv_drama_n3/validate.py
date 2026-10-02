@@ -11,6 +11,7 @@ from aiv_drama_n3.cards import (
     is_none_id,
     is_scene_id,
 )
+from aiv_drama_n3.refs import has_must_face
 from aiv_schema.models import GATE_G3, NODE_DN3
 
 WEAK_BINDING_MESSAGE = "视觉弱绑定 · 下游一致性自负"
@@ -89,14 +90,27 @@ def raise_hard(issues: list[dict[str, Any]]) -> None:
     )
 
 
-def usable_for_n4(n3: dict[str, Any] | None, *, g3_locked: bool) -> bool:
-    """F1: missing CHAR/SCENE refs hard-block usable_for_n4. G3 pass ≠ usable."""
-    if not g3_locked:
-        return False
+def refs_ready_for_n4(n3: dict[str, Any] | None) -> bool:
+    """Technical slot: every CHAR/SCENE card has a usable (non-provenance) ref."""
     cards = all_cards(n3)
     if not cards:
         return False
     return all(has_usable_ref(card) for card in cards)
+
+
+def usable_for_n4(n3: dict[str, Any] | None, *, g3_locked: bool) -> bool:
+    """Product slot. has_usable_ref does NOT imply this.
+
+    Honest false when G3 unlocked, no cards, or any card lacks a usable ref.
+    True only if the stored cards.usable_for_n4 flag is already True (挂起面).
+    Attach / look / generate / G3 confirm never set that flag.
+    """
+    if not g3_locked:
+        return False
+    if not refs_ready_for_n4(n3):
+        return False
+    stored = ((n3 or {}).get("cards") or {}).get("usable_for_n4")
+    return bool(stored)
 
 
 def collect_n3_issues(
@@ -143,7 +157,7 @@ def collect_n3_issues(
                     path=card.get("template_path"),
                 )
             )
-        if not has_usable_ref(card):
+        if card.get("missing_ref") or not has_must_face(card) or not has_usable_ref(card):
             issues.append(
                 issue(
                     "warn",

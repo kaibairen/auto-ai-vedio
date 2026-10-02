@@ -109,6 +109,9 @@ class DramaN4Ops(DramaN3Ops):
         episode_dir = self.store.episode_dir(rec["episode"]["project_id"], ep)
         return read_prompts_jsonl(episode_dir, ep)
 
+    def _episode_dir(self, rec: dict[str, Any]):
+        return self.store.episode_dir(rec["episode"]["project_id"], rec["episode"]["episode_id"])
+
     def n4_envelope(
         self,
         rec: dict[str, Any],
@@ -118,7 +121,7 @@ class DramaN4Ops(DramaN3Ops):
         lines: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         n4 = deepcopy(rec.get("n4") or empty_n4(rec))
-        usable, missing = episode_usable_for_n4(rec, self.settings)
+        usable, missing = episode_usable_for_n4(rec, self.settings, episode_dir=self._episode_dir(rec))
         ready = episode_ready_for_n4(rec)
         artifact = n4.get("artifact")
         env: dict[str, Any] = {
@@ -167,7 +170,9 @@ class DramaN4Ops(DramaN3Ops):
         rec = self._rec(project_id, ep)
         require_g3_for_n4_read(rec)
         lines = self._n4_lines_from_disk(rec) if (rec.get("n4") or {}).get("started") else []
-        issues = collect_n4_issues(rec, lines or None, settings=self.settings, for_write=False)
+        issues = collect_n4_issues(
+            rec, lines or None, settings=self.settings, for_write=False, episode_dir=self._episode_dir(rec)
+        )
         warns = [i for i in issues if i.get("severity") == "warn"]
         extra = {"written": bool(lines)}
         if lines:
@@ -221,9 +226,11 @@ class DramaN4Ops(DramaN3Ops):
             aspect=aspect,
             assemble_version=((rec.get("n4") or {}).get("assemble_version") or 0) + 1,
         )
-        issues = collect_n4_issues(rec, preview, settings=self.settings, for_write=False)
+        issues = collect_n4_issues(
+            rec, preview, settings=self.settings, for_write=False, episode_dir=self._episode_dir(rec)
+        )
         valid = all(i.get("severity") != "error" for i in issues)
-        usable, missing = episode_usable_for_n4(rec, self.settings)
+        usable, missing = episode_usable_for_n4(rec, self.settings, episode_dir=self._episode_dir(rec))
         return {
             "ok": True,
             "project_id": project_id,
@@ -261,7 +268,12 @@ class DramaN4Ops(DramaN3Ops):
         rec = self._rec(project_id, ep)
         self._require_writable_episode(rec)
         req = body or N4AssembleRequest()
-        require_assemble_gates(rec, self.settings, force_reassemble=bool(req.force_reassemble))
+        require_assemble_gates(
+            rec,
+            self.settings,
+            force_reassemble=bool(req.force_reassemble),
+            episode_dir=self._episode_dir(rec),
+        )
         persist, original = normalize_tool_profile(
             req.tool_profile or (rec.get("storyboard") or {}).get("tool_profile")
         )
@@ -269,7 +281,9 @@ class DramaN4Ops(DramaN3Ops):
         cards = ((rec.get("n3") or {}).get("cards") or {})
 
         preview = assemble_episode_lines(rec, tool_profile=persist, aspect=aspect, assemble_version=0)
-        issues = collect_n4_issues(rec, preview, settings=self.settings, for_write=True)
+        issues = collect_n4_issues(
+            rec, preview, settings=self.settings, for_write=True, episode_dir=self._episode_dir(rec)
+        )
         raise_hard_n4(issues, extra={"written": False})
 
         prev = rec.get("n4") or empty_n4(rec)
@@ -349,7 +363,13 @@ class DramaN4Ops(DramaN3Ops):
         ]
         self._touch_episode(rec)
         self._commit(rec)
-        warns = [i for i in collect_n4_issues(rec, lines, settings=self.settings, for_write=False) if i.get("severity") == "warn"]
+        warns = [
+            i
+            for i in collect_n4_issues(
+                rec, lines, settings=self.settings, for_write=False, episode_dir=self._episode_dir(rec)
+            )
+            if i.get("severity") == "warn"
+        ]
         env = self.n4_envelope(
             rec,
             warnings=warns or None,
@@ -377,7 +397,7 @@ class DramaN4Ops(DramaN3Ops):
         n4 = rec.get("n4") or {}
         started = bool(n4.get("started"))
         lines = self._n4_lines_from_disk(rec) if started else []
-        usable, missing = episode_usable_for_n4(rec, self.settings)
+        usable, missing = episode_usable_for_n4(rec, self.settings, episode_dir=self._episode_dir(rec))
         return {
             "ok": True,
             "project_id": project_id,

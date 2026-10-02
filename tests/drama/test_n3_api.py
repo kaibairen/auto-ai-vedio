@@ -39,6 +39,8 @@ def test_openapi_n3_copy_served(client):
     assert "template_paths" in res.text
     assert "force_pass_forbidden" in res.text
     assert "cards/thicken" in res.text
+    assert "cards/attach-ref" in res.text
+    assert "hotlink_ref_forbidden" in res.text
     assert "thicken_skill_paths" in res.text
     assert "provisional_inline" in res.text
 

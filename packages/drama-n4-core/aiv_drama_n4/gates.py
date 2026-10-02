@@ -41,8 +41,13 @@ def episode_ready_for_n4(rec: dict[str, Any]) -> bool:
     return bool(sb.get("ready_for_n4"))
 
 
-def episode_usable_for_n4(rec: dict[str, Any], settings: Any | None = None) -> tuple[bool, list[dict[str, Any]]]:
-    missing = collect_missing_refs(rec.get("n3"), settings)
+def episode_usable_for_n4(
+    rec: dict[str, Any],
+    settings: Any | None = None,
+    *,
+    episode_dir: Any | None = None,
+) -> tuple[bool, list[dict[str, Any]]]:
+    missing = collect_missing_refs(rec.get("n3"), settings, episode_dir=episode_dir)
     usable = usable_for_n4(rec.get("n3"), g3_locked=g3_locked(rec)) and not missing
     return usable, missing
 
@@ -63,6 +68,7 @@ def require_assemble_gates(
     settings: Any | None = None,
     *,
     force_reassemble: bool = False,
+    episode_dir: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Raise the first hard gate. Returns missing_refs (empty on success)."""
     if rec["episode"].get("pipeline_profile") != PIPELINE_DRAMA:
@@ -93,7 +99,7 @@ def require_assemble_gates(
             written=False,
             tool_profile=(rec.get("storyboard") or {}).get("tool_profile"),
         )
-    usable, missing = episode_usable_for_n4(rec, settings)
+    usable, missing = episode_usable_for_n4(rec, settings, episode_dir=episode_dir)
     if not usable:
         raise AppError(
             409,

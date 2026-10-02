@@ -11,7 +11,13 @@ from aiv_drama_n4.models import N4AssembleRequest
 from aiv_drama_n4.projection import prompts_jsonl_name, prompts_jsonl_versioned_name
 from aiv_drama_n4.validate import collect_n4_issues
 
-from tests.drama.helpers import attach_real_refs, lock_g2, lock_g3_usable, seed_project_episode
+from tests.drama.helpers import (
+    attach_real_refs,
+    lock_g2,
+    lock_g3_usable,
+    mark_usable_for_n4_reviewed,
+    seed_project_episode,
+)
 
 
 def _err(fn):
@@ -45,7 +51,8 @@ def test_not_ready_for_n4_blocks_write(svc, data_dir):
     svc.materialize_n3_cards(pid, "EP01", N3MaterializeRequest(actor="yangzhou"))
     attach_real_refs(svc, pid, data_dir)
     svc.confirm_gate_g3(pid, "EP01", {"decision": "pass", "actor": "yangzhou"})
-    assert svc.get_gate_g3(pid, "EP01")["usable_for_n4"] is True
+    # G3 + refs ≠ usable (AIV-031). not_ready is still checked first.
+    assert svc.get_gate_g3(pid, "EP01")["usable_for_n4"] is False
     rec = svc._rec(pid, "EP01")
     assert rec["storyboard"].get("ready_for_n4") is False
     exc = _err(lambda: svc.assemble_n4(pid, "EP01", N4AssembleRequest(actor="yangzhou"), raw={"actor": "yangzhou"}))
@@ -142,6 +149,7 @@ def test_upstream_stale_blocks_write_until_reassemble(svc, data_dir):
     svc.materialize_n3_cards(pid, "EP01", N3MaterializeRequest(actor="yangzhou", unlock_edit=True))
     attach_real_refs(svc, pid, data_dir)
     svc.confirm_gate_g3(pid, "EP01", {"decision": "pass", "actor": "yangzhou"})
+    mark_usable_for_n4_reviewed(svc, pid)
     again = svc.assemble_n4(pid, "EP01", N4AssembleRequest(actor="yangzhou"), raw={"actor": "yangzhou"})
     assert again["written"] is True
     assert again["n4"]["stale"] is False
