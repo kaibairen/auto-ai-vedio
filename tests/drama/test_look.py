@@ -202,7 +202,8 @@ def test_dashscope_client_beijing_wan(settings, monkeypatch):
         text = "{}"
 
         def json(self):
-            return {"output": {"choices": [{"message": {"content": [{"image": f"data:image/png;base64,{b64}"]}}]}}}
+            img = "data:image/png;base64," + b64
+            return {"output": {"choices": [{"message": {"content": [{"image": img}]}}]}}
 
     def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
         captured["url"] = url
