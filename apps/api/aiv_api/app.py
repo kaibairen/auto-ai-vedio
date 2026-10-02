@@ -28,8 +28,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         description=(
             "短剧 pipeline_profile=drama · D-N0 + D-N1（门 G1b）+ D-N2 分镜表（门 G2）+ D-N3 单元卡（门 G3）"
-            " + D-N4 确定性按镜拼装。 "
-            "ForcePass=never. Isolated from koubo-N1. docs≠PASS. Does not auto-open D-N5."
+            " + D-N3 look materialize + D-N4 确定性按镜拼装。 "
+            "ForcePass=never. Isolated from koubo-N1. docs≠PASS. Does not auto-open D-N5. "
+            "Look does not flip usable_for_n4."
         ),
     )
     app.state.settings = settings
@@ -129,6 +130,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     openapi_n2 = settings.repo_root / "openapi" / "drama-n2.v0.yaml"
     openapi_n3 = settings.repo_root / "openapi" / "drama-n3.v0.yaml"
     openapi_n4 = settings.repo_root / "openapi" / "drama-n4.v0.yaml"
+    openapi_look = settings.repo_root / "openapi" / "drama-look.v0.yaml"
 
     @app.get("/openapi/drama-n0n1.v0.yaml")
     def openapi_file() -> FileResponse:
@@ -145,6 +147,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/openapi/drama-n4.v0.yaml")
     def openapi_n4_file() -> FileResponse:
         return FileResponse(openapi_n4, media_type="application/yaml")
+
+    @app.get("/openapi/drama-look.v0.yaml")
+    def openapi_look_file() -> FileResponse:
+        return FileResponse(openapi_look, media_type="application/yaml")
 
     app.include_router(router)
     return app

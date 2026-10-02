@@ -41,6 +41,7 @@ from aiv_drama_n3.models import (
     N3PromoteRequest,
     N3ThickenRequest,
 )
+from aiv_drama_look.models import LookGenerateRequest
 from aiv_drama_n3.validate import reject_force_keys_n3, reject_image_gen_n3
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 from aiv_drama_n4.validate import reject_force_keys_n4
@@ -95,6 +96,26 @@ async def _raw_n4(request: Request) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys_n4(data)
+    return data
+
+
+async def _raw_look(request: Request) -> dict[str, Any]:
+    """Look generate: reject ForcePass, allow image-gen fields (unlike N3 thicken)."""
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_n3(data)
+    if data.get("usable_for_n4") is True:
+        raise AppError(
+            400,
+            "validation",
+            "look generate 禁止翻转 usable_for_n4（仅挂起面三轴）",
+            field="usable_for_n4",
+            node="D-N3",
+        )
     return data
 
 
@@ -492,6 +513,18 @@ async def materialize_n3_cards(
     raw = await _raw_n3(request)
     body = N3MaterializeRequest.model_validate(raw) if raw else N3MaterializeRequest()
     return _svc(request).materialize_n3_cards(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/looks/generate")
+async def generate_n3_look(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_look(request)
+    body = LookGenerateRequest.model_validate(raw)
+    return _svc(request).generate_look(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 @router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/thicken")

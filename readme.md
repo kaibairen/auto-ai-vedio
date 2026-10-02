@@ -4,9 +4,9 @@ KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 �
 
 - `.skill/` — Skill packages (writing + generation). D-N1 **read-only** 女/男频编剧；D-N2 **read-only borrow** `.skill/writing/动态漫-转分镜`（`borrowed_dongman`）。不改教材正文。
 - `.prompt/` — Prompt / instruction documents (koubo, generation, consistency, seedance). **Not** used by this drama runtime.
-- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
-- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` — OpenAPI **0.1.0** copies
-- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` — humans + bots; koubo-N1 isolation
+- `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-look-core` · `packages/drama-n4-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
+- `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-look.v0.yaml` · `openapi/drama-n4.v0.yaml` — OpenAPI **0.1.0** copies
+- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-look.md` · `docs/drama-n4.md` — humans + bots; koubo-N1 isolation
 
 docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. 018c workbench ships Screen E/F/G (min table + G2 button state); not a product PASS.
 
@@ -52,6 +52,18 @@ aiv drama g3 confirm --project proj_01 --ep EP01 --decision pass --actor yangzho
 ```
 
 See [`docs/drama-n3.md`](docs/drama-n3.md). docs≠PASS. ForcePass=never.
+
+## Drama D-N3 look (031)
+
+After cards are thickened, generate one still per card (CHAR `face_front` CU / SCENE `plate_empty` LS). Writes `episodes/<ep>/n3/looks/{char|scene}/<id>/`, md5, and `refs[{path,md5,role}]`. **Does not** set `usable_for_n4=true`. Ark `ARK_API_KEY` (Seedream flash→pro→4.5) is primary; DashScope `DASHSCOPE_API_KEY` (wan2.7→pro) is backup. Isolated from `AIV_OPENAI_API_KEY`. Watermark OFF. Missing face / usable=false still **409** on N4 assemble.
+
+```bash
+# export ARK_API_KEY=...   # not AIV_OPENAI_API_KEY
+aiv drama look generate --project proj_01 --ep EP01 --id CHAR-01 --actor eng-031
+aiv drama look generate --project proj_01 --ep EP01 --id SCENE-01 --actor eng-031
+```
+
+See [`docs/drama-look.md`](docs/drama-look.md) and [`docs/RUN-NOTES-AIV-031-LOOK.md`](docs/RUN-NOTES-AIV-031-LOOK.md). docs≠PASS. ForcePass=never.
 
 ## Drama D-N4 assemble (026)
 

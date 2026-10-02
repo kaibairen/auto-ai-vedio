@@ -203,6 +203,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "usable_for_n4=false · 缺图/缺 ref，拒绝写盘。",
         "en": "usable_for_n4 is false; missing refs/images — jsonl not written.",
     },
+    "hotlink_url_forbidden": {
+        "zh": "禁热链 URL 当 refs[].path；须先落盘本地文件再挂 md5。",
+        "en": "Do not use a hotlinked URL as refs[].path; write a local file and md5 first.",
+    },
+    "look_incomplete": {
+        "zh": "出图前 MUST 仍空（CHAR appearance+immutable / SCENE appearance+light_anchor）。",
+        "en": "Look MUST slots are empty (CHAR appearance+immutable / SCENE appearance+light_anchor).",
+    },
+    "look_cost_cap": {
+        "zh": "出图次数/金额闸已到，停抽改卡或提示。",
+        "en": "Look cost/count cap reached; stop drawing and edit the card or prompt.",
+    },
     "bare_id_in_prompt": {
         "zh": "prompt 禁止只留裸 CHAR-/SCENE- ID，须替换为中文特征。",
         "en": "Prompt must not keep bare CHAR-/SCENE- ids; replace with Chinese features.",

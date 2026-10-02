@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.11 — AIV-031 LOOK materialize on BE refs/409 (docs≠PASS)
+
+Engineering rebase onto BE tip `b8b06d11` (PR#20). ForcePass=never. Does **not** merge to main. Does **not** flip `usable_for_n4`, write N4 jsonl as success, open N5, or ship FE chips.
+
+- Keeps `packages/drama-look-core` as the real providers: Ark Seedream (`ARK_API_KEY` · `images/generations` · flash→pro→4.5) + DashScope wan (`DASHSCOPE_API_KEY` · multimodal-generation · wan2.7→pro). `aiv_drama_n3.image_providers` stays an ENG hook only.
+- Shared looks tree (DESIGN-AIV-031-LOOK): `episodes/<ep>/n3/looks/{char|scene}/<card_id>/` with `face_*`/`full_*`/`plate_*`, `web_refs/`, `meta.json`. `refs[{path,md5,role}]`; **no hotlink URL as path**; CHAR `has_usable_ref` is path+md5+`role∈{face,full}`+`missing_file≠true`. `style_ref`/`web_source` do not count.
+- Generate never flips `usable_for_n4`. `has_usable_ref` ≠ usable. N4 assemble still **409** `usable_for_n4_false` with `details.missing_refs` when usable is false / no face.
+- API/CLI: `POST .../drama/n3/looks/generate` · `aiv drama look generate` (ENG live clients) and BE `POST .../drama/n3/cards/attach-ref` · `aiv drama n3 attach-ref` (local fixture mount).
+- Default SKU `doubao-seedream-5-0-flash-260915`; watermark OFF; same CHAR same seed; SCENE separate seed. Upgrade hooks `identity_drift|api_fail|quality_gate` only (≠更好看).
+- Tests: `tests/drama/test_look.py` + `tests/drama/test_n3_look_refs.py`. Dogfood: `docs/RUN-NOTES-AIV-031-LOOK.md`. **docs≠PASS**.
+
 ## 0.2.10 — AIV-031 BE look refs / md5 / N4 409 (docs≠PASS)
 
 BE slice on main tip `4d651a6c` (N3 thicken + N4 assemble already on main). ForcePass=never. Does **not** merge to main. Does **not** flip `usable_for_n4`. Does **not** claim LOOP-PASS or green N4. Live Seedream/wan clients are ENG.

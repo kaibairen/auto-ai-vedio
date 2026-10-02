@@ -67,10 +67,14 @@ class Settings:
     openai_base_url: str
     openai_model: str
     named_cast_check: str = "warn"
-    # Image providers (AIV-031). Isolated from DeepSeek / AIV_OPENAI_API_KEY.
-    # BE tests must not require live Ark/DashScope. ENG owns live clients.
+    # Look image clients — isolated from AIV_OPENAI_API_KEY / DeepSeek (DESIGN-AIV-031).
+    # Live Seedream/wan live in drama-look-core; image_providers.py is a hook only.
     ark_api_key: str | None = None
+    ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     dashscope_api_key: str | None = None
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    look_sku: str = "doubao-seedream-5-0-flash-260915"
+    look_style_ref: str | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -96,7 +100,13 @@ class Settings:
             openai_model=os.environ.get("AIV_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
             named_cast_check=named_cast,
             ark_api_key=os.environ.get("ARK_API_KEY") or os.environ.get("AIV_ARK_API_KEY"),
+            ark_base_url=(os.environ.get("ARK_BASE_URL") or "https://ark.cn-beijing.volces.com/api/v3").rstrip("/"),
             dashscope_api_key=os.environ.get("DASHSCOPE_API_KEY") or os.environ.get("AIV_DASHSCOPE_API_KEY"),
+            dashscope_base_url=(
+                os.environ.get("DASHSCOPE_BASE_URL") or "https://dashscope.aliyuncs.com/api/v1"
+            ).rstrip("/"),
+            look_sku=os.environ.get("AIV_LOOK_SKU") or "doubao-seedream-5-0-flash-260915",
+            look_style_ref=os.environ.get("AIV_LOOK_STYLE_REF") or None,
         )
 
     def skill_relpath(self, lane: str) -> str:

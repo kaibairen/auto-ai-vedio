@@ -48,6 +48,7 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
+aiv drama look generate --project proj_01 --ep EP01 --id CHAR-01 --actor eng-031
 aiv drama n3 get --project proj_01 --ep EP01
 aiv drama n3 attach --project proj_01 --ep EP01 --id CHAR-01 --version 3
 aiv drama n3 attach-ref --project proj_01 --ep EP01 --id CHAR-01 --role face --source ./fixtures/face.png
