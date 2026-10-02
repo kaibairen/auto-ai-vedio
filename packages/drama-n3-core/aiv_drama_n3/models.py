@@ -24,6 +24,20 @@ class N3ThickenRequest(BaseModel):
     include_bio_skill: bool = False
 
 
+class N3GenerateLookRequest(BaseModel):
+    """Gold-A 3:2 single-sheet look-generate. CHAR only. Never flips usable_for_n4."""
+
+    model_config = {"extra": "forbid"}
+
+    id: str = Field(min_length=1)
+    face_ref: str | None = None
+    expected_md5: str | None = None
+    dry_run: bool = False
+    out_dir: str | None = None
+    actor: str | None = None
+    unlock_edit: bool = False
+
+
 class N3AttachRequest(BaseModel):
     model_config = {"extra": "forbid"}
 

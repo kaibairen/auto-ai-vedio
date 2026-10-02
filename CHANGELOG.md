@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.10 — AIV-032 gold-A 3:2 CHAR turnaround look-generate (docs≠PASS)
+
+BRIEF-AIV-032. ForcePass=never. Does **not** merge to main. Does not flip `usable_for_n4` or green N4. STYLE终句 + RECIPE§4 一字不改. No orphan generate scripts.
+
+- Shared `assemble_gold_a_sheet_prompt` + `generate_gold_a_sheet` in `drama-n3-core` (CLI standalone `--card` and episode/HTTP/workbench).
+- Ark Seedream: `POST …/api/v3/images/generations`, SKU flash→pro→4.5→wan2.7, size `2048x1365`, no `sequential_image_generation`.
+- Face ref md5 bind **before** generate. Dry-run / recorded path when `ARK_API_KEY` is absent.
+- CLI: `aiv drama n3 generate-look`. HTTP: `POST …/drama/n3/cards/generate-look`. Screen H trigger (default dry-run).
+- Tests: `tests/drama/test_n3_look_generate.py`. Dogfood: [`docs/aiv-032-gold-sheet.md`](docs/aiv-032-gold-sheet.md).
+
 ## 0.2.9 — AIV-026 D-N4 deterministic prompt assemble (docs≠PASS)
 
 Engineering on main tip `1c3b921d` (AIV-029 N3 thicken + 弹窗审判庭 already on main). ForcePass=never. Does **not** merge to main. Does not implement N5 / 补图 / Skill·MCP / FE UI. OpenAPI **0.1.0** increment (`openapi/drama-n4.v0.yaml`). **docs≠PASS**.

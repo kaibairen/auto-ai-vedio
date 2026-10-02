@@ -38,6 +38,13 @@ def test_workbench_021b_screen_h_card_list_and_badges():
     assert "上游门 G1b 未锁，不能进 D-N2" in js
     assert "details?.gate" in js or "details.gate" in js
     assert "btn-n3-mat" in html
+    assert "btn-n3-look" in html
+    assert "h-look-char" in html
+    assert "h-face-ref" in html
+    assert "h-look-dry" in html
+    assert "generate-look" in html
+    assert "generate-look" in js
+    assert "cards/generate-look" in js
     assert "btn-g3-pass" in html
     assert "btn-g3-reject" in html
     assert "force_pass" not in js
@@ -55,6 +62,7 @@ def test_workbench_021b_does_not_disable_g3_on_weak_binding():
     assert "disabled" not in weak_fn
     write_fn = js.split("function applyHWriteGate", 1)[1].split("function ", 1)[0]
     assert "btn-n3-mat" in write_fn
+    assert "btn-n3-look" in write_fn
     assert "btn-g3-pass" not in write_fn
     assert "btn-g3-reject" not in write_fn
 

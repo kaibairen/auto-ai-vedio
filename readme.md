@@ -6,7 +6,7 @@ KEEP skill and prompt seed, plus **短剧 D-N0 / D-N1（门 G1b）**、**D-N2 �
 - `.prompt/` — Prompt / instruction documents (koubo, generation, consistency, seedance). **Not** used by this drama runtime.
 - `packages/drama-n0n1-core` · `packages/drama-n2-core` · `packages/drama-n3-core` · `packages/drama-n4-core` · `packages/episode-schema` · `apps/api` · `apps/cli` · `apps/workbench` — drama runtime
 - `openapi/drama-n0n1.v0.yaml` · `openapi/drama-n2.v0.yaml` · `openapi/drama-n3.v0.yaml` · `openapi/drama-n4.v0.yaml` — OpenAPI **0.1.0** copies
-- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` — humans + bots; koubo-N1 isolation
+- `docs/drama-n0n1.md` · `docs/drama-n2.md` · `docs/drama-n3.md` · `docs/drama-n4.md` · `docs/aiv-032-gold-sheet.md` — humans + bots; koubo-N1 isolation
 
 docs≠PASS; ACCEPT≠merge. **ForcePass=never.** This PR does **not** include koubo-N1 runtime (`feature/koubo`). Does **not** auto-open D-N3. 018c workbench ships Screen E/F/G (min table + G2 button state); not a product PASS.
 
@@ -42,16 +42,18 @@ See [`docs/drama-n2.md`](docs/drama-n2.md). Frozen O1–O9: outline+cast→story
 
 ## Drama D-N3 / G3 (021a + 021c)
 
-After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally **thicken** text slots (`appearance` / `immutable` / `light_anchor`) with `provider=llm`, optionally attach `CHAR@version` / `SCENE@version`, then confirm **gate G3**. Missing refs warn only (F1); `usable_for_n4` stays false without refs. Thicken does not call image-gen or assemble N4. Promote is an explicit stub and does not auto-pass G3. N3 uses `template_paths` / `prompt_paths` (F3). Screen H shows CHAR/SCENE rows + ref chips (021b minimal; docs≠PASS).
+After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally **thicken** text slots (`appearance` / `immutable` / `light_anchor`) with `provider=llm`, optionally run gold-A **3:2 single-sheet** `generate-look` (shared assemble+Ark; `usable_for_n4` stays false), optionally attach `CHAR@version` / `SCENE@version`, then confirm **gate G3**. Missing refs warn only (F1); `usable_for_n4` stays false without refs. Thicken does not call image-gen or assemble N4. Promote is an explicit stub and does not auto-pass G3. N3 uses `template_paths` / `prompt_paths` (F3). Screen H shows CHAR/SCENE rows + ref chips (021b minimal; docs≠PASS).
 
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
 # export AIV_OPENAI_API_KEY=...  # DeepSeek / OpenAI-compatible; thicken is llm-only
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
+aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
+# live: ARK_API_KEY in env or ~/.config/aiv/ARK_API_KEY — never echo / never commit
 aiv drama g3 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 ```
 
-See [`docs/drama-n3.md`](docs/drama-n3.md). docs≠PASS. ForcePass=never.
+See [`docs/drama-n3.md`](docs/drama-n3.md) and [`docs/aiv-032-gold-sheet.md`](docs/aiv-032-gold-sheet.md). docs≠PASS. ForcePass=never.
 
 ## Drama D-N4 assemble (026)
 

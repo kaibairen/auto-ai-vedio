@@ -83,7 +83,7 @@ def write_library_character(lib_dir: Path, record: dict[str, Any]) -> Path:
 
 def assert_no_secrets(episode_dir: Path) -> None:
     """Guard: episode projection must not contain API keys."""
-    banned = ("OPENAI_API_KEY", "AIV_OPENAI_API_KEY", "sk-")
+    banned = ("OPENAI_API_KEY", "AIV_OPENAI_API_KEY", "ARK_API_KEY", "AIV_ARK_API_KEY", "sk-")
     if not episode_dir.is_dir():
         return
     for path in episode_dir.rglob("*"):

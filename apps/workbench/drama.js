@@ -1022,6 +1022,8 @@ function applyHWriteGate() {
   const g3Locked = isG3Locked(state.n3);
   const mat = $("btn-n3-mat");
   if (mat) mat.disabled = !ready || g3Locked;
+  const lookBtn = $("btn-n3-look");
+  if (lookBtn) lookBtn.disabled = !ready;
   const hint = $("h-g2-hint");
   if (hint) hint.hidden = ready;
 }
@@ -1093,6 +1095,36 @@ function paintHWeak(data) {
   el.hidden = !weak;
   el.textContent = "视觉弱绑定 · 下游一致性自负";
 }
+function paintLookCharSelect(data) {
+  const sel = $("h-look-char");
+  if (!sel) return;
+  const chars = data?.cards?.characters || [];
+  const prev = sel.value;
+  sel.innerHTML = chars.map((c) => {
+    const id = c.id || "";
+    return `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`;
+  }).join("");
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
+function paintLookMeta(data) {
+  const el = $("h-look-meta");
+  if (!el) return;
+  const look = data?.look || {};
+  const usable = data?.usable_for_n4 === true;
+  const lookUsable = look.usable_for_n4 === true || data?.look_usable_for_n4 === true;
+  const bits = [
+    `look.usable_for_n4=${lookUsable ? "true" : "false"}`,
+    `episode.usable_for_n4=${usable ? "true" : "false"}`,
+    "禁 sequential_image_generation",
+    "单张 3:2",
+  ];
+  if (look.prompt_md5) bits.push(`prompt md5 ${look.prompt_md5}`);
+  if (look.sheet_md5) bits.push(`sheet md5 ${look.sheet_md5}`);
+  if (look.dry_run) bits.push("dry-run");
+  el.textContent = bits.join(" · ");
+}
+
 function paintHFromEnvelope(data) {
   state.n3 = data;
   dump("h-out", data);
@@ -1100,6 +1132,8 @@ function paintHFromEnvelope(data) {
   paintHWeak(data);
   renderCardRows("h-char-tbody", data?.cards?.characters);
   renderCardRows("h-scene-tbody", data?.cards?.scenes);
+  paintLookCharSelect(data);
+  paintLookMeta(data);
   applyHWriteGate();
 }
 async function refreshG2State() {
@@ -1150,6 +1184,31 @@ if ($("btn-n3-mat")) {
 }
 if ($("btn-n3-get")) {
   $("btn-n3-get").onclick = () => refreshScreenH();
+}
+if ($("btn-n3-look")) {
+  $("btn-n3-look").onclick = async () => {
+    if (!isG2Ready() || !state.projectId) {
+      applyHWriteGate();
+      return;
+    }
+    const ident = $("h-look-char")?.value;
+    const face = $("h-face-ref")?.value?.trim();
+    const md5 = $("h-face-md5")?.value?.trim();
+    const dry = Boolean($("h-look-dry")?.checked);
+    if (!ident) {
+      showBanner("请选择 CHAR", false, "error");
+      return;
+    }
+    const payload = { id: ident, dry_run: dry, actor: "yangzhou" };
+    if (face) payload.face_ref = face;
+    if (md5) payload.expected_md5 = md5;
+    const data = await api(
+      "POST",
+      `/projects/${state.projectId}/episodes/${state.ep}/drama/n3/cards/generate-look`,
+      payload,
+    );
+    paintHFromEnvelope(data);
+  };
 }
 async function confirmG3(decision) {
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/gates/g3/confirm`, {

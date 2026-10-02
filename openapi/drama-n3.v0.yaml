@@ -19,8 +19,11 @@ info:
       thicken 用 **provisional_inline**（工程内嵌短模板）；正式 KEEP 另 BRIEF。
     - **F3**：N3 可观测字段只有 `template_paths` / `prompt_paths`。**.prompt 不得写入** D-N1/D-N2 `skill_paths`。
       可选人物小传走独立 `thicken_skill_paths`。不重开 018b。
-    - **029**：`POST .../drama/n3/cards/thicken` 文字加厚（provider=llm）。禁生图 / look md5 / 绿 N4。
-      狗粮默认 G3 **锁前** thicken。ForcePass=never。
+      - **029**：`POST .../drama/n3/cards/thicken` 文字加厚（provider=llm）。禁在 thicken 上传生图 / look md5 / 绿 N4。
+        狗粮默认 G3 **锁前** thicken。ForcePass=never。
+      - **032**：`POST .../drama/n3/cards/generate-look` 金样 A **单张 3:2** 合板（Ark Seedream）。
+        与 CLI `aiv drama n3 generate-look` 共用 assemble+generate。禁 `sequential_image_generation`；
+        禁拆 CU/LS 冒充合板；`usable_for_n4` **不自翻**。SCENE 另轨。
 
     ## 硬规则
     - G2 未锁 → D-N3 写路径 **409 `upstream_unlocked`**
@@ -127,6 +130,42 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/N3ThickenRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/generate-look:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N3Cards]
+      operationId: generateN3Look
+      summary: 金样 A 3:2 单张合板（Ark Seedream · 与 CLI 共用 assemble）
+      description: |
+        BRIEF-AIV-032。读本集 CHAR 厚卡 + 脸 ref（md5 核验先于 generate）→ 拼装 STYLE+RECIPE§4
+        → Ark `images/generations` size=`2048x1365`。
+        最小 body：model + prompt + size + watermark=false + response_format=url + image=face data-URL。
+        **禁** `sequential_image_generation`；**禁** 拆 CU/LS 多图冒充合板。
+        产物：sheet + prompt 全文 + md5。`look.usable_for_n4=false`，**不**自翻集级 usable。
+        `dry_run=true`：落盘 prompt + recorded 请求（无 Key / 无像素）。
+        ForcePass=never。SCENE 另轨。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3GenerateLookRequest'
       responses:
         '200':
           description: OK
@@ -335,6 +374,9 @@ components:
         - auto_promote_forbidden
         - provider
         - thicken_incomplete
+        - material_bind
+        - look_card_incomplete
+        - scene_look_forbidden
     ErrorBody:
       type: object
       required: [code, message]
@@ -381,6 +423,19 @@ components:
           items: { type: string }
         unlock_edit: { type: boolean, default: false }
         include_bio_skill: { type: boolean, default: false }
+    N3GenerateLookRequest:
+      type: object
+      required: [id]
+      additionalProperties: false
+      description: CHAR 合板。additionalProperties=false 拒绝 force_pass / sequential_image_generation
+      properties:
+        id: { type: string, description: CHAR-* }
+        face_ref: { type: string, description: 本地脸 ref 路径；缺省可回落到卡上 role=face }
+        expected_md5: { type: string, description: 32-hex；有则先于 generate 核验 }
+        dry_run: { type: boolean, default: false }
+        out_dir: { type: string }
+        actor: { type: string }
+        unlock_edit: { type: boolean, default: false }
     N3AttachRequest:
       type: object
       required: [id, version]
@@ -457,6 +512,10 @@ components:
         warnings: { type: array, items: { type: object } }
         auto_open_dn4: { type: boolean, enum: [false] }
         docs_pass: { type: boolean, enum: [false] }
+        looks: { type: object, additionalProperties: true }
+        look: { type: object, additionalProperties: true }
+        look_usable_for_n4: { type: boolean, enum: [false] }
+        auto_flipped_usable: { type: boolean, enum: [false] }
     GateG3Status:
       type: object
       required: [gate_id, state, locked, version]

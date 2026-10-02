@@ -30,15 +30,16 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 1. 先走完 D-N2，**门 G2 pass**。未锁时物化/attach/GET N3 → **409 `upstream_unlocked`**。
 2. **POST** `.../drama/n3/cards/materialize`：只从本集 cast 的 CHAR-*/SCENE-* 挂出工作副本。系统音/群杂/CHAR 脏名不开 CHAR。SCENE 与 CHAR **分桶**：合法空间短名（含 侧边栏奶茶时刻 / 开源避难所入口 / **弹窗审判庭**）不得因 CHAR `弹窗*` 半截规则 `b_class_skipped`。裸 `弹窗` / `系统音` 仍跳过。禁以 cast 名手补丁当 G3 产品解。
 3. **POST** `.../drama/n3/cards/thicken`（029 · 文字加厚）：`provider=llm` 填 CHAR `appearance`+`immutable`、SCENE 空间 `appearance`+`light_anchor`。KEEP 人物卡模板进 `prompt_paths`。可选 `--include-bio-skill` 进 `thicken_skill_paths`（**不**写回 N1/N2 `skill_paths`）。SCENE 模板 `provisional_inline`。CAM 扩展槽软并入 appearance/light_anchor。`refs` 可仍空；**不**翻转 `usable_for_n4`；**不** assemble N4。狗粮默认 **G3 锁前** thicken。
-4. 故事板裁剪 **GET** `.../drama/n3/storyboard-crop` = 既有 D-N2 列只读投影（seq/shot_id/duration/shot_size/camera/action/char_ids/scene_id/dialogue/notes）。不扩 N2 schema。
-5. **门 G3**：`{ decision: pass|reject, actor, note? }`。
+4. **POST** `.../drama/n3/cards/generate-look`（032 · 金样 A 3:2 单张合板）：厚卡 + 脸 ref（md5 先于 generate）→ 与 CLI 共用 `assemble_gold_a_sheet_prompt` + Ark Seedream。禁 `sequential_image_generation`；禁拆 CU/LS。合板 `usable_for_n4=false`，**不**自翻集级 usable。SCENE 另轨。无 Key 用 `dry_run`。见 [`aiv-032-gold-sheet.md`](aiv-032-gold-sheet.md)。
+5. 故事板裁剪 **GET** `.../drama/n3/storyboard-crop` = 既有 D-N2 列只读投影（seq/shot_id/duration/shot_size/camera/action/char_ids/scene_id/dialogue/notes）。不扩 N2 schema。
+6. **门 G3**：`{ decision: pass|reject, actor, note? }`。
    - pass → cards `locked=true`，`next_edges=["D-N4"]`，**不**创建 D-N4 job。
    - reject → 回改。
    - `force_pass` / `force` / `skip_gate` → **400 `force_pass_forbidden`**。
    - 同名 SCENE → warn `duplicate_scene_name`（ID 权威）；**不**硬挡 G3；禁静默并 ID。
-6. **attach** `CHAR@version` / `SCENE@version` → 本集 cards 工作副本；**仍须 G3**。
-7. **promote** 显式 stub：写入 `libraries/` 新 version；**不**自动标 G3 pass。
-8. D12–D15：`GET .../library/policy` 只挂起面；`project_scope` 默认可覆盖假设 `project`，`chosen=null`。
+7. **attach** `CHAR@version` / `SCENE@version` → 本集 cards 工作副本；**仍须 G3**。
+8. **promote** 显式 stub：写入 `libraries/` 新 version；**不**自动标 G3 pass。
+9. D12–D15：`GET .../library/policy` 只挂起面；`project_scope` 默认可覆盖假设 `project`，`chosen=null`。
 
 ---
 
@@ -47,6 +48,8 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
+aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
+aiv drama n3 generate-look --project proj_01 --ep EP01 --id CHAR-01 --face-ref /path/to/face.jpg --dry-run
 aiv drama n3 get --project proj_01 --ep EP01
 aiv drama n3 attach --project proj_01 --ep EP01 --id CHAR-01 --version 3
 aiv drama n3 promote --project proj_01 --ep EP01 --id CHAR-01
