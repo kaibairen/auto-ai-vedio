@@ -5,7 +5,7 @@
 | BRIEF | BRIEF-AIV-031-LOOK-IMPL · AIV-031-IMPL-ENG-001 |
 | 性质 | 工程狗粮笔记骨架 · **≠PASS** · **≠绿 N4** · ForcePass=never |
 | 基线 | BE PR#20 tip `b8b06d11` · ENG rebased onto that contract |
-| tip | _pending pytest-green SHA after rebase_ |
+| tip | `e0917990cdac183dbe309b1509f498d6dded59d5` · pytest 271 passed (no live image APIs) |
 
 ## 环境（密钥隔离）
 
