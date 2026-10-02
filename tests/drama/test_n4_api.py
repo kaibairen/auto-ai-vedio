@@ -8,12 +8,15 @@ from tests.drama.test_n2_api import _setup_locked
 from tests.drama.test_n3_api import _setup_g2
 
 
-def _attach_refs_via_store(client, pid):
+def _attach_refs_via_store(client, pid, *, include_scenes: bool = True):
     svc = client.app.state.service
     rec = svc._rec(pid, "EP01")
     data_dir = Path(svc.settings.data_dir)
     cards = rec["n3"]["cards"]
-    for card in list(cards.get("characters") or []) + list(cards.get("scenes") or []):
+    groups = list(cards.get("characters") or [])
+    if include_scenes:
+        groups.extend(cards.get("scenes") or [])
+    for card in groups:
         ident = card["id"]
         role = "face" if card.get("kind") == "character" else "plate"
         path = data_dir / "refs" / f"{ident}.png"
@@ -75,6 +78,7 @@ def test_openapi_n4_copy_served(client):
     assert "force_pass_forbidden" in text
     assert "/drama/n4" in text
     assert "usable_for_n4=false" in text
+    assert "SCENE-LOOK-EXEMPT" in text
 
 
 def test_http_assemble_and_consumer(client):
@@ -148,9 +152,53 @@ def test_http_usable_false_validate_soft_assemble_hard(client):
     assert err["code"] == "usable_for_n4_false"
     assert err["details"]["written"] is False
     assert err["details"]["missing_refs"]
+    assert any(item.get("id", "").startswith("CHAR-") for item in err["details"]["missing_refs"])
+    assert all(item.get("kind") != "scene" for item in err["details"]["missing_refs"])
+    assert err["details"].get("SCENE-LOOK-EXEMPT") == "EP01"
     n4c = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n4-consumer")
     assert n4c.status_code == 200
     assert n4c.json()["started"] is False
+
+
+def test_http_char_only_assemble_when_scene_exempt(client):
+    pid = _setup_locked(client)
+    gen = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard/generate",
+        json={"provider": "fixture", "tool_profile": "seedance_2"},
+    )
+    assert gen.status_code == 200, gen.text
+    client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/gates/g2/confirm",
+        json={"decision": "pass", "actor": "yangzhou"},
+    )
+    mat = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize",
+        json={"actor": "yangzhou"},
+    )
+    assert mat.status_code == 200, mat.text
+    _attach_refs_via_store(client, pid, include_scenes=False)
+    g3 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/gates/g3/confirm",
+        json={"decision": "pass", "actor": "yangzhou"},
+    )
+    assert g3.status_code == 200, g3.text
+    body = g3.json()
+    assert body["usable_for_n4"] is True
+    assert body["SCENE-LOOK-EXEMPT"] == "EP01"
+    assert body["scene_look"] == "exempt"
+    val = client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/validate", json={})
+    assert val.status_code == 200, val.text
+    assert val.json()["valid"] is True
+    assert val.json()["usable_for_n4"] is True
+    asm = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/assemble",
+        json={"actor": "yangzhou"},
+    )
+    assert asm.status_code == 200, asm.text
+    out = asm.json()
+    assert out["written"] is True
+    assert out["SCENE-LOOK-EXEMPT"] == "EP01"
+    assert Path(client.app.state.service.settings.data_dir, "projects", pid, "episodes", "EP01", "EP01-prompts.jsonl").is_file()
 
 
 def test_http_not_ready_for_n4(client):

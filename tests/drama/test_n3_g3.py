@@ -7,7 +7,12 @@ from aiv_drama.models import OutlineGenerateRequest
 from aiv_drama_n3.models import N3MaterializeRequest
 from aiv_drama_n3.validate import WEAK_BINDING_MESSAGE
 
-from tests.drama.helpers import lock_g2, persist_and_confirm_intent, seed_project_episode
+from tests.drama.helpers import (
+    attach_real_char_refs,
+    lock_g2,
+    persist_and_confirm_intent,
+    seed_project_episode,
+)
 
 
 def _err(fn):
@@ -92,3 +97,19 @@ def test_usable_for_n4_true_only_with_refs_and_g3(svc, data_dir):
     passed = svc.confirm_gate_g3(pid, "EP01", {"decision": "pass", "actor": "yangzhou"})
     assert passed["gate"]["locked"] is True
     assert passed["usable_for_n4"] is True
+
+
+def test_usable_for_n4_true_with_char_refs_only_when_exempt(svc, data_dir):
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    svc.materialize_n3_cards(pid, "EP01", N3MaterializeRequest(actor="yangzhou"))
+    attach_real_char_refs(svc, pid, data_dir)
+    rec = svc._rec(pid, "EP01")
+    assert rec["n3"]["cards"]["scenes"]
+    assert all(not (s.get("refs") or []) for s in rec["n3"]["cards"]["scenes"])
+    passed = svc.confirm_gate_g3(pid, "EP01", {"decision": "pass", "actor": "yangzhou"})
+    assert passed["usable_for_n4"] is True
+    assert passed["SCENE-LOOK-EXEMPT"] == "EP01"
+    assert passed["scene_look"] == "exempt"
+    for scene in svc._rec(pid, "EP01")["n3"]["cards"]["scenes"]:
+        assert scene.get("usable_for_n4") is not True

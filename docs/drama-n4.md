@@ -15,7 +15,9 @@
 ## 人怎么走
 
 1. 先走完 D-N2 **G2 pass**（须已选 `tool_profile`，`ready_for_n4=true`）和 D-N3 **G3 pass**。未锁 → **409 `upstream_unlocked`**。
-2. 每张 CHAR/SCENE 工作副本须有真实 ref（path+md5，文件存在）。否则 `usable_for_n4=false` → assemble **409**。
+2. **CHAR 硬门（Mode A）**：目标 CHAR 须有真实 face/full ref（path+md5，文件存在）。缺脸 → `usable_for_n4=false` → assemble **409**。
+   **Mode B（卡文/合板）**：P-CHAR = 人审合板 `look.usable_for_n4=true`，**不**因缺 face 文件单独 409。generate-look **不**自翻 usable。
+   **SCENE-LOOK-EXEMPT**（钉 `proj_01`/`EP01`，NOTE-AIV-036）：缺 SCENE plate **不**单独 409；信封 `scene_look=exempt` / `SCENE-LOOK-EXEMPT=EP01`。非钉集仍要 SCENE look。
 3. 未选工具 / `ready_for_n4=false` → assemble **409 `not_ready_for_n4`**。
 4. **POST** `.../drama/n4/validate`：软校验，不写盘，返回 `missing_refs` / issues / `first_shot_review`。
 5. **POST** `.../drama/n4/assemble`：DIR `join_nonempty` 填槽。成功写 jsonl + `EP##-prompts.v{n}.jsonl`；`n4-consumer.started=true`。
@@ -38,7 +40,7 @@ aiv drama n4 status --project proj_01 --ep EP01
 
 ## DESIGN 对齐（PRD 契约 + ENG adapter 优先）
 
-- 写盘门：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。usable 假 → **409** + 缺图列表，不造假 ref。
+- 写盘门：`G2 locked ∧ G3 locked ∧ ready_for_n4 ∧ usable_for_n4`。usable 假 → **409** + 缺图列表，不造假 ref。SCENE EXEMPT 集缺 plate 不单独 409。Mode B 缺 face 文件不单独 409（须人审合板 usable）。ForcePass=never。
 - DIR 槽：`slot_ref_lead` → 主体特征块 → 场锚 → 光色（无则空，不造平光）→ action → 微表情 → 景别 → 运镜 → 约 N 秒。对白不进正词。
 - CAM 词表：N2 码 → DESIGN-026-CAM 中文短语；一镜一主运镜；Class-D ≥8s。
 - Adapter：`seedance_2`（别名 `seedance_2_0`）；时长 {5,8,10}；画幅 9:16|16:9|2.35:1；`max_prompt_len=800`；ref≤9。

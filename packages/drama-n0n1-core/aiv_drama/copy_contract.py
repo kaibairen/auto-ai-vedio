@@ -200,8 +200,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "ForcePass=never",
     },
     "usable_for_n4_false": {
-        "zh": "usable_for_n4=false · 缺图/缺 ref，拒绝写盘。",
-        "en": "usable_for_n4 is false; missing refs/images — jsonl not written.",
+        "zh": "usable_for_n4=false · 缺图/缺 ref，拒绝写盘。人物缺合格脸图仍拦截；SCENE-LOOK-EXEMPT 集不因缺定场图单独 409。",
+        "en": "usable_for_n4 is false; missing CHAR face/full still blocks. SCENE-LOOK-EXEMPT episodes do not 409 for a missing plate alone.",
     },
     "bare_id_in_prompt": {
         "zh": "prompt 禁止只留裸 CHAR-/SCENE- ID，须替换为中文特征。",

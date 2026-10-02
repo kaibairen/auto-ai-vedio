@@ -17,7 +17,7 @@
 
 | ID | 口径 |
 |----|------|
-| **F1** | G3 允许无图薄确认。缺 ref → warn「视觉弱绑定 · 下游一致性自负」，**不挡** confirm/reject。`usable_for_n4` 才是缺 CHAR/SCENE ref 的硬门。G3 pass ≠ usable_for_n4。 |
+| **F1** | G3 允许无图薄确认。缺 ref → warn「视觉弱绑定 · 下游一致性自负」，**不挡** confirm/reject。集级 `usable_for_n4`：Mode A 缺 CHAR face/full 仍硬；Mode B 以人审合板 `look.usable_for_n4` 为准（缺 face 文件不单独硬挡）；SCENE 仅在非 EXEMPT 集硬与。G3 pass ≠ usable_for_n4。 |
 | **F2** | SCENE materialize = thin stub / `one_line`。不发明虚假 KEEP SCENE 模板路径。thicken 用 **provisional_inline**。 |
 | **F3** | N3 用 `template_paths` / `prompt_paths`。**.prompt 不得写入** D-N1/D-N2 `skill_paths`。可选人物小传只进 `thicken_skill_paths`。不重开 018b。 |
 

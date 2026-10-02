@@ -118,11 +118,28 @@ def lock_g2(
     return svc.confirm_gate_g2(pid, ep, {"decision": "pass", "actor": actor})
 
 
-def attach_real_refs(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01") -> None:
-    """Write on-disk ref files so usable_for_n4 can be true. No fake missing_file=false."""
+def attach_real_refs(
+    svc: DramaService,
+    pid: str,
+    data_dir,
+    *,
+    ep: str = "EP01",
+    include_characters: bool = True,
+    include_scenes: bool = True,
+) -> None:
+    """Write on-disk ref files. CHAR face/full is the hard usable path; SCENE plate is optional.
+
+    Pass ``include_scenes=False`` for the CHAR-only EXEMPT path (U-033).
+    Does not invent usable=true on SCENE cards when plates are omitted.
+    """
     rec = svc._rec(pid, ep)
     cards = (rec.get("n3") or {}).get("cards") or {}
-    for card in list(cards.get("characters") or []) + list(cards.get("scenes") or []):
+    groups: list = []
+    if include_characters:
+        groups.extend(cards.get("characters") or [])
+    if include_scenes:
+        groups.extend(cards.get("scenes") or [])
+    for card in groups:
         ident = card["id"]
         role = "face" if card.get("kind") == "character" else "plate"
         path = data_dir / "refs" / f"{ident}.png"
@@ -134,11 +151,68 @@ def attach_real_refs(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01")
     svc._commit(rec)
 
 
-def lock_g3_usable(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01", actor: str = "yangzhou"):
+def attach_real_char_refs(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01") -> None:
+    """CHAR face/full only — SCENE plates stay missing (EXEMPT / optional path)."""
+    attach_real_refs(svc, pid, data_dir, ep=ep, include_characters=True, include_scenes=False)
+
+
+def attach_reviewed_look_sheet(
+    svc: DramaService,
+    pid: str,
+    data_dir,
+    *,
+    ep: str = "EP01",
+    char_id: str | None = None,
+) -> None:
+    """Simulate hanging-surface human review of a Mode B 合板. Does not invent generate-look usable.
+
+    Tests only: writes a sheet file and sets look.usable_for_n4=true. Production
+    generate-look still persists usable_for_n4=false.
+    """
+    rec = svc._rec(pid, ep)
+    cards = (rec.get("n3") or {}).get("cards") or {}
+    rec.setdefault("n3", {}).setdefault("looks", {})
+    targets = list(cards.get("characters") or [])
+    if char_id:
+        targets = [c for c in targets if c.get("id") == char_id]
+    for card in targets:
+        ident = card["id"]
+        path = data_dir / "looks" / f"{ident}-sheet.jpg"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"sheet-{ident}".encode("utf-8"))
+        look = {
+            "kind": "gold_a_turnaround_sheet",
+            "role": "turnaround_sheet",
+            "sheet_path": str(path),
+            "sheet_md5": "sheetmd5",
+            "usable_for_n4": True,
+            "dry_run": False,
+            "reviewed": True,
+        }
+        card["looks"] = [look]
+        rec["n3"]["looks"][ident] = dict(look)
+        card["look_mode"] = "B"
+    svc._commit(rec)
+
+
+def lock_g3_usable(
+    svc: DramaService,
+    pid: str,
+    data_dir,
+    *,
+    ep: str = "EP01",
+    actor: str = "yangzhou",
+    include_scenes: bool = True,
+):
     lock_g2(svc, pid, ep=ep, actor=actor, tool_profile="seedance_2")
     svc.materialize_n3_cards(pid, ep, N3MaterializeRequest(actor=actor))
-    attach_real_refs(svc, pid, data_dir, ep=ep)
+    attach_real_refs(svc, pid, data_dir, ep=ep, include_scenes=include_scenes)
     return svc.confirm_gate_g3(pid, ep, {"decision": "pass", "actor": actor})
+
+
+def lock_g3_char_usable(svc: DramaService, pid: str, data_dir, *, ep: str = "EP01", actor: str = "yangzhou"):
+    """G3 pass + CHAR refs only. SCENE look not attached."""
+    return lock_g3_usable(svc, pid, data_dir, ep=ep, actor=actor, include_scenes=False)
 
 
 def sample_row(

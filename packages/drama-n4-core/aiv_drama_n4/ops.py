@@ -7,6 +7,8 @@ from aiv_drama.errors import AppError
 from aiv_drama.validate import now_iso
 from aiv_drama_n3.ops import DramaN3Ops
 from aiv_drama_n4.assemble import assemble_episode_lines, assemble_fingerprint, card_fingerprint, g2_fingerprint
+from aiv_drama_n3.char_look import char_look_envelope_fields
+from aiv_drama_n3.scene_look import resolve_scene_look_policy, scene_look_envelope_fields
 from aiv_drama_n4.gates import (
     episode_ready_for_n4,
     episode_usable_for_n4,
@@ -22,7 +24,13 @@ from aiv_drama_n4.projection import (
 )
 from aiv_drama_n4.skeleton import SKELETON_ID, SKELETON_VERSION
 from aiv_drama_n4.tools import adapter_observability, lookup_adapter, normalize_tool_profile
-from aiv_drama_n4.validate import collect_n4_issues, first_shot_review, raise_hard_n4, reject_force_keys_n4
+from aiv_drama_n4.validate import (
+    collect_n4_issues,
+    collect_scene_missing_refs,
+    first_shot_review,
+    raise_hard_n4,
+    reject_force_keys_n4,
+)
 from aiv_schema.models import GATE_G3, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
 
 
@@ -120,6 +128,8 @@ class DramaN4Ops(DramaN3Ops):
         n4 = deepcopy(rec.get("n4") or empty_n4(rec))
         usable, missing = episode_usable_for_n4(rec, self.settings)
         ready = episode_ready_for_n4(rec)
+        policy = resolve_scene_look_policy(rec)
+        scene_missing = collect_scene_missing_refs(rec.get("n3"), self.settings) if policy.scene_optional else []
         artifact = n4.get("artifact")
         env: dict[str, Any] = {
             "ok": True,
@@ -146,6 +156,8 @@ class DramaN4Ops(DramaN3Ops):
             "docs_pass": False,
             "auto_open_dn5": False,
         }
+        env.update(scene_look_envelope_fields(policy, scene_missing_refs=scene_missing))
+        env.update(char_look_envelope_fields(rec))
         if lines is not None:
             env["lines"] = lines
             env["shot_count"] = len(lines)
@@ -180,7 +192,7 @@ class DramaN4Ops(DramaN3Ops):
         rec = self._rec(project_id, ep)
         require_g3_for_n4_read(rec)
         env = self.n4_envelope(rec)
-        return {
+        out: dict[str, Any] = {
             "ok": True,
             "project_id": env["project_id"],
             "episode_id": env["episode_id"],
@@ -197,7 +209,16 @@ class DramaN4Ops(DramaN3Ops):
             "ready_for_n4": env["ready_for_n4"],
             "missing_refs": env["missing_refs"],
             "shot_count": (rec.get("n4") or {}).get("shot_count") or 0,
+            "scene_look": env.get("scene_look"),
+            "scene_look_source": env.get("scene_look_source"),
+            "scene_look_scope": env.get("scene_look_scope"),
         }
+        if "SCENE-LOOK-EXEMPT" in env:
+            out["SCENE-LOOK-EXEMPT"] = env["SCENE-LOOK-EXEMPT"]
+            out["scene_look_copy"] = env.get("scene_look_copy")
+        if env.get("scene_missing_refs"):
+            out["scene_missing_refs"] = env["scene_missing_refs"]
+        return out
 
     def validate_n4(
         self,
@@ -224,6 +245,8 @@ class DramaN4Ops(DramaN3Ops):
         issues = collect_n4_issues(rec, preview, settings=self.settings, for_write=False)
         valid = all(i.get("severity") != "error" for i in issues)
         usable, missing = episode_usable_for_n4(rec, self.settings)
+        policy = resolve_scene_look_policy(rec)
+        scene_missing = collect_scene_missing_refs(rec.get("n3"), self.settings) if policy.scene_optional else []
         return {
             "ok": True,
             "project_id": project_id,
@@ -234,6 +257,8 @@ class DramaN4Ops(DramaN3Ops):
             "usable_for_n4": usable,
             "ready_for_n4": episode_ready_for_n4(rec),
             "missing_refs": missing,
+            **scene_look_envelope_fields(policy, scene_missing_refs=scene_missing),
+            **char_look_envelope_fields(rec),
             "issues": issues,
             "warnings": [i for i in issues if i.get("severity") == "warn"],
             "tool_profile": persist,
@@ -378,6 +403,8 @@ class DramaN4Ops(DramaN3Ops):
         started = bool(n4.get("started"))
         lines = self._n4_lines_from_disk(rec) if started else []
         usable, missing = episode_usable_for_n4(rec, self.settings)
+        policy = resolve_scene_look_policy(rec)
+        scene_missing = collect_scene_missing_refs(rec.get("n3"), self.settings) if policy.scene_optional else []
         return {
             "ok": True,
             "project_id": project_id,
@@ -389,6 +416,8 @@ class DramaN4Ops(DramaN3Ops):
             "usable_for_n4": usable,
             "ready_for_n4": episode_ready_for_n4(rec),
             "missing_refs": missing,
+            **scene_look_envelope_fields(policy, scene_missing_refs=scene_missing),
+            **char_look_envelope_fields(rec),
             "stale": bool(n4.get("stale")),
             "assemble_version": n4.get("assemble_version") or 0,
             "fingerprint": n4.get("fingerprint"),

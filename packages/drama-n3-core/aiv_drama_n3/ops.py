@@ -36,6 +36,12 @@ from aiv_drama_n3.thicken import normalize_thicken_provider, thicken_cards
 from aiv_drama_n3.policy import default_project_scope, hanging_bundle, project_scope_capability
 from aiv_drama_n3.projection import write_character_schema, write_episode_cards, write_scene_schema
 from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
+from aiv_drama_n3.char_look import char_look_envelope_fields
+from aiv_drama_n3.scene_look import (
+    resolve_scene_look_policy,
+    scene_look_envelope_fields,
+    scene_ref_honesty,
+)
 from aiv_drama_n3.validate import (
     CARDS_EMPTY_MESSAGE,
     CAST_ONLY_MESSAGE,
@@ -156,14 +162,27 @@ class DramaN3Ops:
             view = deepcopy(n3["cards"])
         else:
             view = empty_n3_cards(rec)
-        view["usable_for_n4"] = usable_for_n4(rec.get("n3"), g3_locked=bool((rec.get("gate_g3") or {}).get("locked")))
+        view["usable_for_n4"] = usable_for_n4(
+            rec.get("n3"),
+            g3_locked=bool((rec.get("gate_g3") or {}).get("locked")),
+            rec=rec,
+        )
         return view
 
     def _refresh_usable(self, rec: dict[str, Any]) -> None:
         n3 = rec.get("n3")
         if not n3 or not n3.get("cards"):
             return
-        n3["cards"]["usable_for_n4"] = usable_for_n4(n3, g3_locked=bool(rec["gate_g3"].get("locked")))
+        n3["cards"]["usable_for_n4"] = usable_for_n4(
+            n3,
+            g3_locked=bool(rec["gate_g3"].get("locked")),
+            rec=rec,
+        )
+
+    def _scene_look_fields(self, rec: dict[str, Any]) -> dict[str, Any]:
+        policy = resolve_scene_look_policy(rec)
+        honesty = scene_ref_honesty(rec.get("n3")) if policy.scene_optional else []
+        return scene_look_envelope_fields(policy, scene_missing_refs=honesty)
 
     def n3_envelope(
         self,
@@ -186,7 +205,11 @@ class DramaN3Ops:
             "gate": deepcopy(rec["gate_g3"]),
             "next_edges": edges,
             "stale_downstream": list(rec["episode"].get("stale_downstream") or []),
-            "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(rec["gate_g3"].get("locked"))),
+            "usable_for_n4": usable_for_n4(
+                rec.get("n3"),
+                g3_locked=bool(rec["gate_g3"].get("locked")),
+                rec=rec,
+            ),
             "template_paths": list(obs["template_paths"]),
             "prompt_paths": list(obs["prompt_paths"]),
             "scene_template": deepcopy(obs["scene_template"]),
@@ -195,6 +218,8 @@ class DramaN3Ops:
             "docs_pass": False,
             "auto_open_dn4": False,
         }
+        env.update(self._scene_look_fields(rec))
+        env.update(char_look_envelope_fields(rec))
         looks = (rec.get("n3") or {}).get("looks")
         if looks:
             env["looks"] = deepcopy(looks)
@@ -219,7 +244,7 @@ class DramaN3Ops:
 
     def gate_g3_envelope(self, rec: dict[str, Any]) -> dict[str, Any]:
         env = self.n3_envelope(rec)
-        return {
+        out: dict[str, Any] = {
             "ok": True,
             "project_id": env["project_id"],
             "episode_id": env["episode_id"],
@@ -232,7 +257,22 @@ class DramaN3Ops:
             "template_paths": env["template_paths"],
             "prompt_paths": env["prompt_paths"],
             "auto_open_dn4": False,
+            "scene_look": env.get("scene_look"),
+            "scene_look_source": env.get("scene_look_source"),
+            "scene_look_scope": env.get("scene_look_scope"),
         }
+        if "SCENE-LOOK-EXEMPT" in env:
+            out["SCENE-LOOK-EXEMPT"] = env["SCENE-LOOK-EXEMPT"]
+            out["scene_look_note"] = env.get("scene_look_note")
+            out["scene_look_copy"] = env.get("scene_look_copy")
+            out["char_look_copy"] = env.get("char_look_copy")
+        if env.get("CHAR-LOOK-MODE"):
+            out["CHAR-LOOK-MODE"] = env["CHAR-LOOK-MODE"]
+            out["char_look_mode"] = env.get("char_look_mode")
+            out["char_look_copy"] = env.get("char_look_copy")
+        if env.get("scene_missing_refs"):
+            out["scene_missing_refs"] = env["scene_missing_refs"]
+        return out
 
     def _put_library_op(self, rec: dict[str, Any], op: str, payload: dict[str, Any]) -> None:
         rec.setdefault("library_ops", []).append(
@@ -782,9 +822,10 @@ class DramaN3Ops:
             "consumer": NODE_DN4,
             "started": False,
             "jobs": list(rec.get("d_n4_jobs") or []),
-            "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=True),
+            "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=True, rec=rec),
             "next_edges": list(rec["episode"].get("next_edges") or []),
             "note": "G3 pass ≠ usable_for_n4；本拍不实施 N4",
+            **self._scene_look_fields(rec),
         }
 
     # ----- library schema (021c) ---------------------------------------------------

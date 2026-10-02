@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from aiv_drama_n3.cards import is_char_id, is_none_id, is_scene_id
+from aiv_drama_n3.char_look import reviewed_look_sheet_path
 from aiv_drama_n4.camera import camera_lex, safe_zone_note, shot_size_lex
 from aiv_drama_n4.id_resolve import card_features, card_index, card_version, feature_catalog, replace_ids
 from aiv_drama_n4.skeleton import EMPTY_SUBJECT, SLOT_REF_LEAD, SKELETON_ID, SKELETON_VERSION
@@ -18,8 +19,16 @@ def _text(value: Any) -> str:
     return " ".join(str(value or "").split()).strip()
 
 
-def _ref_images(char_cards: list[dict[str, Any]], scene_card: dict[str, Any] | None) -> list[str]:
-    """CAM §6: char_ids order, then scene plate. Never invent paths."""
+def _ref_images(
+    char_cards: list[dict[str, Any]],
+    scene_card: dict[str, Any] | None,
+    *,
+    n3: dict[str, Any] | None = None,
+) -> list[str]:
+    """CAM §6: char_ids order, then scene plate. Mode B may use reviewed 合板 path.
+
+    Never invent paths. Face/full refs stay first; sheet is a fallback, not a fake face.
+    """
     seen: set[str] = set()
     out: list[str] = []
     for card in [*char_cards, scene_card]:
@@ -33,6 +42,10 @@ def _ref_images(char_cards: list[dict[str, Any]], scene_card: dict[str, Any] | N
                 continue
             seen.add(path)
             out.append(path)
+        sheet = reviewed_look_sheet_path(card, n3)
+        if sheet and sheet not in seen:
+            seen.add(sheet)
+            out.append(sheet)
     return out
 
 

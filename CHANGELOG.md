@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.11 — AIV-036 / U-033 SCENE-LOOK-EXEMPT + CHAR Mode A/B (docs≠PASS)
+
+BRIEF-AIV-036 P0 · NOTE-AIV-036-SCENE-EXEMPT-EP01 · NOTE-AIV-036-LOOK-MODE-AB. ForcePass=never. Does **not** merge to main. Does not invent card/look `usable_for_n4=true`. Does not flip dogfood flags on disk.
+
+- **SCENE EXEMPT** pinned `proj_01`/`EP01` (auditable; not global forever). SCENE cards drop out of `usable_for_n4` hard-AND and hard `missing_refs`. Missing plate → warn + `scene_look=exempt` / `SCENE-LOOK-EXEMPT=EP01`. CHAR Mode A face/full still 409.
+- **Mode B**: P-CHAR = human-reviewed 合板 `look.usable_for_n4`. Missing face *file* does **not** 409 on that path. `generate-look` still writes `usable_for_n4=false`.
+- Helpers: `attach_real_char_refs` / `attach_reviewed_look_sheet`. Tests: `test_n4_scene_look_exempt.py`, `test_n4_char_look_mode.py`.
+- Evidence: [`docs/EVIDENCE-AIV-036-ENG-033-IMPL.md`](docs/EVIDENCE-AIV-036-ENG-033-IMPL.md).
+
 ## 0.2.10 — AIV-032 gold-A 3:2 CHAR turnaround look-generate (docs≠PASS)
 
 BRIEF-AIV-032. ForcePass=never. Does **not** merge to main. Does not flip `usable_for_n4` or green N4. STYLE终句 + RECIPE§4 一字不改. No orphan generate scripts.
