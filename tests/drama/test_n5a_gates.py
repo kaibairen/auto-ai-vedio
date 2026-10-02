@@ -190,17 +190,20 @@ def test_g4_pass_without_grid_is_409(svc):
     assert exc.code == "missing_grid"
 
 
-def test_n5b_submit_out_of_pr(svc, monkeypatch):
+def test_n5b_submit_reads_n5a_g4_then_skeleton_block(svc, monkeypatch):
+    """N5b skeleton is on this tip: G4 unlocked → g4_required; G4 locked → live_job_forbidden (no POST)."""
     pid = _setup_mode_b(svc)
     exc = _err(lambda: svc.submit_n5b(pid, "EP01", raw={"actor": "yangzhou"}))
     assert exc.status_code == 409
-    assert exc.code == "upstream_unlocked"
+    assert exc.code == "g4_required"
+    assert exc.details.get("posted") is False
     monkeypatch.setattr("aiv_drama_n5a.ops.generate_grid_image", _mock_grid())
     svc.generate_n5a_grid(pid, "EP01", N5aGenerateRequest(actor="yangzhou"), raw={"actor": "yangzhou"})
     svc.confirm_gate_g4(pid, "EP01", {"verdict": "pass", "actor": "yangzhou"})
     exc2 = _err(lambda: svc.submit_n5b(pid, "EP01", raw={"actor": "yangzhou"}))
-    assert exc2.status_code == 404
-    assert exc2.code == "n5b_not_implemented"
+    assert exc2.status_code == 409
+    assert exc2.code == "live_job_forbidden"
+    assert exc2.details.get("posted") is False
 
 
 def test_layout_25_rejected(svc):
@@ -271,8 +274,9 @@ def test_http_n5a_flow(client, monkeypatch):
     assert st.status_code == 200
     assert st.json()["g4_locked"] is True
     n5b = client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/n5b/jobs", json={"actor": "yangzhou"})
-    assert n5b.status_code == 404
-    assert n5b.json()["error"]["code"] == "n5b_not_implemented"
+    assert n5b.status_code == 409
+    assert n5b.json()["error"]["code"] == "live_job_forbidden"
+    assert n5b.json()["error"]["details"]["posted"] is False
     bare = client.get(f"/api/v0/projects/{pid}/episodes/EP01/n5a")
     assert bare.status_code == 404
 

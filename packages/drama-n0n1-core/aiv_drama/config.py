@@ -26,6 +26,7 @@ SKILL_REFERENCES_TOTAL_LIMIT = 2400
 SHOT_CAP_HARD = 12
 
 ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+N5B_LIVE_JOB_ENV = "AIV_N5B_ALLOW_LIVE_JOB"
 
 
 def _read_secret_from_env_or_file(env_names: tuple[str, ...], file_env: str, default_name: str) -> str | None:
@@ -108,6 +109,7 @@ class Settings:
     ark_api_key: str | None = None
     ark_base_url: str = ARK_DEFAULT_BASE_URL
     user_grant_secret: str | None = None
+    n5b_allow_live_job: bool = False
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -120,6 +122,7 @@ class Settings:
         named_cast = (os.environ.get("AIV_NAMED_CAST_CHECK") or "warn").strip().lower()
         if named_cast not in {"off", "warn", "error"}:
             named_cast = "warn"
+        live_raw = (os.environ.get(N5B_LIVE_JOB_ENV) or "").strip().lower()
         return cls(
             data_dir=Path(data).resolve(),
             repo_root=find_repo_root(),
@@ -137,6 +140,7 @@ class Settings:
                 os.environ.get("ARK_BASE_URL") or os.environ.get("AIV_ARK_BASE_URL") or ARK_DEFAULT_BASE_URL
             ).rstrip("/"),
             user_grant_secret=read_user_grant_secret(),
+            n5b_allow_live_job=live_raw in {"1", "true", "yes", "on"},
         )
 
     def skill_relpath(self, lane: str) -> str:
