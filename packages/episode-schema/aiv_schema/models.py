@@ -10,9 +10,13 @@ NODE_DN1 = "D-N1"
 NODE_DN2 = "D-N2"
 NODE_DN3 = "D-N3"
 NODE_DN4 = "D-N4"
+NODE_DN5A = "D-N5a"
+NODE_DN5B = "D-N5b"
 GATE_G1B = "g1b"
 GATE_G2 = "g2"
 GATE_G3 = "g3"
+GATE_G4 = "g4"
+GATE_G5 = "g5"
 
 # D12–D15 hanging-surface defaults (reversible; chosen stays null — do not silent-pick).
 HANGING_D12 = {
@@ -74,6 +78,7 @@ class EpisodeLocks(BaseModel):
     g1b: bool = False
     g2: bool = False
     g3: bool = False
+    g4: bool = False
 
 
 class EpisodeVersions(BaseModel):
@@ -83,6 +88,7 @@ class EpisodeVersions(BaseModel):
     storyboard: int = 0
     cards: int = 0
     prompts: int = 0
+    grids: int = 0
     episode: int = 1
 
 
