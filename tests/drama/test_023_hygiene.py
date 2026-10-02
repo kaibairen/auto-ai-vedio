@@ -92,9 +92,10 @@ def test_scene_bucket_does_not_reuse_char_punches():
         "开源避难所",
         "IDE侧栏",
         "弹窗空间",
+        "弹窗审判庭",
     ):
         assert not is_scene_b_class(name), name
-    for name in ("吐槽两位王子", "指出两王子", "两位王子", "系统音", "弹窗"):
+    for name in ("吐槽两位王子", "指出两王子", "两位王子", "系统音", "弹窗", "弹窗字"):
         assert is_scene_b_class(name), name
     assert prefer_spatial_scene_name("侧边栏奶茶时刻") == "侧边栏空间"
     assert prefer_spatial_scene_name("开源避难所入口") == "避难所门厅"

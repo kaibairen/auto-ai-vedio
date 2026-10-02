@@ -795,7 +795,41 @@ SCENE_SPATIAL_TOKENS = (
     "办公室",
     "工位",
     "空间",
+    "审判庭",
+    "法庭",
+    "大厅",
+    "走廊",
+    "内廊",
+    "外廊",
+    "房间",
 )
+
+# 弹窗审判庭 family: chrome prefix + place ending. Bare 弹窗 / 弹窗字 stay chrome.
+SCENE_PLACE_ENDINGS = (
+    "空间",
+    "门厅",
+    "战场",
+    "审判庭",
+    "法庭",
+    "大厅",
+    "走廊",
+    "内廊",
+    "外廊",
+    "房间",
+    "营帐",
+    "校场",
+    "茶水间",
+    "办公室",
+    "工位",
+    "城墙",
+    "庭",
+    "厅",
+    "室",
+    "廊",
+    "场",
+    "间",
+)
+POPUP_CHROME_TAILS = frozenset({"", "字", "王子", "系统", "系统音", "音", "字幕"})
 
 
 def prefer_spatial_scene_name(name: str) -> str:
@@ -817,6 +851,22 @@ def prefer_spatial_scene_name(name: str) -> str:
     return key
 
 
+def _popup_prefixed_place(key: str) -> bool:
+    """弹窗审判庭 is a place. Bare 弹窗 / 弹窗字 / 弹窗王子 stay VO/CHAR chrome."""
+    if not key.startswith("弹窗"):
+        return False
+    rest = key[len("弹窗") :]
+    if rest in POPUP_CHROME_TAILS or rest.endswith("王子"):
+        return False
+    lowered = rest.casefold()
+    for tok in SCENE_SPATIAL_TOKENS:
+        if tok.isascii() and tok.casefold() in lowered:
+            return True
+        if not tok.isascii() and tok in rest:
+            return True
+    return any(rest.endswith(end) for end in SCENE_PLACE_ENDINGS)
+
+
 def is_spatial_scene_name(name: str) -> bool:
     key = normalize_name(name)
     if not key:
@@ -829,15 +879,17 @@ def is_spatial_scene_name(name: str) -> bool:
             return True
         if not tok.isascii() and tok in key:
             return True
+    if _popup_prefixed_place(key):
+        return True
     return False
 
 
 def is_scene_b_class(name: str) -> bool:
     """SCENE skip bucket — must not reuse CHAR clause/开源/length punches.
 
-    Spatial place names (…空间 / …门厅 / …战场 and SCENE_SPATIAL_TOKENS)
-    pass through first so a system-speaker substring (弹窗空间) does not skip
-    the SCENE card. Bare 弹窗 / 系统音 and CHAR dirt still skip.
+    Spatial place names (…空间 / …门厅 / …战场 / …审判庭 and SCENE_SPATIAL_TOKENS)
+    pass through first so a system-speaker substring (弹窗空间 / 弹窗审判庭)
+    does not skip the SCENE card. Bare 弹窗 / 系统音 and CHAR dirt still skip.
     """
     key = strip_dirty_prefix(normalize_name(name))
     if not key:

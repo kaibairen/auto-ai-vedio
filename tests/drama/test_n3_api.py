@@ -38,6 +38,9 @@ def test_openapi_n3_copy_served(client):
     assert "usable_for_n4" in res.text
     assert "template_paths" in res.text
     assert "force_pass_forbidden" in res.text
+    assert "cards/thicken" in res.text
+    assert "thicken_skill_paths" in res.text
+    assert "provisional_inline" in res.text
 
 
 def test_http_n3_upstream_unlocked(client):

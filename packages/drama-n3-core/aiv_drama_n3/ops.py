@@ -24,10 +24,12 @@ from aiv_drama_n3.models import (
     N3ForkRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
+    N3ThickenRequest,
 )
+from aiv_drama_n3.thicken import normalize_thicken_provider, thicken_cards
 from aiv_drama_n3.policy import default_project_scope, hanging_bundle, project_scope_capability
 from aiv_drama_n3.projection import write_character_schema, write_episode_cards, write_scene_schema
-from aiv_drama_n3.templates import n3_observability
+from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import (
     CARDS_EMPTY_MESSAGE,
     CAST_ONLY_MESSAGE,
@@ -36,6 +38,7 @@ from aiv_drama_n3.validate import (
     collect_n3_issues,
     raise_hard,
     reject_force_keys_n3,
+    reject_image_gen_n3,
     usable_for_n4,
 )
 from aiv_schema.models import GATE_G2, GATE_G3, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
@@ -186,6 +189,17 @@ class DramaN3Ops:
             "docs_pass": False,
             "auto_open_dn4": False,
         }
+        thicken = (rec.get("n3") or {}).get("thicken")
+        if thicken:
+            skill_paths = list(thicken.get("skill_paths") or [])
+            assert_no_prompt_in_skill_paths(skill_paths)
+            env["thicken_skill_paths"] = skill_paths
+            env["thicken_prompt_paths"] = list(thicken.get("prompt_paths") or [])
+            env["model"] = thicken.get("model")
+            env["fixture_hits"] = int(thicken.get("fixture_hits") or 0)
+            env["provider"] = thicken.get("provider") or "llm"
+            if thicken.get("scene_template"):
+                env["scene_template"] = deepcopy(thicken["scene_template"])
         if rec.get("projection_dirty"):
             env["projection_dirty"] = True
         if warnings:
@@ -285,6 +299,107 @@ class DramaN3Ops:
             idempotency_key,
             f"n3_materialize:{project_id}:{ep}",
             self.n3_envelope(rec, warnings=warns or None),
+        )
+
+    def thicken_n3_cards(
+        self,
+        project_id: str,
+        ep: str,
+        body: N3ThickenRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        reject_force_keys_n3(raw)
+        reject_image_gen_n3(raw)
+        req = body or N3ThickenRequest()
+        provider = normalize_thicken_provider(req.provider)
+        if provider != "llm":
+            raise AppError(
+                422,
+                "provider",
+                "N3 thicken requires provider=llm; fixture is not a success path (fixture_hits must stay 0)",
+                node=NODE_DN3,
+                provider=req.provider,
+            )
+        selected = [i for i in (req.ids or []) if i]
+        idem_tail = f"{project_id}:{ep}:" + (",".join(selected) if selected else "*")
+        cached = self._idem_get(idempotency_key, f"n3_thicken:{idem_tail}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, ep)
+        self._require_g2_for_n3(rec)
+        self._require_n3_unlock(rec, req.unlock_edit)
+        cards = (rec.get("n3") or {}).get("cards")
+        if not cards or not cards.get("materialized"):
+            raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)
+        characters = list(cards.get("characters") or [])
+        scenes = list(cards.get("scenes") or [])
+        by_id = {c.get("id"): c for c in characters + scenes}
+        if selected:
+            missing = [ident for ident in selected if ident not in by_id]
+            if missing:
+                raise AppError(
+                    422,
+                    "card_id_not_in_cast",
+                    CAST_ONLY_MESSAGE,
+                    id=missing[0],
+                    ids=missing,
+                    node=NODE_DN3,
+                )
+            targets = [by_id[ident] for ident in selected]
+        else:
+            targets = characters + scenes
+        result = thicken_cards(
+            self.settings,
+            episode_id=rec["episode"]["episode_id"],
+            cards=targets,
+            storyboard=rec.get("storyboard"),
+            include_bio_skill=bool(req.include_bio_skill),
+        )
+        applied = {c.get("id"): c for c in result["cards"]}
+        cards["characters"] = [applied.get(c.get("id"), c) for c in characters]
+        cards["scenes"] = [applied.get(s.get("id"), s) for s in scenes]
+        cards["version"] = (cards.get("version") or 0) + 1
+        cards["stale"] = False
+        cards["updated_at"] = now_iso()
+        cards["updated_by"] = req.actor
+        # Text thicken must not flip usable / write refs / start N4.
+        self._refresh_usable(rec)
+        rec["n3"]["thicken"] = {
+            "provider": "llm",
+            "model": result["model"],
+            "fixture_hits": 0,
+            "prompt_paths": list(result["prompt_paths"]),
+            "skill_paths": list(result["skill_paths"]),
+            "scene_template": deepcopy(result["scene_template"]),
+            "thickened_ids": [c.get("id") for c in result["cards"]],
+            "include_bio_skill": bool(req.include_bio_skill),
+        }
+        assert_no_prompt_in_skill_paths(rec["n3"]["thicken"]["skill_paths"])
+        rec["episode"]["versions"]["cards"] = cards["version"]
+        rec["episode"]["next_edges"] = [NODE_DN3]
+        rec["gate_g3"]["state"] = "ready" if (cards.get("characters") or cards.get("scenes")) else "idle"
+        rec["gate_g3"]["locked"] = False
+        rec["episode"]["locks"]["g3"] = False
+        self._touch_episode(rec)
+        self._commit(rec)
+        issues = collect_n3_issues(rec)
+        warns = [i for i in issues if i.get("severity") == "warn"]
+        extra = {
+            "thicken_skill_paths": list(result["skill_paths"]),
+            "thicken_prompt_paths": list(result["prompt_paths"]),
+            "prompt_paths": list(result["prompt_paths"]) or list(self._n3_obs()["prompt_paths"]),
+            "model": result["model"],
+            "fixture_hits": 0,
+            "provider": "llm",
+            "scene_template": deepcopy(result["scene_template"]),
+            "thickened_ids": [c.get("id") for c in result["cards"]],
+        }
+        return self._idem_put(
+            idempotency_key,
+            f"n3_thicken:{idem_tail}",
+            self.n3_envelope(rec, warnings=warns or None, extra=extra),
         )
 
     def _find_card(self, rec: dict[str, Any], ident: str, kind: str) -> dict[str, Any] | None:

@@ -83,7 +83,7 @@ from aiv_drama_n2.ops import DramaN2Ops
 from aiv_drama_n2.projection import write_storyboard_csv, write_storyboard_md
 from aiv_drama_n3.ops import DramaN3Ops
 from aiv_drama_n3.projection import write_episode_cards
-from aiv_drama_n3.templates import n3_observability
+from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import usable_for_n4
 from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, PIPELINE_DRAMA
 
@@ -277,14 +277,22 @@ class DramaService(DramaN3Ops, DramaN2Ops):
             if rec.get("n3"):
                 write_episode_cards(episode_dir, rec.get("n3"))
                 obs = n3_observability(self.settings.repo_root)
+                thicken = (rec.get("n3") or {}).get("thicken") or {}
+                thicken_skills = list(thicken.get("skill_paths") or [])
+                assert_no_prompt_in_skill_paths(thicken_skills)
                 # F3: template_paths / prompt_paths only — never merge .prompt into skill_paths.
                 meta["n3_meta"] = {
                     "usable_for_n4": usable_for_n4(rec.get("n3"), g3_locked=bool(g3.get("locked"))),
                     "template_paths": list(obs["template_paths"]),
                     "prompt_paths": list(obs["prompt_paths"]),
                     "cards_version": ((rec.get("n3") or {}).get("cards") or {}).get("version") or 0,
-                    "scene_template": "deferred",
+                    "scene_template": (thicken.get("scene_template") or {}).get("status") or "deferred",
                 }
+                if thicken:
+                    meta["n3_meta"]["thicken_skill_paths"] = thicken_skills
+                    meta["n3_meta"]["thicken_prompt_paths"] = list(thicken.get("prompt_paths") or [])
+                    meta["n3_meta"]["fixture_hits"] = int(thicken.get("fixture_hits") or 0)
+                    meta["n3_meta"]["model"] = thicken.get("model")
             write_episode_json(episode_dir, meta)
             assert_no_secrets(episode_dir)
             rec["projection_dirty"] = False

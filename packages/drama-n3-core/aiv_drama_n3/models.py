@@ -12,6 +12,18 @@ class N3MaterializeRequest(BaseModel):
     unlock_edit: bool = False
 
 
+class N3ThickenRequest(BaseModel):
+    """Text-only CHAR/SCENE thicken. provider=llm only (no fixture success path)."""
+
+    model_config = {"extra": "forbid"}
+
+    actor: str | None = None
+    provider: Literal["llm", "fixture", "skill", "openai", "openai_compat"] | None = "llm"
+    ids: list[str] = Field(default_factory=list)
+    unlock_edit: bool = False
+    include_bio_skill: bool = False
+
+
 class N3AttachRequest(BaseModel):
     model_config = {"extra": "forbid"}
 

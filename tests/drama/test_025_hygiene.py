@@ -464,3 +464,54 @@ def test_025_scene_popup_space_allow_char_popup_prince_deny():
     skipped_ids = {str(w.get("id") or "") for w in skipped if w.get("code") == "b_class_skipped"}
     assert "SCENE-03" not in skipped_ids
     assert {"CHAR-05", "CHAR-06", "CHAR-07", "SCENE-05"} <= skipped_ids
+
+
+def test_029_scene_popup_courtroom_materializes_chrome_still_skips():
+    """DIR EVAL: 弹窗审判庭 is a space noun; do not skip SCENE-03 (S05/S06 hang)."""
+    assert is_spatial_scene_name("弹窗审判庭")
+    assert not is_scene_b_class("弹窗审判庭")
+    # CHAR/N2 chrome detector may still see the 弹窗 prefix; SCENE bucket must not inherit skip.
+    assert is_system_speaker("弹窗审判庭")
+    assert is_system_speaker("弹窗")
+    assert is_system_speaker("系统音")
+    assert is_scene_b_class("弹窗")
+    assert is_scene_b_class("弹窗字")
+    assert is_scene_b_class("系统音")
+    assert classify_char_banlist("弹窗王子") == "B-TAG"
+    assert is_banlist_name("弹窗王子")
+    assert is_scene_b_class("弹窗王子")
+
+    cast = {
+        "characters": [
+            {"id": "CHAR-01", "name": "程序员", "one_line": "男主"},
+            {"id": "CHAR-05", "name": "弹窗王子", "one_line": "脏TAG"},
+            {"id": "CHAR-06", "name": "系统音", "one_line": "VO"},
+        ],
+        "scenes": [
+            {"id": "SCENE-03", "name": "弹窗审判庭", "one_line": "对质空间"},
+            {"id": "SCENE-05", "name": "弹窗", "one_line": "裸系统"},
+            {"id": "SCENE-06", "name": "系统音", "one_line": "误用系统名"},
+        ],
+    }
+    storyboard = {
+        "rows": [
+            {"shot_id": "S05", "char_ids": ["CHAR-01"], "scene_id": "SCENE-03"},
+            {"shot_id": "S06", "char_ids": ["CHAR-01"], "scene_id": "SCENE-03"},
+        ]
+    }
+    characters, scenes, skipped = materialize_cards(cast, storyboard)
+    char_ids = {c["id"] for c in characters}
+    scene_ids = {s["id"] for s in scenes}
+    scene_names = {s["name"] for s in scenes}
+    assert "CHAR-01" in char_ids
+    assert "CHAR-05" not in char_ids
+    assert "CHAR-06" not in char_ids
+    assert "SCENE-03" in scene_ids
+    assert "弹窗审判庭" in scene_names
+    assert "SCENE-05" not in scene_ids
+    assert "SCENE-06" not in scene_ids
+    skipped_ids = {str(w.get("id") or "") for w in skipped if w.get("code") == "b_class_skipped"}
+    assert "SCENE-03" not in skipped_ids
+    assert {"CHAR-05", "CHAR-06", "SCENE-05", "SCENE-06"} <= skipped_ids
+    # Do not "fix green" by rewriting shot scene_ids.
+    assert [row["scene_id"] for row in storyboard["rows"]] == ["SCENE-03", "SCENE-03"]
