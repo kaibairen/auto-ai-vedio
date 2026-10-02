@@ -32,13 +32,17 @@ from aiv_drama_n2.models import (
     StoryboardResetRequest,
     StoryboardWrite,
 )
+from aiv_drama_n3.gold_sheet import load_look_card
+from aiv_drama_n3.look_generate import generate_gold_a_sheet
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
     N3AttachRequest,
+    N3GenerateLookRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
     N3ThickenRequest,
 )
+from aiv_drama_n3.seedream import ARK_IMAGES_URL
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 
 app = typer.Typer(name="aiv", help="Drama D-N0 / D-N1 / D-N2 / D-N3 / D-N4 CLI. JSON envelope on stdout. Isolated from koubo-N1.")
@@ -518,6 +522,65 @@ def n3_thicken(
         include_bio_skill=include_bio_skill,
     )
     _print(_guard(lambda: _service().thicken_n3_cards(project_id, ep, body, raw=body.model_dump())))
+
+
+@n3_app.command("generate-look")
+def n3_generate_look(
+    project_id: Optional[str] = typer.Option(None, "--project"),
+    ep: Optional[str] = typer.Option(None, "--ep"),
+    ident: Optional[str] = typer.Option(None, "--id", help="CHAR-* (episode path)"),
+    card: Optional[str] = typer.Option(None, "--card", help="Standalone thick-card yaml/json"),
+    face_ref: str = typer.Option(..., "--face-ref", help="Local face ref image (BIND before generate)"),
+    expected_md5: Optional[str] = typer.Option(None, "--expected-md5"),
+    out: Optional[str] = typer.Option(None, "--out", help="Output dir for sheet + prompt + md5"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Assemble + bind + recorded Ark body; no HTTP"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    """Gold-A 3:2 single-sheet. Same assemble+generate as HTTP/workbench. usable_for_n4 stays false."""
+
+    def _run() -> dict:
+        settings = Settings.from_env()
+        endpoint = f"{settings.ark_base_url}/images/generations" if settings.ark_base_url else ARK_IMAGES_URL
+        if card:
+            loaded = load_look_card(card)
+            ident_local = loaded.get("id") or Path(card).stem
+            dest = Path(out) if out else Path.cwd() / "looks" / ident_local
+            look = generate_gold_a_sheet(
+                card=loaded,
+                face_ref=face_ref,
+                expected_md5=expected_md5,
+                out_dir=dest,
+                api_key=settings.ark_api_key,
+                dry_run=dry_run,
+                endpoint=endpoint,
+            )
+            return {
+                "ok": True,
+                "mode": "standalone",
+                "node": "D-N3",
+                "usable_for_n4": False,
+                "look_usable_for_n4": False,
+                "auto_flipped_usable": False,
+                **look,
+            }
+        if not project_id or not ep or not ident:
+            raise AppError(
+                422,
+                "validation",
+                "episode path needs --project --ep --id; or pass --card + --face-ref",
+                node="D-N3",
+            )
+        body = N3GenerateLookRequest(
+            id=ident,
+            face_ref=face_ref,
+            expected_md5=expected_md5,
+            dry_run=dry_run,
+            out_dir=out,
+            actor=actor,
+        )
+        return _service().generate_n3_look(project_id, ep, body, raw=body.model_dump(exclude_none=True))
+
+    _print(_guard(_run))
 
 
 @n3_app.command("crop")

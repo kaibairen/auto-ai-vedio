@@ -1,0 +1,12 @@
+# Sourced from RECIPE-AIV-031-BANANA-LOCAL-v0 §4 「CHAR-01 服装身份补丁」+ optional height.
+# Not assistant-written creative sheet body. Wardrobe/immutable/height only.
+id: CHAR-01
+kind: character
+name: 程序员
+one_line: 灰卫衣圆框镜
+wardrobe: 灰色连帽卫衣（帽子常半扣在脑后）、深色宽松工装裤、白色旧运动鞋；圆框黑边眼镜，镜片可有反光；黑色微乱短发，刘海压到眉骨，发际线略后移；瘦削窄肩；定妆站姿中性、手臂自然下垂（勿蹲蜷捂脸哭戏）。
+immutable: 圆框黑边眼镜；灰色连帽卫衣+深色工装裤+白鞋；黑色微乱短发与略后移发际线。
+height: 1.75米
+refs:
+  - role: face
+    md5: a8c70f3b4cb7855284d3d4d2bd3c906d

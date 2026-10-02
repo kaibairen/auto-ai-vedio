@@ -6,3 +6,4 @@
 
 - `outline-female.md` — 女频对照
 - `outline-male.md` — 男频对照
+- `gold-a/` — AIV-032 金样 A 合板：RECIPE 厚卡字段 + eng-031 prompt 全文（禁 Key）

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from aiv_drama.errors import AppError
@@ -16,16 +17,21 @@ from aiv_drama_n3.library import (
     character_store_key,
     normalize_refs,
     parse_kind,
+    resolve_ref_file,
     scene_store_key,
 )
+from aiv_drama_n3.gold_sheet import LOOK_KIND, LOOK_ROLE
+from aiv_drama_n3.look_generate import generate_gold_a_sheet
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
     N3AttachRequest,
     N3ForkRequest,
+    N3GenerateLookRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
     N3ThickenRequest,
 )
+from aiv_drama_n3.seedream import ARK_IMAGES_URL
 from aiv_drama_n3.thicken import normalize_thicken_provider, thicken_cards
 from aiv_drama_n3.policy import default_project_scope, hanging_bundle, project_scope_capability
 from aiv_drama_n3.projection import write_character_schema, write_episode_cards, write_scene_schema
@@ -189,6 +195,9 @@ class DramaN3Ops:
             "docs_pass": False,
             "auto_open_dn4": False,
         }
+        looks = (rec.get("n3") or {}).get("looks")
+        if looks:
+            env["looks"] = deepcopy(looks)
         thicken = (rec.get("n3") or {}).get("thicken")
         if thicken:
             skill_paths = list(thicken.get("skill_paths") or [])
@@ -399,6 +408,117 @@ class DramaN3Ops:
         return self._idem_put(
             idempotency_key,
             f"n3_thicken:{idem_tail}",
+            self.n3_envelope(rec, warnings=warns or None, extra=extra),
+        )
+
+    def generate_n3_look(
+        self,
+        project_id: str,
+        ep: str,
+        body: N3GenerateLookRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        post: Any | None = None,
+        get: Any | None = None,
+    ) -> dict[str, Any]:
+        """Gold-A 3:2 single sheet. Shared generate_gold_a_sheet. Never flips usable_for_n4."""
+        reject_force_keys_n3(raw)
+        if isinstance(raw, dict) and "sequential_image_generation" in raw:
+            raise AppError(
+                400,
+                "validation",
+                "forbidden: sequential_image_generation",
+                node=NODE_DN3,
+                field="sequential_image_generation",
+            )
+        req = body or N3GenerateLookRequest.model_validate(raw or {})
+        cached = self._idem_get(idempotency_key, f"n3_look:{project_id}:{ep}:{req.id}:{int(req.dry_run)}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, ep)
+        self._require_g2_for_n3(rec)
+        self._require_writable_episode(rec)
+        cards = (rec.get("n3") or {}).get("cards")
+        if not cards or not cards.get("materialized"):
+            raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)
+        kind = parse_kind(req.id, None)
+        if kind != KIND_CHAR:
+            raise AppError(
+                422,
+                "scene_look_forbidden",
+                "金样 A 合板仅 CHAR；SCENE 另轨",
+                id=req.id,
+                node=NODE_DN3,
+            )
+        card = self._find_card(rec, req.id, KIND_CHAR)
+        if card is None:
+            raise AppError(422, "card_id_not_in_cast", CAST_ONLY_MESSAGE, id=req.id, node=NODE_DN3)
+        face = (req.face_ref or "").strip()
+        if not face:
+            for ref in card.get("refs") or []:
+                if not isinstance(ref, dict):
+                    continue
+                if (ref.get("role") or "").strip() in {"face", "style_ref"} and (ref.get("path") or "").strip():
+                    face = ref["path"].strip()
+                    break
+        if not face:
+            raise AppError(
+                422,
+                "material_bind",
+                "缺脸 ref；材料绑定门未过，禁 generate",
+                node=NODE_DN3,
+                id=req.id,
+            )
+        resolved = resolve_ref_file(self.settings, face)
+        if resolved is not None:
+            face = str(resolved)
+        ep_id = rec["episode"]["episode_id"]
+        out_dir = Path(req.out_dir) if req.out_dir else self.store.episode_dir(project_id, ep_id) / "looks" / req.id
+        endpoint = f"{getattr(self.settings, 'ark_base_url', None) or ARK_IMAGES_URL.rsplit('/images', 1)[0]}/images/generations"
+        look = generate_gold_a_sheet(
+            card=card,
+            face_ref=face,
+            expected_md5=req.expected_md5,
+            out_dir=out_dir,
+            api_key=getattr(self.settings, "ark_api_key", None),
+            dry_run=bool(req.dry_run),
+            endpoint=endpoint,
+            post=post,
+            get=get,
+        )
+        rec["n3"].setdefault("looks", {})
+        rec["n3"]["looks"][req.id] = {k: v for k, v in look.items() if k != "ok"}
+        slim = {
+            "kind": LOOK_KIND,
+            "role": LOOK_ROLE,
+            "sheet_path": look.get("sheet_path"),
+            "sheet_md5": look.get("sheet_md5"),
+            "prompt_path": look.get("prompt_path"),
+            "prompt_md5": look.get("prompt_md5"),
+            "face_ref_md5": look.get("face_ref_md5"),
+            "usable_for_n4": False,
+            "dry_run": look.get("dry_run"),
+            "model": look.get("model"),
+        }
+        existing = [x for x in (card.get("looks") or []) if isinstance(x, dict) and x.get("kind") != LOOK_KIND]
+        card["looks"] = existing + [slim]
+        cards["updated_at"] = now_iso()
+        cards["updated_by"] = req.actor
+        # Sidecar look write: do not unlock G3, do not bump cards.version, do not touch refs.
+        self._refresh_usable(rec)
+        self._touch_episode(rec)
+        self._commit(rec)
+        issues = collect_n3_issues(rec)
+        warns = [i for i in issues if i.get("severity") == "warn"]
+        extra = {
+            "look": look,
+            "look_usable_for_n4": False,
+            "auto_flipped_usable": False,
+        }
+        return self._idem_put(
+            idempotency_key,
+            f"n3_look:{project_id}:{ep}:{req.id}:{int(req.dry_run)}",
             self.n3_envelope(rec, warnings=warns or None, extra=extra),
         )
 

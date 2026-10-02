@@ -25,6 +25,30 @@ SKILL_REFERENCES_TOTAL_LIMIT = 2400
 
 SHOT_CAP_HARD = 12
 
+ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+
+
+def read_ark_api_key() -> str | None:
+    """Read Ark key from env or ~/.config/aiv/ARK_API_KEY. Never log the value."""
+    for env in ("ARK_API_KEY", "AIV_ARK_API_KEY"):
+        val = (os.environ.get(env) or "").strip()
+        if val:
+            return val
+    file_hint = (os.environ.get("ARK_API_KEY_FILE") or "").strip()
+    candidates: list[Path] = []
+    if file_hint:
+        candidates.append(Path(file_hint).expanduser())
+    candidates.append(Path.home() / ".config" / "aiv" / "ARK_API_KEY")
+    for path in candidates:
+        try:
+            if path.is_file():
+                text = path.read_text(encoding="utf-8").strip()
+                if text:
+                    return text
+        except OSError:
+            continue
+    return None
+
 
 def skill_dir_relpath(lane: str) -> str:
     return SKILL_PATHS[lane].rsplit("/", 1)[0]
@@ -67,6 +91,8 @@ class Settings:
     openai_base_url: str
     openai_model: str
     named_cast_check: str = "warn"
+    ark_api_key: str | None = None
+    ark_base_url: str = ARK_DEFAULT_BASE_URL
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -91,6 +117,10 @@ class Settings:
             ).rstrip("/"),
             openai_model=os.environ.get("AIV_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
             named_cast_check=named_cast,
+            ark_api_key=read_ark_api_key(),
+            ark_base_url=(
+                os.environ.get("ARK_BASE_URL") or os.environ.get("AIV_ARK_BASE_URL") or ARK_DEFAULT_BASE_URL
+            ).rstrip("/"),
         )
 
     def skill_relpath(self, lane: str) -> str:

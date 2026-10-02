@@ -243,6 +243,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "请求校验失败。",
         "en": "validation",
     },
+    "material_bind": {
+        "zh": "材料绑定门未过（脸 ref path+md5）；禁 generate。",
+        "en": "Material bind gate failed (face ref path+md5); generate blocked.",
+    },
+    "look_card_incomplete": {
+        "zh": "厚卡缺 wardrobe/appearance 与 immutable；禁助手自写合板服装正文。",
+        "en": "Thick card missing wardrobe/appearance and immutable; do not invent sheet clothing.",
+    },
+    "scene_look_forbidden": {
+        "zh": "金样 A 合板仅 CHAR；SCENE 另轨。",
+        "en": "Gold-A sheet is CHAR-only; SCENE is a separate track.",
+    },
 }
 
 

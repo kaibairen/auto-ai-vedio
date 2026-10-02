@@ -281,6 +281,15 @@
       <button id="btn-g3-reject">G3 驳回</button>
       <button id="btn-g3-pass" class="primary">G3 确认</button>
     </div>
+    <p class="meta">金样 A 合板（BRIEF-AIV-032）：与 CLI 同一 assemble+Ark。不自翻 usable_for_n4。SCENE 另轨。</p>
+    <div class="row">
+      <label>CHAR <select id="h-look-char"></select></label>
+      <label>face ref <input id="h-face-ref" placeholder="/path/to/face.jpg" /></label>
+      <label>expected md5 <input id="h-face-md5" placeholder="optional 32-hex" /></label>
+      <label><input type="checkbox" id="h-look-dry" checked /> dry-run</label>
+      <button id="btn-n3-look" disabled>合板 generate-look</button>
+    </div>
+    <p class="meta" id="h-look-meta">look.usable_for_n4=false · 禁 sequential_image_generation · 单张 3:2</p>
     <h2 class="h-sub">CHAR</h2>
     <div class="table-wrap">
       <table class="cards" id="h-char-table">
