@@ -5,6 +5,7 @@
 | 席 | AI视频-后端 |
 | BRIEF | BRIEF-AIV-031-LOOK-IMPL · BE slice |
 | 基线 | main `4d651a6cb003a16dcdef6e53c2ee0c85df8df3ca` |
+| 本拍 tip | `614703f9556b3d3a6a1d58189d4ba2a7749998bf` |
 | 性质 | BE 契约落地 · **≠绿 N4** · **≠LOOP-PASS** · 不合 main |
 | 硬 | ForcePass=never · 禁自翻 `usable_for_n4` · 禁热链 path |
 
