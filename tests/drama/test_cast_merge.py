@@ -185,6 +185,34 @@ def test_resolve_preattached_uses_library_identity_after_rename(svc):
     assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
 
 
+def test_generate_after_rename_does_not_stale_confirmed_intent(svc):
+    pid = _seed_programmer_doubao(svc)
+    persist_and_confirm_intent(svc, pid, follow_precast=True)
+    rec = svc._rec(pid, "EP01")
+    svc.put_library_character(
+        pid,
+        "CHAR-02",
+        LibraryCharacterWrite(
+            name="奶蛙公主",
+            one_line="踢飞两大模型王子，带着程序员私奔",
+            version=2,
+        ),
+    )
+    lane = rec["brief"]["lane_preference"]
+    env = svc.generate_outline(
+        pid,
+        "EP01",
+        OutlineGenerateRequest(lane=lane, provider="fixture"),
+        raw={"lane": lane, "provider": "fixture"},
+    )
+    assert env["ok"] is True
+    names = [c["name"] for c in env["cast"]["characters"]]
+    assert "豆包" not in names
+    frog = next(c for c in env["cast"]["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
+
+
 def test_fixture_generate_library_rename_reaches_episode_cast(svc):
     pid = _seed_programmer_doubao(svc)
     rec = svc._rec(pid, "EP01")

@@ -446,7 +446,11 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         return deepcopy(ensure_intent(rec))
 
     def _fingerprint_cards(self, rec: dict[str, Any]) -> list[dict[str, Any]]:
-        return self._resolve_preattached_characters(rec["episode"]["project_id"], rec)
+        # Intent fingerprint stays on the episode-cast spelling so a library
+        # rename does not 422 intent_stale before generate can apply it.
+        return self._resolve_preattached_characters(
+            rec["episode"]["project_id"], rec, prefer_library=False
+        )
 
     def _compute_fingerprint(self, rec: dict[str, Any]) -> str:
         return compute_intent_fingerprint(rec.get("brief") or {}, self._fingerprint_cards(rec))
@@ -962,7 +966,13 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         ex_line = ((existing or {}).get("one_line") or "").strip()
         return lib_name or ex_name or cid, lib_line or ex_line or "预挂角色"
 
-    def _resolve_preattached_characters(self, project_id: str, rec: dict[str, Any]) -> list[dict[str, Any]]:
+    def _resolve_preattached_characters(
+        self,
+        project_id: str,
+        rec: dict[str, Any],
+        *,
+        prefer_library: bool = True,
+    ) -> list[dict[str, Any]]:
         existing = {c["id"]: c for c in ((rec.get("cast") or {}).get("characters") or [])}
         cards: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -972,7 +982,15 @@ class DramaService(DramaN4Ops, DramaN2Ops):
             seen.add(cid)
             lib = self._latest_library(project_id, cid)
             ex = existing.get(cid)
-            name, one_line = self._library_wins_identity(lib, ex, cid)
+            if prefer_library:
+                name, one_line = self._library_wins_identity(lib, ex, cid)
+            else:
+                name = ((ex or {}).get("name") or "").strip() or ((lib or {}).get("name") or "").strip() or cid
+                one_line = (
+                    ((ex or {}).get("one_line") or "").strip()
+                    or ((lib or {}).get("one_line") or "").strip()
+                    or "预挂角色"
+                )
             ref = None
             if ex and ex.get("library_ref"):
                 ref = deepcopy(ex["library_ref"])
