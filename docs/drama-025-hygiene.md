@@ -21,14 +21,14 @@
 
 手段：`.skill/writing/动态漫-转分镜` 引导 + N2 LLM rules + validate 软检。
 
-## 轨 B · name 槽漏网
+## 轨 B · name 槽
 
-硬扫仅 `characters[].name`（及 merge/sidecar 开行）。**不**因 one_line/大纲含「技术王子」「两位王子」删 ALLOW 01–04。
+硬扫仅 `characters[].name`（及 merge/sidecar 开行）。**不**因 one_line/大纲含集合头衔删已挂行。
 
-扩例（DENY 开 CHAR）：正统/体验/重构/回滚王子（无戏仿前缀）；弹窗/破防/联猎王子；拆穿两位…/吐槽程序员；屏幕里/弹幕里两位…；最优解/最贵解/联猎；半截系统音；裸「王子」fold 至 03/04。
+姓名只来自本项目本集预挂人物卡。生成名是该全名加前缀或后缀则折回同一 id；对不上则不硬折。漏库新角色仍按 §5.2 新开 id。已挂 library_ref 行不得因通用头衔分类被丢掉。
 
-护：`程序员` `豆包` `GPT(CODEX)王子` `Opus5.5(CURSOR)王子`（及 023 A 档别名）。脏三仍 0。**禁**再开 Acc#3 平行大轨。
+扩例（DENY 开 CHAR）：弹窗/双屏/窗口/爽点+头衔；拆穿两位…/吐槽…；屏幕里/弹幕里两位…；半截系统音；裸头衔 fold 至已挂全名。无剧集专名白名单。
 
-SCENE 与 CHAR **分桶**：`is_scene_b_class` 先放行空间短名（`弹窗空间` / `弹窗审判庭` / `…门厅` / `…战场`），再判 system-speaker。CHAR `弹窗王子` / 裸 `弹窗` 仍 DENY。禁手改 SCENE 名冒充。
+SCENE 与 CHAR **分桶**：`is_scene_b_class` 先放行空间短名（`弹窗空间` / `弹窗审判庭` / `…门厅` / `…战场`），再判 system-speaker。CHAR `弹窗将军` / 裸 `弹窗` 仍 DENY（无 library_ref 时）。禁手改 SCENE 名冒充。
 
 — docs≠PASS · ForcePass=never —

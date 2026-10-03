@@ -33,22 +33,22 @@ def _draft(
     )
 
 
-def _seed_programmer_doubao(svc: DramaService, *, lane: str = "female") -> str:
+def _seed_preattached_pair(svc: DramaService, *, lane: str = "female") -> str:
     pid = svc.create_project(ProjectCreate(name="dn1-merge"))["project"]["id"]
     svc.put_library_character(
-        pid, "CHAR-01", LibraryCharacterWrite(name="程序员", one_line="程序员·男", version=1)
+        pid, "CHAR-01", LibraryCharacterWrite(name="预挂甲", one_line="预挂甲·男", version=1)
     )
     svc.put_library_character(
-        pid, "CHAR-02", LibraryCharacterWrite(name="豆包", one_line="奶蛙豆包", version=1)
+        pid, "CHAR-02", LibraryCharacterWrite(name="预挂乙", one_line="预挂乙·配", version=1)
     )
     svc.create_episode(pid, EpisodeCreate(episode_id="EP01", pipeline_profile="drama"))
     svc.put_brief(
         pid,
         "EP01",
         DramaBriefWrite(
-            title_intent="程序员与两王子和豆包",
+            title_intent="预挂甲与预挂乙",
             lane_preference=lane,  # type: ignore[arg-type]
-            hero_one_line="程序员·男",
+            hero_one_line="预挂甲·男",
         ),
     )
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=1))
@@ -57,54 +57,77 @@ def _seed_programmer_doubao(svc: DramaService, *, lane: str = "female") -> str:
 
 
 def test_merge_folds_same_name_onto_preattach_keeps_ref(svc):
-    pid = _seed_programmer_doubao(svc)
+    pid = _seed_preattached_pair(svc)
     rec = svc._rec(pid, "EP01")
     cast = svc._merge_generated_cast(
         rec,
         _draft(
             [
-                {"name": "程序员", "one_line": "被模型改写的程序员"},
-                {"name": "豆包", "one_line": "第二豆包"},
-                {"name": "豆包", "one_line": "第三豆包"},
+                {"name": "预挂甲", "one_line": "被模型改写的预挂甲"},
+                {"name": "预挂乙", "one_line": "第二预挂乙"},
+                {"name": "预挂乙", "one_line": "第三预挂乙"},
             ]
         ),
         pid,
     )
     names = [c["name"] for c in cast["characters"]]
-    assert names.count("程序员") == 1
-    assert names.count("豆包") == 1
-    programmer = next(c for c in cast["characters"] if c["name"] == "程序员")
-    doubao = next(c for c in cast["characters"] if c["name"] == "豆包")
-    assert programmer["id"] == "CHAR-01"
-    assert doubao["id"] == "CHAR-02"
-    assert programmer["library_ref"] == {"id": "CHAR-01", "version": 1}
-    assert doubao["library_ref"] == {"id": "CHAR-02", "version": 1}
-    # preattach one_line wins; generated rewrite must not clobber identity
-    assert programmer["one_line"] == "程序员·男"
-    assert doubao["one_line"] == "奶蛙豆包"
+    assert names.count("预挂甲") == 1
+    assert names.count("预挂乙") == 1
+    lead = next(c for c in cast["characters"] if c["name"] == "预挂甲")
+    support = next(c for c in cast["characters"] if c["name"] == "预挂乙")
+    assert lead["id"] == "CHAR-01"
+    assert support["id"] == "CHAR-02"
+    assert lead["library_ref"] == {"id": "CHAR-01", "version": 1}
+    assert support["library_ref"] == {"id": "CHAR-02", "version": 1}
+    assert lead["one_line"] == "预挂甲·男"
+    assert support["one_line"] == "预挂乙·配"
+
+
+def test_merge_folds_prefix_and_suffix_onto_preattach(svc):
+    pid = _seed_preattached_pair(svc)
+    rec = svc._rec(pid, "EP01")
+    cast = svc._merge_generated_cast(
+        rec,
+        _draft(
+            [
+                {"name": "小预挂甲", "one_line": "前缀包装"},
+                {"name": "预挂乙大人", "one_line": "后缀包装"},
+                {"name": "预挂戊", "one_line": "漏库新角色"},
+            ]
+        ),
+        pid,
+    )
+    names = [c["name"] for c in cast["characters"]]
+    assert names.count("预挂甲") == 1
+    assert names.count("预挂乙") == 1
+    assert "小预挂甲" not in names
+    assert "预挂乙大人" not in names
+    assert "预挂戊" in names
+    assert next(c for c in cast["characters"] if c["name"] == "预挂甲")["id"] == "CHAR-01"
+    assert next(c for c in cast["characters"] if c["name"] == "预挂乙")["id"] == "CHAR-02"
 
 
 def test_merge_soft_suppresses_parallel_protagonist_no_422(svc):
-    pid = _seed_programmer_doubao(svc)
+    pid = _seed_preattached_pair(svc)
     rec = svc._rec(pid, "EP01")
     warnings: list[str] = []
     cast = svc._merge_generated_cast(
         rec,
         _draft(
             [
-                {"name": "林码", "one_line": "重生女主"},
-                {"name": "豆包", "one_line": "第二豆包"},
-                {"name": "大皇子", "one_line": "傲慢王子"},
+                {"name": "另造甲", "one_line": "重生女主"},
+                {"name": "预挂乙", "one_line": "第二预挂乙"},
+                {"name": "预挂戊", "one_line": "漏库新角色"},
             ]
         ),
         pid,
         warnings=warnings,
     )
     names = [c["name"] for c in cast["characters"]]
-    assert "林码" not in names
-    assert names.count("程序员") == 1
-    assert names.count("豆包") == 1
-    assert "大皇子" in names
+    assert "另造甲" not in names
+    assert names.count("预挂甲") == 1
+    assert names.count("预挂乙") == 1
+    assert "预挂戊" in names
     assert any("soft-suppressed parallel protagonist" in w for w in warnings)
     ids = [c["id"] for c in cast["characters"]]
     assert ids.count("CHAR-01") == 1
@@ -118,13 +141,13 @@ def test_merge_used_names_dedups_generated_without_preattach(svc):
         rec,
         _draft(
             [
-                {"name": "豆包", "one_line": "第一只"},
-                {"name": " 豆包 ", "one_line": "第二只"},
+                {"name": "预挂乙", "one_line": "第一只"},
+                {"name": " 预挂乙 ", "one_line": "第二只"},
             ]
         ),
         pid,
     )
-    named = [c for c in cast["characters"] if c["name"].strip() == "豆包"]
+    named = [c for c in cast["characters"] if c["name"].strip() == "预挂乙"]
     assert len(named) == 1
     assert named[0]["library_ref"] is None
 
@@ -133,7 +156,6 @@ def test_merge_never_overwrites_library_ref(svc):
     pid = seed_project_episode(svc)
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=3))
     rec = svc._rec(pid, "EP01")
-    # plant a generated-looking sibling id so fold must not steal the ref
     rec["cast"]["characters"].append(
         {"id": "CHAR-99", "name": "林晚", "one_line": "假行", "library_ref": None}
     )
@@ -148,21 +170,21 @@ def test_merge_never_overwrites_library_ref(svc):
     assert lin[0]["library_ref"] == {"id": "CHAR-01", "version": 3}
 
 
-def test_generate_attach_programmer_doubao_cast_is_clean(svc):
-    pid = _seed_programmer_doubao(svc)
+def test_generate_attach_preattached_pair_cast_is_clean(svc):
+    pid = _seed_preattached_pair(svc)
     env = generate_ready(svc, pid, "female")
     names = [c["name"] for c in env["cast"]["characters"]]
-    assert names.count("程序员") == 1
-    assert names.count("豆包") == 1
+    assert names.count("预挂甲") == 1
+    assert names.count("预挂乙") == 1
     refs = {c["name"]: c.get("library_ref") for c in env["cast"]["characters"]}
-    assert refs["程序员"] == {"id": "CHAR-01", "version": 1}
-    assert refs["豆包"] == {"id": "CHAR-02", "version": 1}
-    assert "程序员" in env["outline"]["body_md"]
+    assert refs["预挂甲"] == {"id": "CHAR-01", "version": 1}
+    assert refs["预挂乙"] == {"id": "CHAR-02", "version": 1}
+    assert "预挂甲" in env["outline"]["body_md"]
     assert env["ok"] is True
 
 
 def test_lane_l1_warning_not_422(svc):
-    pid = _seed_programmer_doubao(svc, lane="female")
+    pid = _seed_preattached_pair(svc, lane="female")
     persist_and_confirm_intent(svc, pid, follow_precast=True)
     env = svc.generate_outline(
         pid,
@@ -173,6 +195,5 @@ def test_lane_l1_warning_not_422(svc):
     assert env["ok"] is True
     warnings = env.get("warnings") or []
     assert any("lane female may clash" in w and "CHAR-01" in w for w in warnings)
-    # still a legal 0.1.0 success envelope
     assert env["node"] == "D-N1"
     assert env["outline"]["lane"] == "female"

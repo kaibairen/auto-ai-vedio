@@ -882,7 +882,7 @@ $("btn-sb-val").onclick = async () => {
 $("btn-sidecar").onclick = async () => {
   const before = state.cast?.version ?? state.seenCastVersion;
   const data = await api("POST", `/projects/${state.projectId}/episodes/${state.ep}/drama/cast/sidecar-add`, {
-    name: $("side-name").value || "CODEX王子",
+    name: $("side-name").value.trim(),
     one_line: $("side-line").value || undefined,
     actor: "yangzhou",
   });

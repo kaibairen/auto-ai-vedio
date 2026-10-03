@@ -47,7 +47,7 @@ def _write_skill_tree(root: Path, *, with_references: bool = True, missing_one: 
         (refs / name).write_text(text, encoding="utf-8")
 
 
-def _fake_ok(monkeypatch, *, body_md: str = "# 大纲\n- 桥段序列：\n  1. 程序员登场\n"):
+def _fake_ok(monkeypatch, *, body_md: str = "# 大纲\n- 桥段序列：\n  1. 预挂甲登场\n"):
     captured: dict = {}
 
     class _Resp:
@@ -63,8 +63,8 @@ def _fake_ok(monkeypatch, *, body_md: str = "# 大纲\n- 桥段序列：\n  1. �
                                 {
                                     "body_md": body_md,
                                     "characters": [
-                                        {"name": "程序员", "one_line": "预挂男主"},
-                                        {"name": "豆包", "one_line": "奶蛙"},
+                                        {"name": "预挂甲", "one_line": "预挂男主"},
+                                        {"name": "预挂乙", "one_line": "预挂配角"},
                                     ],
                                     "scenes": [{"name": "公司", "one_line": "开场"}],
                                 },
@@ -94,20 +94,20 @@ def test_llm_prompt_includes_preattached_and_rules(tmp_path, monkeypatch):
         lane="female",
         shot_cap=12,
         brief={
-            "title_intent": "程序员与豆包",
+            "title_intent": "预挂甲与预挂乙",
             "pin": None,
             "setting_notes": "都市",
             "preattached_characters": [
                 {
                     "id": "CHAR-01",
-                    "name": "程序员",
-                    "one_line": "程序员·男",
+                    "name": "预挂甲",
+                    "one_line": "预挂甲·男",
                     "library_ref": {"id": "CHAR-01", "version": 1},
                 },
                 {
                     "id": "CHAR-02",
-                    "name": "豆包",
-                    "one_line": "奶蛙豆包",
+                    "name": "预挂乙",
+                    "one_line": "预挂乙·配",
                     "library_ref": {"id": "CHAR-02", "version": 1},
                 },
             ],
@@ -116,14 +116,16 @@ def test_llm_prompt_includes_preattached_and_rules(tmp_path, monkeypatch):
     user = json.loads(captured["json"]["messages"][1]["content"])
     cards = user["brief"]["preattached_characters"]
     assert cards[0]["id"] == "CHAR-01"
-    assert cards[0]["name"] == "程序员"
-    assert cards[0]["one_line"] == "程序员·男"
+    assert cards[0]["name"] == "预挂甲"
+    assert cards[0]["one_line"] == "预挂甲·男"
     assert cards[0]["library_ref"] == {"id": "CHAR-01", "version": 1}
-    assert cards[1]["name"] == "豆包"
+    assert cards[1]["name"] == "预挂乙"
     assert any("大纲主角必须使用预挂角色的姓名" in r for r in user["rules"])
     assert any("禁止另造同名角色" in r for r in user["rules"])
+    assert any("preattached character card" in r for r in user["rules"])
+    assert any("prefix or a suffix" in r for r in user["rules"])
     assert "宫格" in "".join(user["rules"])
-    assert draft.characters[0]["name"] == "程序员"
+    assert draft.characters[0]["name"] == "预挂甲"
 
 
 def test_llm_injects_reference_excerpts_and_lists_real_paths(tmp_path, monkeypatch):
@@ -169,16 +171,16 @@ def test_llm_skips_missing_reference_without_500(tmp_path, monkeypatch):
 def test_generate_outline_passes_preattached_into_provider(svc, monkeypatch):
     pid = svc.create_project(ProjectCreate(name="prompt-wire"))["project"]["id"]
     svc.put_library_character(
-        pid, "CHAR-01", LibraryCharacterWrite(name="程序员", one_line="程序员·男", version=1)
+        pid, "CHAR-01", LibraryCharacterWrite(name="预挂甲", one_line="预挂甲·男", version=1)
     )
     svc.put_library_character(
-        pid, "CHAR-02", LibraryCharacterWrite(name="豆包", one_line="奶蛙豆包", version=1)
+        pid, "CHAR-02", LibraryCharacterWrite(name="预挂乙", one_line="预挂乙·配", version=1)
     )
     svc.create_episode(pid, EpisodeCreate(episode_id="EP01", pipeline_profile="drama"))
     svc.put_brief(
         pid,
         "EP01",
-        DramaBriefWrite(title_intent="程序员与豆包", lane_preference="female", hero_one_line="程序员·男"),
+        DramaBriefWrite(title_intent="预挂甲与预挂乙", lane_preference="female", hero_one_line="预挂甲·男"),
     )
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=1))
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-02", version=1))
@@ -190,13 +192,13 @@ def test_generate_outline_passes_preattached_into_provider(svc, monkeypatch):
         def generate(self, **kwargs):
             seen.update(kwargs)
             return GeneratedDraft(
-                body_md="# 大纲\n- 桥段序列：\n  1. 程序员与豆包\n",
+                body_md="# 大纲\n- 桥段序列：\n  1. 预挂甲与预挂乙\n",
                 lane="female",
                 shot_cap=12,
                 characters=[
-                    {"name": "林码", "one_line": "重生女主"},
-                    {"name": "豆包", "one_line": "第二豆包"},
-                    {"name": "二皇子", "one_line": "温柔王子"},
+                    {"name": "另造甲", "one_line": "重生女主"},
+                    {"name": "预挂乙", "one_line": "第二预挂乙"},
+                    {"name": "预挂戊", "one_line": "漏库新角色"},
                 ],
                 scenes=[{"name": "公司", "one_line": "开场"}],
                 source_skills=[
@@ -214,11 +216,11 @@ def test_generate_outline_passes_preattached_into_provider(svc, monkeypatch):
     )
     cards = seen["brief"]["preattached_characters"]
     assert [c["id"] for c in cards] == ["CHAR-01", "CHAR-02"]
-    assert cards[0]["name"] == "程序员"
+    assert cards[0]["name"] == "预挂甲"
     assert cards[0]["library_ref"] == {"id": "CHAR-01", "version": 1}
     names = [c["name"] for c in env["cast"]["characters"]]
-    assert "林码" not in names
-    assert names.count("豆包") == 1
-    assert names.count("程序员") == 1
-    assert "二皇子" in names
+    assert "另造甲" not in names
+    assert names.count("预挂乙") == 1
+    assert names.count("预挂甲") == 1
+    assert "预挂戊" in names
     assert env["ok"] is True

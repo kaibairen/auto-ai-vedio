@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.11 — library-only character names (docs≠PASS)
+
+Shared pipeline no longer rivets one dogfood episode's proper names or look assets. Names live only on this project's this episode's preattached character cards. A generated name that is that full name plus a prefix or suffix folds to the same id; otherwise do not force-fold. A genuinely new character still gets a new id under DRAMA-N0N1-PRD §5.2. An already-attached row is not dropped because a generic-title classifier matches. ForcePass=never. Do **not** merge until the control seat reviews the head.
+
+- N1 outline prompt + male-lane writing skill: library fold only; no person-name / ban-list / scene-name examples from one episode.
+- N2 storyboard prompt + `named_cast`: no protected-lead / prince-allowlist / brand-to-prince folding. Prefix/suffix fold onto attached cards.
+- Workbench sidecar empty-name fallback no longer invents a titled name.
+- Tests use fixture names (`预挂甲` / `预挂乙` / `预挂丙将军`). N3 gold-sheet `禁豆包拟人` look-style ban is unchanged.
+- Does not edit generated episode files, `data/`, or dogfood dirs.
+
 ## 0.2.10 — AIV-032 gold-A 3:2 CHAR turnaround look-generate (docs≠PASS)
 
 BRIEF-AIV-032. ForcePass=never. Does **not** merge to main. Does not flip `usable_for_n4` or green N4. STYLE终句 + RECIPE§4 一字不改. No orphan generate scripts.

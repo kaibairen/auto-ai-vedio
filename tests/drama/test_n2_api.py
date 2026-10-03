@@ -166,14 +166,14 @@ def test_http_sidecar_add_keeps_g1b_and_hints(client):
     outline_ver = before["outline"]["version"]
     res = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/cast/sidecar-add",
-        json={"name": "CODEX王子", "one_line": "弹窗反派", "actor": "yangzhou"},
+        json={"name": "预挂丙将军", "one_line": "侧车配角", "actor": "yangzhou"},
     )
     assert res.status_code == 200
     body = res.json()
     assert body["cast_changed"] is True
     assert body["cast"]["locked"] is True
     names = [c["name"] for c in body["cast"]["characters"]]
-    assert "CODEX王子" in names
+    assert "预挂丙将军" in names
     after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/outline").json()
     assert after["outline"]["locked"] is True
     assert after["outline"]["body_md"] == outline_body
@@ -187,7 +187,7 @@ def test_http_named_cast_warn_blocks_g2(client):
     pid = _setup_locked(client)
     put = client.put(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/storyboard",
-        json={"rows": [sample_row(dialogue="CODEX王子：嫁给我。", action="弹窗弹出")]},
+        json={"rows": [sample_row(dialogue="预挂丙将军：站住。", action="弹窗弹出")]},
     )
     assert put.status_code == 200
     assert any(w["code"] == "named_cast_missing" for w in put.json().get("validate_warnings") or [])

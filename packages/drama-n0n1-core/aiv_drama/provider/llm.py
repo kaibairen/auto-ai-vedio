@@ -53,8 +53,8 @@ class LlmProvider:
             "Do NOT write 提示词, 宫格, Seedance, 分镜表, or 成稿台词",
             f"shot_cap hard cap {shot_cap}",
             "Ceiling is outline/beats only (D-N1), not D-N2",
-            "characters[].name must look like a person (程序员/豆包/GPT(CODEX)王子/Opus5.5(CURSOR)王子). Never open CHAR from 吐槽两位王子/技术王子/幕里两位王子/两位王子/两侧王子/幕里…王子/正统王子/体验王子/重构王子/回滚王子/弹窗王子/破防王子/联猎王子/拆穿两位王子/吐槽程序员/弹幕里两位王子/最优解/最贵解/联猎/非技术型AI/代码库已冻结 or bare CURSOR/CODEX. NAME slot only — outline/one_line may say 技术王子/两位王子",
-            "scenes[].name must be a spatial noun (侧边栏空间/避难所门厅/深夜IDE战场). Events/props/actions go in one_line. Avoid 侧边栏奶茶时刻 / 开源避难所入口 as the field name",
+            "characters[].name must look like a person name. A name comes from this episode's preattached character card. If a generated name is that full name plus a prefix or a suffix, fold it back to the same id; otherwise do not force-fold. A genuinely new character still gets a new CHAR id. Never open CHAR from system-voice, half-line dialogue, verb phrases, slogan tags, or collection-title labels. NAME slot only — outline/one_line may describe titles without becoming CHAR.name",
+            "scenes[].name must be a spatial noun. Events, props, and actions go in one_line, not the name field.",
         ]
         if preattached:
             rules.extend(

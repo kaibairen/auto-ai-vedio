@@ -71,10 +71,10 @@ from aiv_drama.validate import (
 from aiv_drama_n2.named_cast import (
     CAST_CHANGED_HINT,
     SIDECAR_ONE_LINE,
-    is_a_tier_prince_name,
+    attached_names_from_cast,
+    fold_to_attached_name,
+    is_attached_character_name,
     is_banlist_name,
-    is_bare_brand,
-    is_protected_lead,
     is_registerable_name,
     prefer_spatial_scene_name,
     normalize_name,
@@ -1054,9 +1054,16 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         if lead is None and bound:
             lead = bound[0]
 
+        attached = list(used_names.keys())
         for row in draft.characters:
-            name = (row.get("name") or "").strip() or "未命名"
-            if name != "未命名" and is_banlist_name(name) and not is_protected_lead(name) and not is_a_tier_prince_name(name):
+            raw_name = (row.get("name") or "").strip() or "未命名"
+            folded = fold_to_attached_name(raw_name, attached)
+            name = folded or raw_name
+            if (
+                name != "未命名"
+                and is_banlist_name(name, attached)
+                and not is_attached_character_name(name, attached)
+            ):
                 msg = f"skipped banlist CHAR {name!r} (B-ACT/B-TAG/B-FRAG/B-GEN)"
                 logger.warning(msg)
                 notes.append(msg)
@@ -1267,12 +1274,14 @@ class DramaService(DramaN4Ops, DramaN2Ops):
             if not (row.name or "").strip() or not (row.one_line or "").strip():
                 raise AppError(422, "validation", f"{kind} name and one_line are required")
             if kind == "CHAR":
+                attached = attached_names_from_cast(rec.get("cast"))
                 char_name = normalize_name(row.name)
+                folded = fold_to_attached_name(char_name, attached)
+                check_name = folded or char_name
                 if (
-                    (is_banlist_name(char_name) or is_bare_brand(char_name))
-                    and not is_protected_lead(char_name)
-                    and not is_a_tier_prince_name(char_name)
-                    and not is_registerable_name(char_name)
+                    is_banlist_name(check_name, attached)
+                    and not is_attached_character_name(check_name, attached)
+                    and not is_registerable_name(check_name, attached)
                 ):
                     raise AppError(
                         422,
@@ -1448,11 +1457,11 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         name = normalize_name(body.name)
         if not name:
             raise AppError(422, "validation", "name is required", node=NODE_DN1)
-        if (
-            (is_banlist_name(name) or is_bare_brand(name))
-            and not is_protected_lead(name)
-            and not is_a_tier_prince_name(name)
-        ):
+        attached = attached_names_from_cast(rec.get("cast"))
+        folded = fold_to_attached_name(name, attached)
+        if folded:
+            name = folded
+        if is_banlist_name(name, attached) and not is_attached_character_name(name, attached):
             raise AppError(
                 422,
                 "validation",
@@ -1465,6 +1474,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
                 c
                 for c in rec["cast"]["characters"]
                 if normalize_name(str(c.get("name") or "")) == name
+                or fold_to_attached_name(name, [str(c.get("name") or "")])
             ),
             None,
         )

@@ -15,6 +15,7 @@ from aiv_drama_n2.named_cast import (
     classify_char_banlist,
     collect_named_hits,
     is_a_tier_prince_name,
+    is_attached_character_name,
     is_banlist_name,
     is_protected_lead,
     is_registerable_name,
@@ -29,25 +30,19 @@ from tests.drama.helpers import lock_g1b, persist_and_confirm_intent, sample_row
 
 
 DENY_NAMES = (
-    "吐槽两位王子",
-    "技术王子",
-    "幕里两位王子",
-    "两位王子",
-    "两侧王子",
-    "幕里的王子",
-    "屏幕里两位王子",
-    "CURSOR",
-    "CODEX",
+    "吐槽两位将军",
+    "弹窗将军",
+    "幕里两位将军",
+    "两位将军",
+    "两侧将军",
+    "幕里的将军",
+    "屏幕里两位将军",
 )
 ALLOW_NAMES = (
-    "程序员",
-    "豆包",
-    "GPT(CODEX)王子",
-    "Opus5.5(CURSOR)王子",
-    "GPT王子",
-    "Opus5.5王子",
-    "CODEX王子",
-    "CURSOR(Opus5.5)王子",
+    "预挂甲",
+    "预挂乙",
+    "预挂丙将军",
+    "预挂丁将军",
 )
 
 
@@ -60,14 +55,12 @@ def _err(fn):
 
 
 def test_banlist_allow_deny_table():
-    assert classify_char_banlist("吐槽两位王子") == "B-ACT"
-    assert classify_char_banlist("技术王子") == "B-TAG"
-    assert classify_char_banlist("幕里两位王子") == "B-GEN"
-    assert classify_char_banlist("两位王子") == "B-GEN"
-    assert classify_char_banlist("两侧王子") == "B-GEN"
-    assert classify_char_banlist("幕里的王子") == "B-GEN"
-    assert classify_char_banlist("CURSOR") == "B-BARE"
-    assert classify_char_banlist("CODEX") == "B-BARE"
+    assert classify_char_banlist("吐槽两位将军") == "B-ACT"
+    assert classify_char_banlist("弹窗将军") == "B-TAG"
+    assert classify_char_banlist("幕里两位将军") == "B-GEN"
+    assert classify_char_banlist("两位将军") == "B-GEN"
+    assert classify_char_banlist("两侧将军") == "B-GEN"
+    assert classify_char_banlist("幕里的将军") == "B-GEN"
     for name in DENY_NAMES:
         assert is_banlist_name(name), name
         assert not is_registerable_name(name), name
@@ -75,31 +68,31 @@ def test_banlist_allow_deny_table():
         assert classify_char_banlist(name) == "ALLOW", name
         assert is_registerable_name(name), name
         assert not is_banlist_name(name), name
-    assert is_protected_lead("程序员") and is_protected_lead("豆包")
-    assert is_a_tier_prince_name("GPT(CODEX)王子")
-    assert is_a_tier_prince_name("Opus5.5(CURSOR)王子")
-    assert not is_a_tier_prince_name("技术王子")
-    assert not is_a_tier_prince_name("吐槽CODEX王子")
+    assert is_protected_lead("预挂甲", ALLOW_NAMES) and is_protected_lead("预挂乙", ALLOW_NAMES)
+    assert is_a_tier_prince_name("预挂丙将军", ALLOW_NAMES)
+    assert is_attached_character_name("小预挂甲", ALLOW_NAMES)
+    assert is_attached_character_name("吐槽预挂丙将军", ALLOW_NAMES)
+    assert classify_char_banlist("吐槽预挂丙将军", ALLOW_NAMES) == "ALLOW"
+    assert classify_char_banlist("吐槽预挂丙将军") == "B-ACT"
+    assert not is_a_tier_prince_name("弹窗将军", ALLOW_NAMES)
 
 
 def test_scene_bucket_does_not_reuse_char_punches():
     for name in (
-        "侧边栏奶茶时刻",
-        "开源避难所入口",
-        "侧边栏空间",
-        "避难所门厅",
-        "深夜IDE战场",
-        "开源避难所",
-        "IDE侧栏",
+        "茶水间时刻",
+        "营帐入口",
+        "茶水间空间",
+        "营帐门厅",
+        "深夜战场",
         "弹窗空间",
         "弹窗审判庭",
     ):
         assert not is_scene_b_class(name), name
-    for name in ("吐槽两位王子", "指出两王子", "两位王子", "系统音", "弹窗", "弹窗字"):
+    for name in ("吐槽两位将军", "指出两将军", "两位将军", "系统音", "弹窗", "弹窗字"):
         assert is_scene_b_class(name), name
-    assert prefer_spatial_scene_name("侧边栏奶茶时刻") == "侧边栏空间"
-    assert prefer_spatial_scene_name("开源避难所入口") == "避难所门厅"
-    assert prefer_spatial_scene_name("深夜IDE战场") == "深夜IDE战场"
+    assert prefer_spatial_scene_name("茶水间时刻") == "茶水间空间"
+    assert prefer_spatial_scene_name("营帐入口") == "营帐门厅"
+    assert prefer_spatial_scene_name("深夜战场") == "深夜战场"
 
 
 def _eng021_dirty_rows(scene: str, lead: str) -> list[dict]:
@@ -109,37 +102,37 @@ def _eng021_dirty_rows(scene: str, lead: str) -> list[dict]:
             seq=9,
             scene_id=scene,
             char_ids=[lead],
-            action="吐槽两位王子与技术王子、幕里两位王子同框",
-            dialogue="吐槽两位王子：两位王子退兵。技术王子：覆盖。幕里两位王子：回滚。",
+            action="吐槽两位将军与弹窗将军、幕里两位将军同框",
+            dialogue="吐槽两位将军：两位将军退兵。弹窗将军：覆盖。幕里两位将军：旁观。",
         ),
         sample_row(
             shot_id="S01",
             seq=1,
             scene_id=scene,
             char_ids=[lead],
-            action="GPT(CODEX)王子与Opus5.5(CURSOR)王子弹窗夹击",
-            dialogue="GPT(CODEX)王子：联猎。",
+            action="预挂丙将军与预挂丁将军弹窗夹击",
+            dialogue="预挂丙将军：到齐。",
         ),
     ]
 
 
-def test_auto_merge_rejects_021_dirty_keeps_leads_and_princes():
+def test_auto_merge_rejects_021_dirty_keeps_leads_and_titled():
     rec = {
         "outline": {
             "body_md": (
-                "1. 开钩\n程序员与豆包\nGPT(CODEX)王子 / Opus5.5(CURSOR)王子\n"
-                "吐槽两位王子 技术王子 幕里两位王子\n"
+                "1. 开钩\n预挂甲与预挂乙\n预挂丙将军 / 预挂丁将军\n"
+                "吐槽两位将军 弹窗将军 幕里两位将军\n"
             )
         },
         "cast": {
             "characters": [
-                {"id": "CHAR-01", "name": "程序员"},
-                {"id": "CHAR-02", "name": "豆包"},
-                {"id": "CHAR-05", "name": "吐槽两位王子"},
-                {"id": "CHAR-06", "name": "技术王子"},
-                {"id": "CHAR-07", "name": "幕里两位王子"},
+                {"id": "CHAR-01", "name": "预挂甲"},
+                {"id": "CHAR-02", "name": "预挂乙"},
+                {"id": "CHAR-05", "name": "吐槽两位将军"},
+                {"id": "CHAR-06", "name": "弹窗将军"},
+                {"id": "CHAR-07", "name": "幕里两位将军"},
             ],
-            "scenes": [{"id": "SCENE-01", "name": "侧边栏奶茶时刻"}],
+            "scenes": [{"id": "SCENE-01", "name": "茶水间时刻"}],
             "version": 3,
             "locked": True,
         },
@@ -157,30 +150,25 @@ def test_auto_merge_rejects_021_dirty_keeps_leads_and_princes():
         outline_body=rec["outline"]["body_md"],
     )
     registerable = {h["name"] for h in hits if h.get("registerable")}
-    assert "吐槽两位王子" not in registerable
-    assert "技术王子" not in registerable
-    assert "幕里两位王子" not in registerable
+    assert "吐槽两位将军" not in registerable
+    assert "弹窗将军" not in registerable
+    assert "幕里两位将军" not in registerable
 
     rows, _added = auto_merge_named_cast(
         rec, _eng021_dirty_rows("SCENE-01", "CHAR-01"), alloc_char=alloc
     )
     names = [c["name"] for c in rec["cast"]["characters"]]
-    assert "程序员" in names and "豆包" in names
-    assert "吐槽两位王子" not in names
-    assert "技术王子" not in names
-    assert "幕里两位王子" not in names
-    assert "两位王子" not in names
-    assert "CURSOR" not in names and "CODEX" not in names
-    assert "GPT(CODEX)王子" in names or "GPT王子" in names or "CODEX王子" in names
-    assert (
-        "Opus5.5(CURSOR)王子" in names
-        or "Opus5.5王子" in names
-        or "CURSOR(Opus5.5)王子" in names
-    )
+    assert "预挂甲" in names and "预挂乙" in names
+    assert "吐槽两位将军" not in names
+    assert "弹窗将军" not in names
+    assert "幕里两位将军" not in names
+    assert "两位将军" not in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
     hung = {cid for r in rows for cid in r["char_ids"]}
-    assert by_name["程序员"] in hung
-    assert by_name["豆包"] in {c["id"] for c in rec["cast"]["characters"]}
+    assert by_name["预挂甲"] in hung
+    assert by_name["预挂乙"] in {c["id"] for c in rec["cast"]["characters"]}
     dirty_ids = {"CHAR-05", "CHAR-06", "CHAR-07"}
     assert dirty_ids.isdisjoint(hung)
 
@@ -191,10 +179,10 @@ def test_generate_skips_021_dirty_names(svc, monkeypatch):
     rec = svc._rec(pid, "EP01")
     rec["outline"]["body_md"] = (
         rec["outline"]["body_md"]
-        + "\n程序员 豆包 GPT(CODEX)王子 Opus5.5(CURSOR)王子\n吐槽两位王子 技术王子 幕里两位王子\n"
+        + "\n预挂甲 预挂乙 预挂丙将军 预挂丁将军\n吐槽两位将军 弹窗将军 幕里两位将军\n"
     )
-    rec["cast"]["characters"][0]["name"] = "程序员"
-    rec["cast"]["characters"][1]["name"] = "豆包"
+    rec["cast"]["characters"][0]["name"] = "预挂甲"
+    rec["cast"]["characters"][1]["name"] = "预挂乙"
     lead = rec["cast"]["characters"][0]["id"]
     scene = rec["cast"]["scenes"][0]["id"]
 
@@ -207,45 +195,38 @@ def test_generate_skips_021_dirty_names(svc, monkeypatch):
     )
     rec = svc._rec(pid, "EP01")
     names = [c["name"] for c in rec["cast"]["characters"]]
-    assert "程序员" in names and "豆包" in names
-    assert "吐槽两位王子" not in names
-    assert "技术王子" not in names
-    assert "幕里两位王子" not in names
-    assert "CURSOR" not in names and "CODEX" not in names
-    assert any(is_a_tier_prince_name(n) for n in names)
+    assert "预挂甲" in names and "预挂乙" in names
+    assert "吐槽两位将军" not in names
+    assert "弹窗将军" not in names
+    assert "幕里两位将军" not in names
+    assert any(is_attached_character_name(n, ["预挂丙将军", "预挂丁将军"]) or n in {"预挂丙将军", "预挂丁将军"} for n in names)
     val = svc.validate_storyboard(pid, "EP01")
     assert val["valid"] is True
     assert env["storyboard"]["skill_excerpt"]
 
 
-def test_sidecar_rejects_banlist_keeps_a_tier(svc):
+def test_sidecar_rejects_banlist_keeps_registerable(svc):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
     exc = _err(
         lambda: svc.sidecar_add_character(
             pid,
             "EP01",
-            SidecarAddCharacterRequest(name="吐槽两位王子"),
-            raw={"name": "吐槽两位王子"},
+            SidecarAddCharacterRequest(name="吐槽两位将军"),
+            raw={"name": "吐槽两位将军"},
         )
     )
     assert exc.status_code == 422
     assert exc.code == "validation"
-    exc2 = _err(
-        lambda: svc.sidecar_add_character(
-            pid, "EP01", SidecarAddCharacterRequest(name="CURSOR"), raw={"name": "CURSOR"}
-        )
-    )
-    assert exc2.status_code == 422
     env = svc.sidecar_add_character(
         pid,
         "EP01",
-        SidecarAddCharacterRequest(name="GPT(CODEX)王子", one_line="A档"),
-        raw={"name": "GPT(CODEX)王子"},
+        SidecarAddCharacterRequest(name="预挂丙将军", one_line="A档"),
+        raw={"name": "预挂丙将军"},
     )
     names = [c["name"] for c in env["cast"]["characters"]]
-    assert "GPT(CODEX)王子" in names
-    assert "吐槽两位王子" not in names
+    assert "预挂丙将军" in names
+    assert "吐槽两位将军" not in names
 
 
 def test_n1_generate_skips_banlist_prefers_spatial_scenes(svc, monkeypatch):
@@ -259,17 +240,17 @@ def test_n1_generate_skips_banlist_prefers_spatial_scenes(svc, monkeypatch):
             shot_cap=12,
             source_skills=[],
             characters=[
-                {"name": "程序员", "one_line": "男主"},
-                {"name": "豆包", "one_line": "破局"},
-                {"name": "吐槽两位王子", "one_line": "脏ACT"},
-                {"name": "技术王子", "one_line": "脏TAG"},
-                {"name": "幕里两位王子", "one_line": "脏GEN"},
-                {"name": "GPT(CODEX)王子", "one_line": "A档"},
-                {"name": "Opus5.5(CURSOR)王子", "one_line": "A档"},
+                {"name": "预挂甲", "one_line": "男主"},
+                {"name": "预挂乙", "one_line": "破局"},
+                {"name": "吐槽两位将军", "one_line": "脏ACT"},
+                {"name": "弹窗将军", "one_line": "脏TAG"},
+                {"name": "幕里两位将军", "one_line": "脏GEN"},
+                {"name": "预挂丙将军", "one_line": "A档"},
+                {"name": "预挂丁将军", "one_line": "A档"},
             ],
             scenes=[
-                {"name": "侧边栏奶茶时刻", "one_line": "陪伴事件"},
-                {"name": "开源避难所入口", "one_line": "逃亡动作"},
+                {"name": "茶水间时刻", "one_line": "陪伴事件"},
+                {"name": "营帐入口", "one_line": "入场动作"},
             ],
         )
 
@@ -279,29 +260,29 @@ def test_n1_generate_skips_banlist_prefers_spatial_scenes(svc, monkeypatch):
     )
     rec = svc._rec(pid, "EP01")
     names = [c["name"] for c in rec["cast"]["characters"]]
-    assert "程序员" in names and "豆包" in names
-    assert "GPT(CODEX)王子" in names
-    assert "Opus5.5(CURSOR)王子" in names
-    assert "吐槽两位王子" not in names
-    assert "技术王子" not in names
-    assert "幕里两位王子" not in names
+    assert "预挂甲" in names and "预挂乙" in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "吐槽两位将军" not in names
+    assert "弹窗将军" not in names
+    assert "幕里两位将军" not in names
     scenes = [s["name"] for s in rec["cast"]["scenes"]]
-    assert "侧边栏空间" in scenes
-    assert "避难所门厅" in scenes
-    assert "侧边栏奶茶时刻" not in scenes
-    assert "开源避难所入口" not in scenes
+    assert "茶水间空间" in scenes
+    assert "营帐门厅" in scenes
+    assert "茶水间时刻" not in scenes
+    assert "营帐入口" not in scenes
 
 
 def test_materialize_keeps_spatial_scenes_skips_dirty_char():
     cast = {
         "characters": [
-            {"id": "CHAR-01", "name": "程序员", "one_line": "男主"},
-            {"id": "CHAR-05", "name": "吐槽两位王子", "one_line": "脏"},
+            {"id": "CHAR-01", "name": "预挂甲", "one_line": "男主"},
+            {"id": "CHAR-05", "name": "吐槽两位将军", "one_line": "脏"},
         ],
         "scenes": [
-            {"id": "SCENE-01", "name": "侧边栏奶茶时刻", "one_line": "陪伴"},
-            {"id": "SCENE-02", "name": "开源避难所入口", "one_line": "逃亡"},
-            {"id": "SCENE-03", "name": "侧边栏空间", "one_line": "空间"},
+            {"id": "SCENE-01", "name": "茶水间时刻", "one_line": "陪伴"},
+            {"id": "SCENE-02", "name": "营帐入口", "one_line": "入场"},
+            {"id": "SCENE-03", "name": "茶水间空间", "one_line": "空间"},
         ],
     }
     storyboard = {
@@ -330,6 +311,7 @@ def test_class_d_duration_floor_adsorb():
     assert adsorb_duration(5, None, camera="ROLL") == (8, None)
     assert adsorb_duration(5, None, camera="STATIC") == (5, None)
     assert adsorb_duration(5, None, camera="PUSH") == (5, None)
+    assert adsorb_duration(5, None, camera="HANDHELD") == (8, None)
     assert adsorb_duration(5, "seedance_2", camera="HANDHELD") == (8, "seedance:8")
     assert adsorb_duration(5, "seedance_2", camera="WHIP_PUSH") == (8, "seedance:8")
     assert adsorb_duration(5, "kling", camera="ORBIT") == (10, "kling:10")
@@ -341,7 +323,7 @@ def test_class_d_duration_floor_adsorb():
 
 
 def test_class_d_validate_warn_without_profile_hard_with_profile():
-    cast = {"characters": [{"id": "CHAR-01", "name": "程序员"}], "scenes": [{"id": "SCENE-01"}]}
+    cast = {"characters": [{"id": "CHAR-01", "name": "预挂甲"}], "scenes": [{"id": "SCENE-01"}]}
     rows = [
         sample_row(
             shot_id="S06",
@@ -435,8 +417,8 @@ def test_n3_materialize_spatial_scenes_on_locked_g2(svc, monkeypatch):
     lock_g1b(svc, pid)
     rec = svc._rec(pid, "EP01")
     rec["cast"]["scenes"] = [
-        {"id": "SCENE-01", "name": "侧边栏奶茶时刻", "one_line": "陪伴", "library_ref": None},
-        {"id": "SCENE-02", "name": "开源避难所入口", "one_line": "逃亡", "library_ref": None},
+        {"id": "SCENE-01", "name": "茶水间时刻", "one_line": "陪伴", "library_ref": None},
+        {"id": "SCENE-02", "name": "营帐入口", "one_line": "入场", "library_ref": None},
     ]
     lead = rec["cast"]["characters"][0]["id"]
 

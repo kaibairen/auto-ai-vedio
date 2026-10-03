@@ -80,6 +80,8 @@ def skip_cast_row(row: dict[str, Any], *, kind: str | None = None) -> bool:
         if is_scene_b_class(name):
             return True
         return not is_scene_id(ident)
+    if row.get("library_ref"):
+        return not is_char_id(ident)
     if is_system_speaker(name) or is_group_label(name) or is_b_class(name):
         return True
     if not is_char_id(ident):

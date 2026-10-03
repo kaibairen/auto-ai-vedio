@@ -73,8 +73,8 @@ def test_t_e4_sidecar_hint_has_version_numbers(svc):
     env = svc.sidecar_add_character(
         pid,
         "EP01",
-        SidecarAddCharacterRequest(name="CODEX王子", one_line="弹窗反派"),
-        raw={"name": "CODEX王子"},
+        SidecarAddCharacterRequest(name="预挂丙将军", one_line="侧车配角"),
+        raw={"name": "预挂丙将军"},
     )
     assert env["cast_changed"] is True
     hint = (env.get("hints") or [None])[0]
