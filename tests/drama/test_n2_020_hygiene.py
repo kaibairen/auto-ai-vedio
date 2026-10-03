@@ -532,12 +532,12 @@ def test_prefix_suffix_folds_onto_attached_only():
 
 
 def test_paren_wrap_is_one_entity_not_two_rows():
-    names = extract_proper_names("甲（预挂丙将军）与乙（预挂丁将军）出场")
-    assert "甲" not in names
-    assert "乙" not in names
+    names = extract_proper_names("Jia（预挂丙将军）与Yi（预挂丁将军）出场")
+    assert "Jia" not in names
+    assert "Yi" not in names
     assert names.count("预挂丙将军") == 1
     assert names.count("预挂丁将军") == 1
-    glued = extract_paren_entities("甲（预挂丙将军）站在门口")
+    glued = extract_paren_entities("Jia（预挂丙将军）站在门口")
     assert glued == ["预挂丙将军"]
     titled = extract_proper_names("预挂丙将军与预挂丁将军并肩")
     assert "预挂丙将军" in titled
@@ -547,7 +547,7 @@ def test_paren_wrap_is_one_entity_not_two_rows():
 def test_auto_merge_folds_prefix_no_orphan_no_paren_split():
     rec = {
         "outline": {
-            "body_md": "1. 开钩\n甲（预挂丙将军）与预挂丁将军出场\n两大王国将军\n"
+            "body_md": "1. 开钩\nJia（预挂丙将军）与预挂丁将军出场\n两大王国将军\n"
         },
         "cast": {
             "characters": [
@@ -593,7 +593,7 @@ def test_generate_folds_prefix_and_hangs_titled(svc, monkeypatch):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
     rec = svc._rec(pid, "EP01")
-    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\n甲（预挂丙将军）与预挂丁将军\n"
+    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\nJia（预挂丙将军）与预挂丁将军\n"
     svc._register_char(rec, "CHAR-03")
     rec["cast"]["characters"].append({"id": "CHAR-03", "name": "预挂丙将军", "one_line": "已挂", "library_ref": None})
     lead = rec["cast"]["characters"][0]["id"]

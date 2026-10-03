@@ -288,7 +288,7 @@ SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,32})[：:]")
 PROPER_NAME_RE = re.compile(
     r"(?:"
     r"[A-Za-z][A-Za-z0-9._-]*(?:\([^)]{1,32}\))?"
-    r"|[\u4e00-\u9fff]{2,4}"
+    r"|(?:(?![与和或把被让给在对从向到并的地得])[\u4e00-\u9fff])[\u4e00-\u9fff]{1,3}"
     r")"
     r"(?:王子|公主|女王|国王|将军|大人|小姐|少爷|殿下)"
 )
@@ -346,7 +346,7 @@ CLAUSE_INFIX = frozenset("的地得和与或把被让给在对从向到并")
 
 # No episode-riveted A-class recoveries. Fold only onto this episode's attached names.
 PAREN_WRAP_RE = re.compile(
-    r"([A-Za-z][A-Za-z0-9._-]*|[\u4e00-\u9fff]{1,4})\s*[\(（]\s*([^)）]{1,40})\s*[\)）]"
+    r"([A-Za-z][A-Za-z0-9._-]*)\s*[\(（]\s*([^)）]{1,40})\s*[\)）]"
     r"(?:(?P<title>王子|公主|女王|国王|将军|大人|小姐|少爷|殿下))?"
 )
 SYSTEM_SPAN_RE = re.compile(
@@ -368,12 +368,21 @@ def normalize_name(name: str) -> str:
 
 
 def attached_names_from_rows(rows: Iterable[dict[str, Any]] | None) -> list[str]:
+    """Fold targets: library-backed rows and clean existing names. Not B-class leftovers."""
     names: list[str] = []
     for row in rows or []:
         if not isinstance(row, dict):
             continue
         key = normalize_name(str(row.get("name") or ""))
-        if key and key not in names:
+        if not key:
+            continue
+        if row.get("library_ref"):
+            if key not in names:
+                names.append(key)
+            continue
+        if classify_char_banlist(key) != "ALLOW" or is_b_class(key):
+            continue
+        if key not in names:
             names.append(key)
     return names
 
