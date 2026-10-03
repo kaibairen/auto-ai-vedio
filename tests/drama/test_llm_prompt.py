@@ -122,10 +122,15 @@ def test_llm_prompt_includes_preattached_and_rules(tmp_path, monkeypatch):
     assert cards[1]["name"] == "豆包"
     assert any("大纲主角必须使用预挂角色的姓名" in r for r in user["rules"])
     assert any("禁止另造同名角色" in r for r in user["rules"])
-    assert any("follow this episode's cast" in r for r in user["rules"])
+    assert any(
+        "follows this episode's preattached cards" in r and "奶蛙公主" in r for r in user["rules"]
+    )
     rules_text = "".join(user["rules"])
+    assert "must look like a person" not in rules_text
     assert "程序员/豆包" not in rules_text
     assert "豆包" not in rules_text
+    assert "吐槽两位王子" in rules_text
+    assert "bare CURSOR/CODEX" in rules_text
     assert "宫格" in rules_text
     assert draft.characters[0]["name"] == "程序员"
 
