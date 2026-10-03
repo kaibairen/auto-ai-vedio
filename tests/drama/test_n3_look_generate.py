@@ -35,8 +35,10 @@ from aiv_drama_n3.seedream import (
     SEEDREAM_SKU_CHAIN,
     SEEDREAM_SKU_PRIMARY,
     SHEET_SIZE,
+    ark_image_field,
     build_ark_body,
     generate_seedream_sheet,
+    recorded_ark_request,
 )
 from tests.drama.helpers import lock_g2, seed_project_episode
 
@@ -56,8 +58,8 @@ def _err(fn):
     raise AssertionError("expected AppError")
 
 
-def _face(tmp_path: Path, payload: bytes = b"\xff\xd8fake-face-bytes") -> Path:
-    path = tmp_path / "CHAR-01-user-ref.jpg"
+def _face(tmp_path: Path, payload: bytes = b"\xff\xd8fake-face-bytes", name: str = "CHAR-01-user-ref.jpg") -> Path:
+    path = tmp_path / name
     path.write_bytes(payload)
     return path
 
@@ -221,6 +223,8 @@ def test_ark_body_minimal_no_sequential():
     assert body["size"] == SHEET_SIZE == "2048x1365"
     assert body["watermark"] is False
     assert body["response_format"] == "url"
+    assert isinstance(body["image"], str)
+    assert body["image"] == "data:image/jpeg;base64,QQ=="
     assert set(body) == {"model", "prompt", "size", "watermark", "response_format", "image"}
     assert "sequential_image_generation" not in body
     assert FORBIDDEN_ARK_KEYS.isdisjoint(body)
@@ -231,6 +235,42 @@ def test_ark_body_minimal_no_sequential():
         "wan2.7-image",
     )
     assert ARK_IMAGES_URL == "https://ark.cn-beijing.volces.com/api/v3/images/generations"
+
+
+def test_ark_body_two_refs_image_is_array():
+    one = "data:image/jpeg;base64,QQ=="
+    two = "data:image/png;base64,Qg=="
+    assert ark_image_field(one) == one
+    assert isinstance(ark_image_field(one), str)
+    assert ark_image_field([one]) == one
+    body = build_ark_body(
+        model=SEEDREAM_SKU_PRIMARY,
+        prompt="p",
+        image_data_url=[one, two],
+    )
+    assert body["image"] == [one, two]
+    assert isinstance(body["image"], list)
+    assert len(body["image"]) == 2
+    assert set(body) == {"model", "prompt", "size", "watermark", "response_format", "image"}
+    assert "sequential_image_generation" not in body
+    recorded_one = recorded_ark_request(
+        model=SEEDREAM_SKU_PRIMARY,
+        prompt="p",
+        face_md5="a" * 32,
+        image_bytes_len=12,
+    )
+    assert isinstance(recorded_one["image"], str)
+    recorded_two = recorded_ark_request(
+        model=SEEDREAM_SKU_PRIMARY,
+        prompt="p",
+        face_md5="a" * 32,
+        image_bytes_len=12,
+        extra_images=[("b" * 32, 9)],
+    )
+    assert recorded_two["image"] == [
+        "data-url redacted · bytes=12 · md5=" + "a" * 32,
+        "data-url redacted · bytes=9 · md5=" + "b" * 32,
+    ]
 
 
 def test_sku_fallback_then_success():
@@ -287,6 +327,9 @@ def test_dry_run_writes_prompt_not_sheet(tmp_path, monkeypatch):
     assert recorded["endpoint"] == ARK_IMAGES_URL
     assert recorded["size"] == "2048x1365"
     assert recorded["sequential_image_generation"] is False
+    assert isinstance(recorded["image"], str)
+    assert look["face_ref_md5"] in recorded["image"]
+    assert "face_ref_2_path" not in look
     blob = json.dumps(look)
     assert "sk-" not in blob
     assert "Bearer " not in blob
@@ -363,6 +406,7 @@ def test_http_generate_look_force_and_sequential(client, tmp_path):
     spec = client.get("/openapi/drama-n3.v0.yaml")
     assert "cards/generate-look" in spec.text
     assert "2048x1365" in spec.text
+    assert "face_ref_2" in spec.text
 
 
 def test_cli_standalone_dry_run(tmp_path, monkeypatch):
@@ -412,6 +456,8 @@ def test_live_generate_writes_sheet_keeps_usable_false(tmp_path):
         assert json["size"] == "2048x1365"
         assert "sequential_image_generation" not in json
         assert json["model"] == SEEDREAM_SKU_PRIMARY
+        assert isinstance(json["image"], str)
+        assert json["image"].startswith("data:image/")
         return _Resp(200, payload={"data": [{"url": "https://cdn.example/s.jpg"}]})
 
     def fake_get(url, timeout=None):
@@ -448,3 +494,171 @@ def test_live_without_key_is_honest(tmp_path):
     assert exc.code == "provider"
     assert Path(tmp_path / "out" / "CHAR-01-doubao-sheet-prompt.txt").is_file()
     assert not (tmp_path / "out" / "CHAR-01-turnaround-sheet-3x2.jpg").exists()
+
+
+def test_two_ref_dry_run_posts_image_array_same_prompt(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIV_LOOK_PROMPT_ADAPTER", raising=False)
+    face = _face(tmp_path)
+    face2 = _face(tmp_path, payload=b"\xff\xd8second-face-bytes", name="CHAR-01-user-ref-2.jpg")
+    one = generate_gold_a_sheet(
+        card=_sheet_card(),
+        face_ref=face,
+        out_dir=tmp_path / "looks-one",
+        api_key=None,
+        dry_run=True,
+    )
+    two = generate_gold_a_sheet(
+        card=_sheet_card(),
+        face_ref=face,
+        face_ref_2=face2,
+        out_dir=tmp_path / "looks-two",
+        api_key=None,
+        dry_run=True,
+    )
+    assert one["usable_for_n4"] is False
+    assert two["usable_for_n4"] is False
+    assert one["prompt_md5"] == two["prompt_md5"]
+    assert Path(one["prompt_path"]).read_text(encoding="utf-8") == Path(two["prompt_path"]).read_text(encoding="utf-8")
+    assert "【L3硬约束】" in Path(two["prompt_path"]).read_text(encoding="utf-8")
+    recorded = json.loads(Path(two["recorded_path"]).read_text(encoding="utf-8"))
+    assert isinstance(recorded["image"], list)
+    assert len(recorded["image"]) == 2
+    assert two["face_ref_md5"] in recorded["image"][0]
+    assert two["face_ref_2_md5"] in recorded["image"][1]
+    assert two["face_ref_2_path"].endswith("CHAR-01-user-ref-2.jpg")
+    assert recorded["sequential_image_generation"] is False
+
+
+def test_two_ref_live_posts_image_array_no_ark(tmp_path):
+    face = _face(tmp_path)
+    face2 = _face(tmp_path, payload=b"\xff\xd8second-face-bytes", name="CHAR-01-user-ref-2.jpg")
+    jpeg = b"\xff\xd8\xff" + b"sheet" * 20
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
+        captured["image"] = json["image"]
+        assert url == ARK_IMAGES_URL
+        assert isinstance(json["image"], list)
+        assert len(json["image"]) == 2
+        assert all(item.startswith("data:image/") for item in json["image"])
+        assert json["image"][0] != json["image"][1]
+        assert "sequential_image_generation" not in json
+        return _Resp(200, payload={"data": [{"url": "https://cdn.example/s.jpg"}]})
+
+    def fake_get(url, timeout=None):
+        return _Resp(200, content=jpeg)
+
+    look = generate_gold_a_sheet(
+        card=_sheet_card(),
+        face_ref=face,
+        face_ref_2=face2,
+        out_dir=tmp_path / "out",
+        api_key="not-a-real-key",
+        dry_run=False,
+        post=fake_post,
+        get=fake_get,
+    )
+    assert look["usable_for_n4"] is False
+    assert isinstance(captured["image"], list)
+    assert look["face_ref_2_md5"] == hashlib.md5(face2.read_bytes()).hexdigest()
+    assert "not-a-real-key" not in json.dumps(look)
+
+
+def test_face_ref_2_bind_before_generate(tmp_path, monkeypatch):
+    face = _face(tmp_path)
+    called = {"n": 0}
+
+    def boom(*_a, **_k):
+        called["n"] += 1
+        raise AssertionError("Ark must not run on bind fail")
+
+    monkeypatch.setattr("aiv_drama_n3.look_generate.generate_seedream_sheet", boom)
+    exc = _err(
+        lambda: generate_gold_a_sheet(
+            card=_sheet_card(),
+            face_ref=face,
+            face_ref_2=tmp_path / "missing-second.jpg",
+            out_dir=tmp_path / "out",
+            api_key="sk-should-not-be-used",
+            dry_run=False,
+        )
+    )
+    assert exc.code == "material_bind"
+    assert called["n"] == 0
+
+
+def test_cli_two_ref_standalone_dry_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIV_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.delenv("ARK_API_KEY", raising=False)
+    monkeypatch.delenv("AIV_LOOK_PROMPT_ADAPTER", raising=False)
+    face = _face(tmp_path)
+    face2 = _face(tmp_path, payload=b"\xff\xd8second-face-bytes", name="CHAR-01-user-ref-2.jpg")
+    digest = hashlib.md5(face.read_bytes()).hexdigest()
+    digest2 = hashlib.md5(face2.read_bytes()).hexdigest()
+    card_path = tmp_path / "CHAR-01-card.yaml"
+    card_path.write_text(GOLD_CARD.read_text(encoding="utf-8").replace("refs:\n", "refs_unused:\n"), encoding="utf-8")
+    out = tmp_path / "sheet-out"
+    res = runner.invoke(
+        app,
+        [
+            "drama",
+            "n3",
+            "generate-look",
+            "--card",
+            str(card_path),
+            "--face-ref",
+            str(face),
+            "--face-ref-2",
+            str(face2),
+            "--expected-md5",
+            digest,
+            "--expected-md5-2",
+            digest2,
+            "--out",
+            str(out),
+            "--dry-run",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    assert payload["usable_for_n4"] is False
+    recorded = json.loads(Path(payload["recorded_path"]).read_text(encoding="utf-8"))
+    assert isinstance(recorded["image"], list)
+    assert len(recorded["image"]) == 2
+    assert digest in recorded["image"][0]
+    assert digest2 in recorded["image"][1]
+    assert payload["prompt_md5"] == md5_text(Path(payload["prompt_path"]).read_text(encoding="utf-8"))
+    assert "sk-" not in res.output
+
+
+def test_http_generate_look_two_ref_dry_run(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize", json={"actor": "x"})
+    rec = svc._rec(pid, "EP01")
+    gold = _sheet_card()
+    rec["n3"]["cards"]["characters"][0]["appearance"] = gold["wardrobe"]
+    rec["n3"]["cards"]["characters"][0]["immutable"] = gold["immutable"]
+    rec["n3"]["cards"]["characters"][0]["height"] = gold["height"]
+    svc._commit(rec)
+    face = _face(tmp_path)
+    face2 = _face(tmp_path, payload=b"\xff\xd8second-face-bytes", name="CHAR-01-user-ref-2.jpg")
+    ok = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/generate-look",
+        json={
+            "id": "CHAR-01",
+            "face_ref": str(face),
+            "face_ref_2": str(face2),
+            "dry_run": True,
+            "actor": "eng-032",
+        },
+    )
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["usable_for_n4"] is False
+    assert body["look"]["usable_for_n4"] is False
+    recorded = body["look"]["recorded"]
+    assert isinstance(recorded["image"], list)
+    assert len(recorded["image"]) == 2
+    assert "sk-" not in ok.text

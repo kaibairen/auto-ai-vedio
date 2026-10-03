@@ -531,7 +531,13 @@ def n3_generate_look(
     ident: Optional[str] = typer.Option(None, "--id", help="CHAR-* (episode path)"),
     card: Optional[str] = typer.Option(None, "--card", help="Standalone thick-card yaml/json"),
     face_ref: str = typer.Option(..., "--face-ref", help="Local face ref image (BIND before generate)"),
+    face_ref_2: Optional[str] = typer.Option(
+        None,
+        "--face-ref-2",
+        help="Optional second face ref posted in the same Ark image array",
+    ),
     expected_md5: Optional[str] = typer.Option(None, "--expected-md5"),
+    expected_md5_2: Optional[str] = typer.Option(None, "--expected-md5-2"),
     out: Optional[str] = typer.Option(None, "--out", help="Output dir for sheet + prompt + md5"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Assemble + bind + recorded Ark body; no HTTP"),
     actor: Optional[str] = typer.Option(None, "--actor"),
@@ -548,7 +554,9 @@ def n3_generate_look(
             look = generate_gold_a_sheet(
                 card=loaded,
                 face_ref=face_ref,
+                face_ref_2=face_ref_2,
                 expected_md5=expected_md5,
+                expected_md5_2=expected_md5_2,
                 out_dir=dest,
                 api_key=settings.ark_api_key,
                 dry_run=dry_run,
@@ -573,7 +581,9 @@ def n3_generate_look(
         body = N3GenerateLookRequest(
             id=ident,
             face_ref=face_ref,
+            face_ref_2=face_ref_2,
             expected_md5=expected_md5,
+            expected_md5_2=expected_md5_2,
             dry_run=dry_run,
             out_dir=out,
             actor=actor,

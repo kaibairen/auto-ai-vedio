@@ -473,13 +473,20 @@ class DramaN3Ops:
         resolved = resolve_ref_file(self.settings, face)
         if resolved is not None:
             face = str(resolved)
+        face2 = (req.face_ref_2 or "").strip()
+        if face2:
+            resolved2 = resolve_ref_file(self.settings, face2)
+            if resolved2 is not None:
+                face2 = str(resolved2)
         ep_id = rec["episode"]["episode_id"]
         out_dir = Path(req.out_dir) if req.out_dir else self.store.episode_dir(project_id, ep_id) / "looks" / req.id
         endpoint = f"{getattr(self.settings, 'ark_base_url', None) or ARK_IMAGES_URL.rsplit('/images', 1)[0]}/images/generations"
         look = generate_gold_a_sheet(
             card=card,
             face_ref=face,
+            face_ref_2=face2 or None,
             expected_md5=req.expected_md5,
+            expected_md5_2=req.expected_md5_2,
             out_dir=out_dir,
             api_key=getattr(self.settings, "ark_api_key", None),
             dry_run=bool(req.dry_run),

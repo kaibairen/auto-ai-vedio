@@ -49,6 +49,7 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
 aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
+aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --face-ref-2 /path/to/face-2.jpg --dry-run
 aiv drama n3 generate-look --project proj_01 --ep EP01 --id CHAR-01 --face-ref /path/to/face.jpg --dry-run
 aiv drama n3 get --project proj_01 --ep EP01
 aiv drama n3 attach --project proj_01 --ep EP01 --id CHAR-01 --version 3

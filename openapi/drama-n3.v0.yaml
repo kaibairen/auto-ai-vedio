@@ -431,7 +431,9 @@ components:
       properties:
         id: { type: string, description: CHAR-* }
         face_ref: { type: string, description: 本地脸 ref 路径；缺省可回落到卡上 role=face }
+        face_ref_2: { type: string, description: 可选第二脸 ref；与 face_ref 同一次 generate-look 写入 Ark image 数组 }
         expected_md5: { type: string, description: 32-hex；有则先于 generate 核验 }
+        expected_md5_2: { type: string, description: 可选第二脸 ref 的 32-hex；有则先于 generate 核验 }
         dry_run: { type: boolean, default: false }
         out_dir: { type: string }
         actor: { type: string }
