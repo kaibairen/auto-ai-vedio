@@ -16,6 +16,7 @@ from aiv_drama.models import (
     ProjectCreate,
 )
 from tests.drama.helpers import persist_and_confirm_intent
+from aiv_drama.provider import llm as n1_llm
 from aiv_drama.provider.llm import LlmProvider
 
 
@@ -122,17 +123,26 @@ def test_llm_prompt_includes_preattached_and_rules(tmp_path, monkeypatch):
     assert cards[1]["name"] == "豆包"
     assert any("大纲主角必须使用预挂角色的姓名" in r for r in user["rules"])
     assert any("禁止另造同名角色" in r for r in user["rules"])
-    assert any(
-        "follows this episode's preattached cards" in r and "奶蛙公主" in r for r in user["rules"]
-    )
+    assert any("follows this episode's preattached cards" in r for r in user["rules"])
+    assert any("Use whatever name is on the card" in r for r in user["rules"])
     rules_text = "".join(user["rules"])
     assert "must look like a person" not in rules_text
+    assert "if the card says" not in rules_text
+    assert "奶蛙公主" not in rules_text
     assert "程序员/豆包" not in rules_text
     assert "豆包" not in rules_text
     assert "吐槽两位王子" in rules_text
     assert "bare CURSOR/CODEX" in rules_text
     assert "宫格" in rules_text
     assert draft.characters[0]["name"] == "程序员"
+
+
+def test_n1_production_prompt_is_not_episode_specialized():
+    source = Path(n1_llm.__file__).read_text(encoding="utf-8")
+    assert "奶蛙公主" not in source
+    assert "豆包" not in source
+    assert "must look like a person" not in source
+    assert "if the card says" not in source
 
 
 def test_llm_injects_reference_excerpts_and_lists_real_paths(tmp_path, monkeypatch):
