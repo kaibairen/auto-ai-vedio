@@ -73,6 +73,13 @@ def _write_bytes(path: Path, data: bytes) -> None:
     tmp.replace(path)
 
 
+def _optional_face_path(value: str | Path | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def generate_gold_a_sheet(
     *,
     card: dict[str, Any],
@@ -80,6 +87,8 @@ def generate_gold_a_sheet(
     out_dir: str | Path,
     api_key: str | None,
     expected_md5: str | None = None,
+    face_ref_2: str | Path | None = None,
+    expected_md5_2: str | None = None,
     dry_run: bool = False,
     endpoint: str = ARK_IMAGES_URL,
     post: Any | None = None,
@@ -89,6 +98,7 @@ def generate_gold_a_sheet(
 
     usable_for_n4 on the look record is always false. No sequential_image_generation.
     No CU/LS split. No key in the returned envelope.
+    Optional face_ref_2 is posted in the same Ark `image` array; it does not rebuild the prompt.
     """
     kind = (card.get("kind") or "character").strip()
     ident = (card.get("id") or "CHAR").strip()
@@ -105,6 +115,15 @@ def generate_gold_a_sheet(
         expected_md5=normalize_md5(expected_md5),
         card=card,
     )
+    second = _optional_face_path(face_ref_2)
+    bind2 = None
+    if second:
+        # Second ref is extra identity, not the card's primary face-md5 bind.
+        bind2 = verify_face_ref_md5(
+            second,
+            expected_md5=normalize_md5(expected_md5_2),
+            card=None,
+        )
     prompt = _maybe_append_prompt_adapter(assemble_gold_a_sheet_prompt(card))
     adapter = resolve_look_prompt_adapter()
     dest = Path(out_dir)
@@ -113,6 +132,9 @@ def generate_gold_a_sheet(
     atomic_write_text(prompt_path, prompt)
     prompt_md5 = md5_text(prompt)
     face_path = Path(bind["path"])
+    extra_images = None
+    if bind2:
+        extra_images = [(bind2["md5"], Path(bind2["path"]).stat().st_size)]
     recorded = recorded_ark_request(
         model=SEEDREAM_SKU_PRIMARY,
         prompt=prompt,
@@ -120,6 +142,7 @@ def generate_gold_a_sheet(
         image_bytes_len=face_path.stat().st_size,
         size=SHEET_SIZE,
         endpoint=endpoint,
+        extra_images=extra_images,
     )
     look: dict[str, Any] = {
         "ok": True,
@@ -146,6 +169,9 @@ def generate_gold_a_sheet(
         "recorded": recorded,
         "attempts": [],
     }
+    if bind2:
+        look["face_ref_2_path"] = bind2["path"]
+        look["face_ref_2_md5"] = bind2["md5"]
     if dry_run:
         recorded_path = dest / f"{ident}-ark-request.recorded.json"
         atomic_write_text(recorded_path, json.dumps(recorded, ensure_ascii=False, indent=2) + "\n")
@@ -159,10 +185,13 @@ def generate_gold_a_sheet(
             node=NODE_DN3,
         )
     data_url = face_to_data_url(face_path)
+    image_data_url: str | list[str] = data_url
+    if bind2:
+        image_data_url = [data_url, face_to_data_url(Path(bind2["path"]))]
     result = generate_seedream_sheet(
         api_key=api_key,
         prompt=prompt,
-        image_data_url=data_url,
+        image_data_url=image_data_url,
         endpoint=endpoint,
         post=post,
         get=get,

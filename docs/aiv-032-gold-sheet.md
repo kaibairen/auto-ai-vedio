@@ -17,13 +17,15 @@
 | API | `POST https://ark.cn-beijing.volces.com/api/v3/images/generations` |
 | SKU 主 | `doubao-seedream-5-0-flash-260915` |
 | SKU 备 | `doubao-seedream-5-0-pro-260628` → `doubao-seedream-4-5-251128` → `wan2.7-image` |
-| body | `model` + `prompt` + `size=2048x1365` + `watermark=false` + `response_format=url` + `image`=face data-URL |
+| body | `model` + `prompt` + `size=2048x1365` + `watermark=false` + `response_format=url` + `image`=face data-URL（单 ref 为字符串；可选第二 ref 时为两元素数组，同一 generate-look） |
 | 禁 | `sequential_image_generation`；拆 CU/LS 多图冒充合板 |
 | Prompt 序 | STYLE终句（ADDENDUM 一字不改）→ RECIPE§4 合板正文（一字不改）→ 厚卡 wardrobe/immutable → 身高句（若有）→ negatives → EN identity 锚句 →「输出单张3:2横版合板」→ **L3 adapter（default ON，拼装后追加）** |
 | 门 | 脸 ref **md5 核验先于** generate |
 | usable | 合板记录 `usable_for_n4=false`；**不**自翻集级 usable；不把 sheet 写成 face/full |
 
 wardrobe / immutable / height **只**从厚卡字段读取。缺服装字段 → `look_card_incomplete`，禁助手自写合板正文。
+
+卡面写 **无官方人脸**（或 `no_official_face`）时，`identity_anchor_for_card` **不**追加「Use the attached reference photo as the ONLY identity anchor for the face」；改为服装 pin/crest 形色锚：各标贴在同一套服装上可见，禁止单独漂浮当唯一主体，禁止顶替人脸。有脸 ref 的卡仍用原 EN identity 句。
 
 ## L3 adapter（default ON · post-assemble）
 
@@ -57,6 +59,7 @@ AIV_LOOK_PROMPT_ADAPTER=off aiv drama n3 generate-look --card fixtures/drama/gol
 aiv drama n3 generate-look \
   --card fixtures/drama/gold-a/CHAR-01-card.yaml \
   --face-ref /path/to/CHAR-01-user-ref.jpg \
+  --face-ref-2 /path/to/CHAR-01-user-ref-2.jpg \
   --expected-md5 a8c70f3b4cb7855284d3d4d2bd3c906d \
   --out ./looks/CHAR-01 \
   --dry-run
@@ -88,7 +91,7 @@ aiv drama n3 generate-look \
 `POST /api/v0/projects/{id}/episodes/{ep}/drama/n3/cards/generate-look`
 
 ```json
-{ "id": "CHAR-01", "face_ref": "/path/to/face.jpg", "expected_md5": "…", "dry_run": true }
+{ "id": "CHAR-01", "face_ref": "/path/to/face.jpg", "face_ref_2": "/path/to/face-2.jpg", "expected_md5": "…", "dry_run": true }
 ```
 
 Screen H：选 CHAR、填 face ref、默认 dry-run 勾选后点「合板 generate-look」。

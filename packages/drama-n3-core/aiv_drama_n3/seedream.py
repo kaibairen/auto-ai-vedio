@@ -55,11 +55,29 @@ def face_to_data_url(path: str | Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def ark_image_field(image_data_url: str | Sequence[str]) -> str | list[str]:
+    """Ark `image`: one ref stays a string; two+ refs become an array."""
+    if isinstance(image_data_url, str):
+        if not image_data_url:
+            raise AppError(422, "validation", "Ark image ref is empty", node=NODE_DN3)
+        return image_data_url
+    urls = [str(item) for item in image_data_url]
+    if not urls or any(not item for item in urls):
+        raise AppError(422, "validation", "Ark image ref is empty", node=NODE_DN3)
+    if len(urls) == 1:
+        return urls[0]
+    return urls
+
+
+def recorded_image_slot(*, md5: str, image_bytes_len: int) -> str:
+    return f"data-url redacted · bytes={image_bytes_len} · md5={md5}"
+
+
 def build_ark_body(
     *,
     model: str,
     prompt: str,
-    image_data_url: str,
+    image_data_url: str | Sequence[str],
     size: str = SHEET_SIZE,
 ) -> dict[str, Any]:
     body = {
@@ -68,7 +86,7 @@ def build_ark_body(
         "size": size,
         "watermark": False,
         "response_format": "url",
-        "image": image_data_url,
+        "image": ark_image_field(image_data_url),
     }
     leaked = FORBIDDEN_ARK_KEYS.intersection(body)
     if leaked:
@@ -90,8 +108,16 @@ def recorded_ark_request(
     image_bytes_len: int,
     size: str = SHEET_SIZE,
     endpoint: str = ARK_IMAGES_URL,
+    extra_images: Sequence[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Dry-run / CI recorded contract. No key, no data-URL payload."""
+    first = recorded_image_slot(md5=face_md5, image_bytes_len=image_bytes_len)
+    extras = list(extra_images or [])
+    image: str | list[str] = (
+        first
+        if not extras
+        else [first, *[recorded_image_slot(md5=md5, image_bytes_len=n) for md5, n in extras]]
+    )
     return {
         "provider": "ark",
         "endpoint": endpoint,
@@ -103,7 +129,7 @@ def recorded_ark_request(
         "response_format": "url",
         "body_keys": list(ARK_BODY_KEYS),
         "forbidden_absent": sorted(FORBIDDEN_ARK_KEYS),
-        "image": f"data-url redacted · bytes={image_bytes_len} · md5={face_md5}",
+        "image": image,
         "prompt_chars": len(prompt),
         "sequential_image_generation": False,
         "split_cu_ls": False,
@@ -135,7 +161,7 @@ def generate_seedream_sheet(
     *,
     api_key: str,
     prompt: str,
-    image_data_url: str,
+    image_data_url: str | Sequence[str],
     models: Sequence[str] = SEEDREAM_SKU_CHAIN,
     size: str = SHEET_SIZE,
     endpoint: str = ARK_IMAGES_URL,

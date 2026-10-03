@@ -31,7 +31,9 @@ class N3GenerateLookRequest(BaseModel):
 
     id: str = Field(min_length=1)
     face_ref: str | None = None
+    face_ref_2: str | None = None
     expected_md5: str | None = None
+    expected_md5_2: str | None = None
     dry_run: bool = False
     out_dir: str | None = None
     actor: str | None = None
