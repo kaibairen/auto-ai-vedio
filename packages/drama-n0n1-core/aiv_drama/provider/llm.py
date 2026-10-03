@@ -53,7 +53,7 @@ class LlmProvider:
             "Do NOT write 提示词, 宫格, Seedance, 分镜表, or 成稿台词",
             f"shot_cap hard cap {shot_cap}",
             "Ceiling is outline/beats only (D-N1), not D-N2",
-            "characters[].name must look like a person name. A name comes from this episode's preattached character card. If a generated name is that full name plus a prefix or a suffix, fold it back to the same id; otherwise do not force-fold. A genuinely new character still gets a new CHAR id. Never open CHAR from system-voice, half-line dialogue, verb phrases, slogan tags, or collection-title labels. NAME slot only — outline/one_line may describe titles without becoming CHAR.name",
+            "characters[].name comes from this episode's preattached character card and need not look like a human personal name. If a generated name is that full name plus a prefix or a suffix, fold it back to the same id; otherwise do not force-fold. A genuinely new character still gets a new CHAR id. Never open CHAR from system-voice, half-line dialogue, verb phrases, slogan tags, or collection-title labels. NAME slot only — outline/one_line may describe titles without becoming CHAR.name",
             "scenes[].name must be a spatial noun. Events, props, and actions go in one_line, not the name field.",
         ]
         if preattached:

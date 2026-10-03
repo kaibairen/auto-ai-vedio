@@ -280,7 +280,7 @@ GENERIC_TITLE_STARTS = (
     "王国",
 )
 
-# Speaker prefix: "预挂甲：" / "林晚:" (fullwidth or halfwidth colon).
+# Speaker prefix: "预挂甲：" / "预挂乙:" (fullwidth or halfwidth colon).
 SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,32})[：:]")
 
 # High-confidence titled proper names. CJK prefix capped at 4 so clause

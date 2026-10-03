@@ -123,6 +123,8 @@ def test_llm_prompt_includes_preattached_and_rules(tmp_path, monkeypatch):
     assert any("大纲主角必须使用预挂角色的姓名" in r for r in user["rules"])
     assert any("禁止另造同名角色" in r for r in user["rules"])
     assert any("preattached character card" in r for r in user["rules"])
+    assert any("need not look like a human personal name" in r for r in user["rules"])
+    assert not any("must look like a person name" in r for r in user["rules"])
     assert any("prefix or a suffix" in r for r in user["rules"])
     assert "宫格" in "".join(user["rules"])
     assert draft.characters[0]["name"] == "预挂甲"
