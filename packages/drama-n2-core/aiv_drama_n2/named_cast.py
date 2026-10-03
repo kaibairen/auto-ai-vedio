@@ -97,89 +97,47 @@ GENERIC_REFS = frozenset(
     }
 )
 
-GROUP_LABELS = frozenset(
-    {
-        "王子们",
-        "两位王子",
-        "俩王子",
-        "两名王子",
-        "两王子",
-        "两个王子",
-        "双王子",
-        "双王",
-        "指出两王子",
-        "指出两位王子",
-        "两大王子",
-        "两大AI王子",
-        "两侧王子",
-        "两边王子",
-        "双方王子",
-        "两端王子",
-        "两个闭源王子",
-        "两个开源王子",
-        "幕里两位王子",
-        "幕里两王子",
-        "幕外两位王子",
-        "门外两位王子",
-        "屏幕里两位王子",
-        "画面里两位王子",
-        "镜头里两位王子",
-        "弹幕里两位王子",
-        "双窗两位王子",
-        "IDE里两位王子",
-        "AI王子",
-        "王国王子",
-        "公主们",
-        "两位公主",
-        "俩公主",
-        "两名公主",
-        "两公主",
-    }
-)
-
-# Acc#1/#2 + leads that banlist must never kill.
-PROTECTED_LEAD_NAMES = frozenset({"程序员", "豆包"})
-A_TIER_PRINCE_RE = re.compile(
-    r"(?ix)^(?:"
-    r"GPT(?:\s*[\(（]\s*CODEX\s*[\)）])?|"
-    r"CODEX(?:\s*[\(（]\s*GPT\s*[\)）])?|"
-    r"Opus\s*5\.5(?:\s*[\(（]\s*CURSOR\s*[\)）])?|"
-    r"CURSOR(?:\s*[\(（]\s*Opus\s*5\.5\s*[\)）])?"
-    r")王子$"
-)
+TITLES = ("王子", "公主", "女王", "国王", "将军", "大人", "小姐", "少爷", "殿下")
 
 BARE_TITLES = frozenset(
     {
-        "王子",
-        "公主",
-        "大人",
-        "将军",
-        "小姐",
-        "少爷",
+        *TITLES,
         "老师",
         "老板",
-        "女王",
-        "国王",
-        "殿下",
     }
 )
 
-# LK-Q4: unnamed 王子 folds to 03/04; never opens a fifth CHAR.
-BARE_PRINCE_LABELS = frozenset({"王子", "那位王子", "这个王子", "那个王子"})
-# LK-Q1: short form without A-tier parody structure — fold if 03/04 exist, else DENY.
-SHORT_PRINCE_NEAR_DENY = frozenset({"opus王子"})
 
-# LK-01/02 + PRD B-TAG stems. A-tier whitelist is checked first.
+def _quantity_title_labels() -> frozenset[str]:
+    """Collection labels for any title (两位将军 / 将军们). No episode proper names."""
+    quantity = ("两位", "俩", "两名", "两", "两个", "双", "两大", "两侧", "两边", "双方", "两端")
+    located = ("幕里", "幕外", "门外", "屏幕里", "画面里", "镜头里", "弹幕里", "双窗")
+    labels: set[str] = set()
+    for title in TITLES:
+        labels.add(f"{title}们")
+        for qty in quantity:
+            labels.add(f"{qty}{title}")
+        for loc in located:
+            labels.add(f"{loc}两位{title}")
+            labels.add(f"{loc}两{title}")
+            labels.add(f"{loc}{title}")
+    return frozenset(labels)
+
+
+GROUP_LABELS = _quantity_title_labels()
+
+# Unnamed title alone never opens CHAR; fold only onto an attached full name.
+BARE_PRINCE_LABELS = frozenset(
+    set(BARE_TITLES)
+    | {f"那位{t}" for t in TITLES}
+    | {f"这个{t}" for t in TITLES}
+    | {f"那个{t}" for t in TITLES}
+)
+
+# Generic chrome / slogan stems. NAME slot only. Not one episode's proper names.
 B_TAG_TITLE_PREFIXES = frozenset(
     {
-        "技术",
-        "正统",
-        "体验",
-        "重构",
-        "回滚",
         "弹窗",
-        "破防",
-        "联猎",
         "双屏",
         "窗口",
         "爽点",
@@ -188,39 +146,20 @@ B_TAG_TITLE_PREFIXES = frozenset(
 # NAME slot only. Prose in one_line/outline is not classified.
 B_TAG_EXACT = frozenset(
     {
-        "最优解",
-        "最贵解",
-        "联猎",
         "默认助手",
         "爽点爆发",
-        "非技术型AI",
-        "技术型AI",
-        "联猎非技术型AI",
-        "奶蛙",
-        "奶蛙脸",
-        "双窗AI",
-        "CODEX窗口",
-        "CURSOR窗口",
         "神秘ID",
         "神秘ID消息",
-        "深处神秘ID",
     }
 )
 B_FRAG_EXACT = frozenset(
     {
-        "代码库已冻结",
         "倒计时开始",
-        "清除非技术型AI",
-        "谁更懂他",
-        "先喝口水再吵",
-        "选你自己",
     }
 )
 B_ACT_INFIX = ("吐槽", "端水", "争宠", "调侃", "嘲讽", "拆穿", "追杀")
 B_TAG_EXACT_FOLDED = frozenset(item.casefold().replace(" ", "") for item in B_TAG_EXACT)
 B_FRAG_EXACT_FOLDED = frozenset(item.casefold().replace(" ", "") for item in B_FRAG_EXACT)
-
-TITLES = ("王子", "公主", "女王", "国王", "将军", "大人", "小姐", "少爷", "殿下")
 
 VERB_LEADERS = (
     "指出",
@@ -252,7 +191,7 @@ VERB_LEADERS = (
     "追杀",
 )
 
-# Cut from questions/narration: 「你被双王子联猎了？」 / 「不是追杀，而是两王子同时…」
+# Cut from questions/narration: 「你被双将军…？」 / 「不是追杀，而是两将军同时…」
 HALF_LINE_STARTERS = (
     "你被",
     "我被",
@@ -268,8 +207,6 @@ HALF_LINE_STARTERS = (
     "所以",
     "如果",
     "虽然",
-    "包的",
-    "豆包当众",
     "当众",
 )
 # Grammar/function chars that never start a real proper name before 王子/公主.
@@ -299,21 +236,9 @@ GENERIC_TITLE_PREFIXES = frozenset(
         "两边",
         "双方",
         "两端",
-        "闭源",
-        "开源",
-        "两个闭源",
-        "两个开源",
-        "技术",
-        "正统",
-        "体验",
-        "重构",
-        "回滚",
         "弹窗",
-        "破防",
-        "联猎",
         "双屏",
         "窗口",
-        "奶蛙",
         "幕里",
         "幕外",
         "门外",
@@ -349,61 +274,46 @@ GENERIC_TITLE_STARTS = (
     "弹幕里",
     "双窗",
     "IDE里",
-    "技术",
-    "正统",
-    "体验",
-    "重构",
-    "回滚",
     "弹窗",
-    "破防",
-    "联猎",
     "双屏",
     "窗口",
     "王国",
 )
 
-# Speaker prefix: "CODEX王子：" / "林晚:" (fullwidth or halfwidth colon).
+# Speaker prefix: "预挂甲：" / "预挂乙:" (fullwidth or halfwidth colon).
 SPEAKER_RE = re.compile(r"(?:^|[\n；;。！？!?])\s*([^：:\n]{1,32})[：:]")
 
-# High-confidence titled proper names. Allows CURSOR(Opus5.5)王子.
-# CJK prefix capped at 4 so outline clauses (豆包当众拆穿两个王子) never full-match.
+# High-confidence titled proper names. CJK prefix capped at 4 so clause
+# fragments never full-match as a CHAR name.
 PROPER_NAME_RE = re.compile(
     r"(?:"
     r"[A-Za-z][A-Za-z0-9._-]*(?:\([^)]{1,32}\))?"
-    r"|[\u4e00-\u9fff]{2,4}"
+    r"|(?:(?![与和或把被让给在对从向到并的地得])[\u4e00-\u9fff])[\u4e00-\u9fff]{1,3}"
     r")"
     r"(?:王子|公主|女王|国王|将军|大人|小姐|少爷|殿下)"
 )
 
+_TITLE_ALT = "(?:王子|公主|女王|国王|将军|大人|小姐|少爷|殿下)"
 GROUP_RE = re.compile("|".join(sorted((re.escape(g) for g in GROUP_LABELS), key=len, reverse=True)))
-# 两侧王子 / 两个闭源王子 / 两大AI王国王子 — quantity+title, never a CHAR slot.
+# Quantity + title (两位将军 / 两侧大人), never a CHAR slot.
 GROUP_GENERIC_RE = re.compile(
     r"(?:幕里|幕外|门外|屏幕里|画面里|镜头里|弹幕里|双窗|IDE里)?"
-    r"(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|闭源|开源|王国)*王子"
+    r"(?:两侧|两边|双方|两端|两位|两名|两个|两大|两|双|俩)(?:AI|王国)*"
+    + _TITLE_ALT
 )
-# 幕里/弹幕里/门外…王子 family (方位+集合). Do not pin only「幕里」.
+# Located collection (屏幕里两位将军).
 GROUP_LOCATED_RE = re.compile(
-    r"(?:幕里|幕外|门外|屏幕里|画面里|镜头里|弹幕里|双窗|IDE里).{0,8}王子"
+    r"(?:幕里|幕外|门外|屏幕里|画面里|镜头里|弹幕里|双窗|IDE里).{0,8}" + _TITLE_ALT
 )
 
 DIRTY_PREFIX_RE = re.compile(r"^[\s/\\|#@*>\-–—·•、,，.。;；'\"“”‘’\[\]【】()（）]+")
-HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|已冻结|倒计时|清除非技术|目标")
+HALF_LINE_PUNCT_RE = re.compile(r"[,，。！？!?、;；…]|已启动|已冻结|倒计时|目标")
 CLAUSE_MARKERS = (
     "当众",
     "拆穿",
     "反制",
-    "权重",
-    "开源",
-    "闭源",
-    "续写",
-    "大纲",
     "同时",
     "伸出手",
-    "两个王子",
-    "两个闭源",
-    "两侧王子",
-    "包的",
-    "豆包当众",
 )
 CLAUSE_VERBS = (
     "拆穿",
@@ -434,46 +344,15 @@ CLAUSE_VERBS = (
 )
 CLAUSE_INFIX = frozenset("的地得和与或把被让给在对从向到并")
 
-# Well-known A-class recoveries (dogfood 王子专名). Only used when a group
-# label is present and no individual titled prince was extracted.
-WELL_KNOWN_A_CLASS = ("CODEX王子", "CURSOR(Opus5.5)王子")
-BRAND_TOKEN_RES: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"CURSOR\s*\(\s*Opus\s*5\.5\s*\)", re.I), "CURSOR(Opus5.5)王子"),
-    (re.compile(r"\bCURSOR\b", re.I), "CURSOR(Opus5.5)王子"),
-    (re.compile(r"OPUS\s*5\.5", re.I), "CURSOR(Opus5.5)王子"),
-    (re.compile(r"Opus\s*5\.5", re.I), "CURSOR(Opus5.5)王子"),
-    (re.compile(r"\bCODEX\b", re.I), "CODEX王子"),
-    (re.compile(r"\bGPT\b", re.I), "GPT王子"),
-)
-
-# Bare brands must fold onto a titled A slot — never open CHAR-CURSOR / CHAR-CODEX.
-BARE_BRANDS = frozenset({"cursor", "codex", "gpt", "opus5.5", "opus55", "opus"})
-BRAND_FAMILIES: tuple[frozenset[str], ...] = (
-    frozenset({"cursor", "cursoropus55", "opus55", "opus5.5", "opus"}),
-    frozenset({"codex", "gpt"}),
-)
-# Preferred titled slot when a family has no existing cast row.
-BARE_BRAND_CANONICAL = {
-    "cursor": "Opus5.5王子",
-    "opus": "Opus5.5王子",
-    "opus5.5": "Opus5.5王子",
-    "opus55": "Opus5.5王子",
-    "codex": "GPT王子",
-    "gpt": "GPT王子",
-}
+# No episode-riveted A-class recoveries. Fold only onto this episode's attached names.
 PAREN_WRAP_RE = re.compile(
     r"([A-Za-z][A-Za-z0-9._-]*)\s*[\(（]\s*([^)）]{1,40})\s*[\)）]"
     r"(?:(?P<title>王子|公主|女王|国王|将军|大人|小姐|少爷|殿下))?"
 )
-# ASCII-boundary (not \b) so CURSOR王国 / CURSOR（…） still match.
-LATIN_BRAND_TOKEN_RE = re.compile(
-    r"(?<![A-Za-z0-9])(CURSOR|CODEX|GPT|OPUS\s*5\.5|Opus\s*5\.5)(?![A-Za-z0-9])",
-    re.I,
-)
 SYSTEM_SPAN_RE = re.compile(
     r"[/\\]?\s*[【\[]系统音[】\]][^。！？!?\n]*|系统音：[^\n。！？!?]*"
 )
-CONFRONTATION_MARKERS = ("对峙", "联猎", "退兵", "嘴炮", "现身", "并肩", "破屏")
+CONFRONTATION_MARKERS = ("对峙", "退兵", "嘴炮", "现身", "并肩", "破屏")
 
 NONE_ID = "NONE"
 
@@ -486,6 +365,60 @@ def parse_named_cast_check(value: str | None) -> str:
 def normalize_name(name: str) -> str:
     text = unicodedata.normalize("NFKC", (name or "").strip())
     return " ".join(text.split())
+
+
+def attached_names_from_rows(rows: Iterable[dict[str, Any]] | None) -> list[str]:
+    """Fold targets: library-backed rows and clean existing names. Not B-class leftovers."""
+    names: list[str] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        key = normalize_name(str(row.get("name") or ""))
+        if not key:
+            continue
+        if row.get("library_ref"):
+            if key not in names:
+                names.append(key)
+            continue
+        if classify_char_banlist(key) != "ALLOW" or is_b_class(key):
+            continue
+        if key not in names:
+            names.append(key)
+    return names
+
+
+def attached_names_from_cast(cast: dict[str, Any] | None) -> list[str]:
+    if not isinstance(cast, dict):
+        return []
+    return attached_names_from_rows(cast.get("characters"))
+
+
+def fold_to_attached_name(name: str, attached_names: Iterable[str] | None) -> str | None:
+    """Fold generated name onto an attached full name.
+
+    Match only: exact attached name, or that full name plus a prefix or a suffix.
+    Do not force-fold unrelated names.
+    """
+    key = strip_dirty_prefix(normalize_name(name))
+    if not key:
+        return None
+    ordered = sorted(
+        {normalize_name(n) for n in (attached_names or ()) if normalize_name(n)},
+        key=len,
+        reverse=True,
+    )
+    for full in ordered:
+        if len(full) < 2:
+            continue
+        if key == full:
+            return full
+        if len(key) > len(full) and (key.startswith(full) or key.endswith(full)):
+            return full
+    return None
+
+
+def is_attached_character_name(name: str, attached_names: Iterable[str] | None = None) -> bool:
+    return fold_to_attached_name(name, attached_names) is not None
 
 
 def strip_dirty_prefix(name: str) -> str:
@@ -524,7 +457,7 @@ def is_dialogue_fragment(name: str) -> bool:
 
 
 def is_generic_title(name: str) -> bool:
-    """Vague collection / compound title (王国王子 / AI王子 / 两侧王子), not a true A-class slot."""
+    """Vague collection / compound title (王国王子 / 两侧将军), not a true A-class slot."""
     key = strip_dirty_prefix(normalize_name(name))
     split = _split_title(key)
     if not split:
@@ -561,10 +494,6 @@ def is_clause_fragment(name: str) -> bool:
         return True
     if not split and _cjk_len(key) > 6:
         return True
-    for lead in ("豆包", "林晚"):
-        if key.startswith(lead) and len(key) > len(lead):
-            if not split or body != lead:
-                return True
     return False
 
 
@@ -628,17 +557,14 @@ def is_group_label(name: str) -> bool:
     return False
 
 
-def is_protected_lead(name: str) -> bool:
-    key = strip_dirty_prefix(normalize_name(name))
-    return key in PROTECTED_LEAD_NAMES
+def is_protected_lead(name: str, attached_names: Iterable[str] | None = None) -> bool:
+    """True only when name folds onto this episode's attached character card."""
+    return is_attached_character_name(name, attached_names)
 
 
-def is_a_tier_prince_name(name: str) -> bool:
-    """F2 / Acc#2 parody proper names. White before「凡含王子即杀」."""
-    key = strip_dirty_prefix(normalize_name(name))
-    if not key:
-        return False
-    return bool(A_TIER_PRINCE_RE.fullmatch(key))
+def is_a_tier_prince_name(name: str, attached_names: Iterable[str] | None = None) -> bool:
+    """No hardcoded prince allowlist. Attached card names win via fold."""
+    return is_attached_character_name(name, attached_names)
 
 
 def _folded_token(name: str) -> str:
@@ -646,21 +572,20 @@ def _folded_token(name: str) -> str:
 
 
 def is_bare_prince_label(name: str) -> bool:
-    """Unnamed 王子 / 那位王子 — fold onto 03/04, never a new CHAR."""
-    return strip_dirty_prefix(normalize_name(name)) in BARE_PRINCE_LABELS
+    """Unnamed bare title — fold onto attached titled cards, never a new CHAR."""
+    return strip_dirty_prefix(normalize_name(name)) in BARE_PRINCE_LABELS or strip_dirty_prefix(
+        normalize_name(name)
+    ) in BARE_TITLES
 
 
 def is_short_prince_near_deny(name: str) -> bool:
-    """Opus王子 etc. without 5.5 / parody wrap — 准 DENY as a fifth slot."""
-    if is_a_tier_prince_name(name) or is_protected_lead(name):
-        return False
-    return _folded_token(name) in SHORT_PRINCE_NEAR_DENY
+    return False
 
 
 def is_b_act(name: str) -> bool:
     """B-ACT: sentence-level action phrase pretending to be a CHAR name."""
     key = strip_dirty_prefix(normalize_name(name))
-    if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
+    if not key:
         return False
     if is_verb_phrase(key):
         return True
@@ -672,7 +597,7 @@ def is_b_act(name: str) -> bool:
 def is_b_tag(name: str) -> bool:
     """B-TAG: 爽点/设定 tag. NAME slot only — not one_line/outline prose."""
     key = strip_dirty_prefix(normalize_name(name))
-    if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
+    if not key:
         return False
     folded = _folded_token(key)
     if folded in B_TAG_EXACT_FOLDED or key in B_TAG_EXACT:
@@ -680,21 +605,21 @@ def is_b_tag(name: str) -> bool:
     split = _split_title(key)
     if not split:
         return False
-    prefix, title = split
+    prefix, _title = split
     folded_prefix = prefix.casefold().replace(" ", "")
     if folded_prefix in B_TAG_TITLE_PREFIXES or prefix in B_TAG_TITLE_PREFIXES:
         return True
-    if title == "王子" and any(stem in prefix for stem in B_TAG_TITLE_PREFIXES):
+    if any(stem in prefix for stem in B_TAG_TITLE_PREFIXES):
         return True
     return False
 
 
 def is_b_gen(name: str) -> bool:
-    """B-GEN: collection generics 两位/两侧/幕里…王子 + bare 王子 fold."""
+    """B-GEN: collection generics (两位/两侧 + title) and bare titles."""
     key = strip_dirty_prefix(normalize_name(name))
-    if not key or is_a_tier_prince_name(key) or is_protected_lead(key):
+    if not key:
         return False
-    if is_bare_prince_label(key) or is_short_prince_near_deny(key):
+    if is_bare_prince_label(key):
         return True
     if is_group_label(key) or is_generic_title(key):
         return True
@@ -705,26 +630,21 @@ def is_b_gen(name: str) -> bool:
 
 def is_b_frag(name: str) -> bool:
     """B-FRAG: half-line dialogue / outline continuation / system-vo slice."""
-    if is_a_tier_prince_name(name) or is_protected_lead(name):
-        return False
     key = strip_dirty_prefix(normalize_name(name))
     if key in B_FRAG_EXACT or _folded_token(key) in B_FRAG_EXACT_FOLDED:
         return True
     return is_dialogue_fragment(name) or is_clause_fragment(name) or is_half_line(name)
 
 
-def classify_char_banlist(name: str) -> str:
-    """ALLOW or B-ACT / B-TAG / B-FRAG / B-GEN / B-BARE (Acc#1).
+def classify_char_banlist(name: str, attached_names: Iterable[str] | None = None) -> str:
+    """ALLOW or B-ACT / B-TAG / B-FRAG / B-GEN.
 
     Hard scan is the CHAR **name** slot (open / merge / sidecar) only.
-    Do not run this on one_line / outline / dialogue prose — 「技术王子」
-    / 「两位王子」 in those fields must not delete ALLOW 01–04 rows.
+    Attached card names (and prefix/suffix wraps) are ALLOW and must not be dropped.
     """
     key = strip_dirty_prefix(normalize_name(name))
-    if is_protected_lead(key) or is_a_tier_prince_name(key):
+    if is_attached_character_name(key, attached_names):
         return "ALLOW"
-    if is_bare_brand(key):
-        return "B-BARE"
     if is_b_act(key):
         return "B-ACT"
     if is_b_tag(key):
@@ -733,23 +653,23 @@ def classify_char_banlist(name: str) -> str:
         return "B-GEN"
     if is_b_frag(key):
         return "B-FRAG"
-    if is_b_class(key):
+    if is_b_class(key, attached_names=attached_names):
         return "B-FRAG"
     return "ALLOW"
 
 
-def is_banlist_name(name: str) -> bool:
-    """True when named_cast must not open a CHAR row (DESIGN-023 F1)."""
-    return classify_char_banlist(name) != "ALLOW"
+def is_banlist_name(name: str, attached_names: Iterable[str] | None = None) -> bool:
+    """True when named_cast must not open a CHAR row."""
+    return classify_char_banlist(name, attached_names) != "ALLOW"
 
 
-def is_b_class(name: str) -> bool:
-    """F1 / 023: system-vo / popup / VO / half-line / verb / banlist leftover.
+def is_b_class(name: str, attached_names: Iterable[str] | None = None) -> bool:
+    """System-vo / popup / VO / half-line / verb leftover.
 
-    CHAR-only. SCENE materialize must call is_scene_b_class — do not reuse this
-    for place names (021-live 侧边栏奶茶时刻 / 开源避难所入口 mis-skip).
+    CHAR-only. SCENE materialize must call is_scene_b_class.
+    A row already attached is never B-class.
     """
-    if is_protected_lead(name) or is_a_tier_prince_name(name):
+    if is_attached_character_name(name, attached_names):
         return False
     if is_system_speaker(name) or is_generic_ref(name):
         return True
@@ -776,15 +696,10 @@ def is_b_class(name: str) -> bool:
     return False
 
 
-# Spatial SCENE short names (DIR S1–S3). Events belong in one_line, not name.
-SCENE_SPATIAL_ALIASES = {
-    "侧边栏奶茶时刻": "侧边栏空间",
-    "开源避难所入口": "避难所门厅",
-}
+# Spatial SCENE short names. Events belong in one_line, not name.
+# No episode-riveted aliases; generic 时刻→空间 / 入口→门厅 stems stay below.
+SCENE_SPATIAL_ALIASES: dict[str, str] = {}
 SCENE_SPATIAL_TOKENS = (
-    "IDE",
-    "侧边栏",
-    "避难所",
     "门厅",
     "工位",
     "战场",
@@ -793,7 +708,6 @@ SCENE_SPATIAL_TOKENS = (
     "茶水间",
     "城墙",
     "办公室",
-    "工位",
     "空间",
     "审判庭",
     "法庭",
@@ -829,11 +743,21 @@ SCENE_PLACE_ENDINGS = (
     "场",
     "间",
 )
-POPUP_CHROME_TAILS = frozenset({"", "字", "王子", "系统", "系统音", "音", "字幕"})
+POPUP_CHROME_TAILS = frozenset({"", "字", "系统", "系统音", "音", "字幕", *TITLES})
+
+
+def _has_spatial_token(text: str) -> bool:
+    lowered = text.casefold()
+    for tok in SCENE_SPATIAL_TOKENS:
+        if tok.isascii() and tok.casefold() in lowered:
+            return True
+        if not tok.isascii() and tok in text:
+            return True
+    return False
 
 
 def prefer_spatial_scene_name(name: str) -> str:
-    """Generate-side spatial short name. Not a post-hoc dogfood card patch."""
+    """Generate-side spatial short name. Event 时刻→空间, 入口→门厅. No episode aliases."""
     key = normalize_name(name)
     if not key:
         return key
@@ -841,22 +765,24 @@ def prefer_spatial_scene_name(name: str) -> str:
         return SCENE_SPATIAL_ALIASES[key]
     if key.endswith("时刻") and _cjk_len(key) >= 4:
         stem = key[: -len("时刻")]
-        if any(tok in stem for tok in ("侧边栏", "IDE", "工位", "茶水间", "营帐")):
+        if _has_spatial_token(stem) or _cjk_len(stem) >= 2:
             return stem if stem.endswith("空间") else f"{stem}空间"
     if key.endswith("入口") and _cjk_len(key) >= 4:
         stem = key[: -len("入口")]
-        if "避难所" in stem:
-            return "避难所门厅"
-        return stem or key
+        if not stem:
+            return key
+        if stem.endswith("门厅") or stem.endswith("厅"):
+            return stem
+        return f"{stem}门厅"
     return key
 
 
 def _popup_prefixed_place(key: str) -> bool:
-    """弹窗审判庭 is a place. Bare 弹窗 / 弹窗字 / 弹窗王子 stay VO/CHAR chrome."""
+    """弹窗审判庭 is a place. Bare 弹窗 / 弹窗字 / 弹窗+title stay VO/CHAR chrome."""
     if not key.startswith("弹窗"):
         return False
     rest = key[len("弹窗") :]
-    if rest in POPUP_CHROME_TAILS or rest.endswith("王子"):
+    if rest in POPUP_CHROME_TAILS or any(rest.endswith(title) for title in TITLES):
         return False
     lowered = rest.casefold()
     for tok in SCENE_SPATIAL_TOKENS:
@@ -900,7 +826,7 @@ def is_scene_b_class(name: str) -> bool:
         return True
     if is_group_label(key) or is_banlist_name(key):
         return True
-    if HALF_LINE_PUNCT_RE.search(key) and (_cjk_len(key) > 12 or "王子" in key):
+    if HALF_LINE_PUNCT_RE.search(key) and (_cjk_len(key) > 12 or any(t in key for t in TITLES)):
         return True
     if _cjk_len(key) > 16:
         return True
@@ -912,37 +838,22 @@ def _brand_key(name: str) -> str:
     return re.sub(r"[.\s_-]", "", text)
 
 
-def is_bare_brand(name: str) -> bool:
-    """CODEX / CURSOR / GPT / Opus5.5 without a title — alias, not a CHAR slot."""
-    key = strip_dirty_prefix(normalize_name(name))
-    if not key:
-        return False
-    if any(key.endswith(title) for title in TITLES):
-        return False
-    return _brand_key(key) in BARE_BRANDS
+def is_bare_brand(_name: str) -> bool:
+    """No episode brand list. Bare tokens are not force-folded."""
+    return False
 
 
-def brand_family(name: str) -> frozenset[str] | None:
-    core = _title_core(name) or _brand_key(name)
-    if not core:
-        return None
-    for family in BRAND_FAMILIES:
-        if core in family:
-            return family
-        if any(len(item) >= 3 and (item in core or core in item) for item in family):
-            return family
+def brand_family(_name: str) -> frozenset[str] | None:
     return None
 
 
-def is_registerable_name(name: str) -> bool:
+def is_registerable_name(name: str, attached_names: Iterable[str] | None = None) -> bool:
     key = strip_dirty_prefix(name)
     if not key or len(key) < 2:
         return False
-    if is_protected_lead(key) or is_a_tier_prince_name(key):
+    if is_attached_character_name(key, attached_names):
         return True
-    if is_bare_brand(key):
-        return False
-    if is_banlist_name(key) or is_b_class(name) or is_b_class(key):
+    if is_banlist_name(key, attached_names) or is_b_class(name, attached_names) or is_b_class(key, attached_names):
         return False
     if key in BARE_TITLES:
         return False
@@ -953,19 +864,13 @@ def is_registerable_name(name: str) -> bool:
     return True
 
 
-def fold_brand_to_canonical(name: str) -> str | None:
-    """Bare CURSOR/CODEX → titled A slot (Opus5.5王子 / GPT王子)."""
-    fam = brand_family(name)
-    if not fam:
-        return None
-    for token, canon in BARE_BRAND_CANONICAL.items():
-        if token in fam:
-            return canon
+def fold_brand_to_canonical(_name: str) -> str | None:
+    """Removed: no canonical episode prince/brand slot."""
     return None
 
 
 def prefer_paren_entity(outer: str, inner: str, trailing_title: str | None = None) -> str:
-    """One entity from CURSOR（Opus5.5王子） / CURSOR(Opus5.5)王子 — never two CHAR rows."""
+    """One entity from A（B） / A(B)title — never two CHAR rows."""
     outer_n = normalize_name(outer)
     inner_n = normalize_name(inner)
     title = trailing_title or ""
@@ -980,9 +885,6 @@ def prefer_paren_entity(outer: str, inner: str, trailing_title: str | None = Non
         return inner_n
     if is_registerable_name(outer_n):
         return outer_n
-    canon = fold_brand_to_canonical(inner_n) or fold_brand_to_canonical(outer_n)
-    if canon:
-        return canon
     if title and outer_n:
         return f"{outer_n}({inner_n}){title}"
     return inner_n or outer_n
@@ -993,15 +895,11 @@ def _is_brand_or_titled_wrap(outer: str, inner: str, trailing_title: str | None)
         return True
     inner_n = normalize_name(inner)
     outer_n = normalize_name(outer)
-    if is_registerable_name(inner_n) or is_registerable_name(outer_n):
-        return True
-    if is_bare_brand(outer_n) or is_bare_brand(inner_n):
-        return True
-    return bool(brand_family(outer_n) or brand_family(inner_n))
+    return is_registerable_name(inner_n) or is_registerable_name(outer_n)
 
 
 def glue_paren_name(name: str) -> str:
-    """Speaker/hit `CURSOR（Opus5.5王子）` → one titled name."""
+    """Speaker/hit `甲（乙将军）` → one titled name."""
     text = normalize_name(name)
     if not text:
         return text
@@ -1032,36 +930,14 @@ def strip_system_spans(text: str) -> str:
     return SYSTEM_SPAN_RE.sub(" ", text or "")
 
 
-def extract_bare_brands(text: str) -> list[str]:
-    """CURSOR/CODEX/GPT tokens outside system-voice spans."""
-    cleaned = strip_system_spans(text or "")
-    hits: list[str] = []
-    seen: set[str] = set()
-    for match in LATIN_BRAND_TOKEN_RE.finditer(cleaned):
-        token = normalize_name(match.group(1))
-        if not is_bare_brand(token):
-            continue
-        if token not in seen:
-            seen.add(token)
-            hits.append(token)
-    return hits
+def extract_bare_brands(_text: str) -> list[str]:
+    """No episode brand tokens."""
+    return []
 
 
 def fold_brand_to_pool(name: str, pool: Iterable[str]) -> str | None:
-    """Fold a brand/alias onto an existing titled family slot, else canonical A name."""
-    key = glue_paren_name(strip_dirty_prefix(normalize_name(name)))
-    ordered = [normalize_name(p) for p in pool if normalize_name(p)]
-    if key in ordered:
-        return key
-    fam = brand_family(key)
-    if not fam:
-        return None
-    for existing in ordered:
-        if brand_family(existing) == fam and is_registerable_name(existing):
-            return existing
-    if is_registerable_name(key):
-        return key
-    return fold_brand_to_canonical(key)
+    """Fold onto an attached/pool full name plus prefix or suffix only."""
+    return fold_to_attached_name(name, pool)
 
 
 def extract_speakers(text: str) -> list[str]:
@@ -1130,7 +1006,7 @@ def extract_group_labels(text: str) -> list[str]:
 
 
 def names_mentioned(text: str, pool: Iterable[str]) -> list[str]:
-    """Longest-first substring hits so CODEX王子 wins over 王子."""
+    """Longest-first substring hits so a full attached name wins over a bare title."""
     body = text or ""
     if not body:
         return []
@@ -1157,15 +1033,13 @@ def names_mentioned(text: str, pool: Iterable[str]) -> list[str]:
 def expand_group(label: str, individual_names: Iterable[str]) -> list[str]:
     key = normalize_name(label)
     members: list[str] = []
-    if "王子" in key:
-        needle = "王子"
-    elif "公主" in key:
-        needle = "公主"
-    else:
+    needle = next((title for title in TITLES if title in key), None)
+    if not needle:
         return []
-    for name in individual_names:
+    attached = list(individual_names)
+    for name in attached:
         norm = normalize_name(name)
-        if not is_registerable_name(norm):
+        if not is_registerable_name(norm, attached):
             continue
         if needle in norm and not is_group_label(norm):
             if norm not in members:
@@ -1185,35 +1059,25 @@ def _title_core(name: str) -> str:
 
 
 def names_are_aliases(left: str, right: str) -> bool:
-    a = _title_core(left)
-    b = _title_core(right)
+    """True only when one name is the other, or the other plus a prefix/suffix."""
+    a = normalize_name(left)
+    b = normalize_name(right)
     if not a or not b:
         return False
     if a == b:
         return True
-    if len(a) >= 3 and len(b) >= 3 and (a in b or b in a):
-        return True
-    fam_a = brand_family(left)
-    fam_b = brand_family(right)
-    if fam_a and fam_b and fam_a == fam_b:
-        return True
-    return False
+    return fold_to_attached_name(a, [b]) is not None or fold_to_attached_name(b, [a]) is not None
 
 
 def prefer_name(left: str, right: str) -> str:
     a = normalize_name(left)
     b = normalize_name(right)
-    if is_bare_brand(a) and not is_bare_brand(b):
-        return b
-    if is_bare_brand(b) and not is_bare_brand(a):
-        return a
     a_titled = any(a.endswith(t) for t in TITLES)
     b_titled = any(b.endswith(t) for t in TITLES)
     if a_titled and not b_titled:
         return a
     if b_titled and not a_titled:
         return b
-    # First-seen titled slot wins so outline GPT/Opus names are not rewritten.
     if a_titled and b_titled:
         return a
     if ("(" in a or "（" in a) and "(" not in b and "（" not in b:
@@ -1248,24 +1112,17 @@ def resolve_to_pool_name(name: str, pool: Iterable[str]) -> str | None:
         return key
     if cleaned in ordered:
         return cleaned
-    # Fold brand / short-prince aliases onto existing 03/04 before DENY.
-    folded = fold_brand_to_pool(cleaned, ordered)
+    folded = fold_to_attached_name(cleaned, ordered) or fold_to_attached_name(key, ordered)
     if folded:
         return folded
     if is_bare_prince_label(cleaned) or is_bare_prince_label(key):
-        members = expand_group("王子", ordered)
+        members = expand_group(cleaned or key, ordered)
         return members[0] if len(members) == 1 else None
-    if is_b_class(key) and not is_group_label(key) and not is_bare_brand(key) and not is_bare_brand(cleaned):
+    if is_b_class(key, ordered) and not is_group_label(key):
         return None
-    if not is_registerable_name(key) and cleaned not in ordered:
-        for p in ordered:
-            if names_are_aliases(cleaned, p) and is_registerable_name(p):
-                return p
+    if not is_registerable_name(key, ordered) and cleaned not in ordered:
         return None
-    for p in ordered:
-        if names_are_aliases(cleaned, p) and is_registerable_name(p):
-            return p
-    if is_registerable_name(cleaned):
+    if is_registerable_name(cleaned, ordered):
         return cleaned
     return None
 
@@ -1283,26 +1140,20 @@ def infer_a_class_names(
     rows: list[dict[str, Any]],
     *,
     outline_body: str | None = None,
+    attached_names: Iterable[str] | None = None,
 ) -> list[str]:
-    """A-tier proper names from outline + shots; recover well-known princes only if needed."""
+    """Proper names from outline + shots. Fold onto attached cards only."""
     outline_names = extract_proper_names(outline_body or "")
     shot_text = "\n".join(_row_prose(row)[2] for row in rows)
     shot_names = extract_proper_names(shot_text)
     names = fold_needed([*outline_names, *shot_names])
-    corpus = _corpus_from_rows(rows, outline_body)
-    has_group = bool(extract_group_labels(corpus))
-    has_prince = any("王子" in n and is_registerable_name(n) for n in names)
-    if has_group and not has_prince:
-        recovered: list[str] = []
-        for rx, canon in BRAND_TOKEN_RES:
-            if rx.search(corpus):
-                recovered.append(canon)
-        names = fold_needed([*names, *recovered])
-    for token in extract_bare_brands(corpus):
-        folded = fold_brand_to_pool(token, names)
-        if folded and is_registerable_name(folded):
-            names = fold_needed([*names, folded])
-    return names
+    attached = list(attached_names or ())
+    folded: list[str] = []
+    for name in names:
+        hit = fold_to_attached_name(name, attached) or name
+        if hit not in folded:
+            folded.append(hit)
+    return folded
 
 
 def _cast_name_index(cast: dict[str, Any] | None) -> tuple[dict[str, str], dict[str, str]]:
@@ -1337,26 +1188,24 @@ def collect_named_hits(
     Each hit: {name, shot_id, fields, kind: speaker|action|group, registerable: bool}
     """
     by_name, _ = _cast_name_index(cast)
+    attached = attached_names_from_cast(cast)
     pool: set[str] = set(by_name)
-    pool.update(infer_a_class_names(rows, outline_body=outline_body))
+    pool.update(infer_a_class_names(rows, outline_body=outline_body, attached_names=attached))
 
     for row in rows:
         action, dialogue, _ = _row_prose(row)
         for name in extract_speakers(dialogue) + extract_speakers(action):
-            if is_b_class(name) and not is_bare_brand(name):
+            if is_b_class(name, attached) and not is_attached_character_name(name, attached):
                 continue
-            if is_registerable_name(name):
-                pool.add(strip_dirty_prefix(name) or name)
+            if is_registerable_name(name, attached):
+                folded = fold_to_attached_name(name, attached)
+                pool.add(folded or strip_dirty_prefix(name) or name)
             else:
-                folded = fold_brand_to_pool(name, pool)
+                folded = fold_to_attached_name(name, attached) or fold_to_attached_name(name, pool)
                 if folded:
                     pool.add(folded)
         pool.update(extract_proper_names(action))
         pool.update(extract_proper_names(dialogue))
-        for token in extract_bare_brands(f"{action}\n{dialogue}"):
-            folded = fold_brand_to_pool(token, pool)
-            if folded:
-                pool.add(folded)
 
     hits: list[dict[str, Any]] = []
     for idx, row in enumerate(rows):
@@ -1368,7 +1217,7 @@ def collect_named_hits(
         for name in extract_speakers(dialogue):
             if is_system_speaker(name) or is_generic_ref(name):
                 continue
-            if is_b_class(name) and not is_group_label(name) and not is_bare_brand(name):
+            if is_b_class(name, attached) and not is_group_label(name) and not is_attached_character_name(name, attached):
                 continue
             cleaned = glue_paren_name(strip_dirty_prefix(name) or name)
             names[cleaned] = "group" if is_group_label(cleaned) else "speaker"
@@ -1376,14 +1225,14 @@ def collect_named_hits(
         for name in extract_speakers(action):
             if is_system_speaker(name) or is_generic_ref(name):
                 continue
-            if is_b_class(name) and not is_group_label(name) and not is_bare_brand(name):
+            if is_b_class(name, attached) and not is_group_label(name) and not is_attached_character_name(name, attached):
                 continue
             cleaned = glue_paren_name(strip_dirty_prefix(name) or name)
             names.setdefault(cleaned, "group" if is_group_label(cleaned) else "speaker")
             fields.add("action")
 
         for name in names_mentioned(combined, pool):
-            if is_b_class(name) and not is_group_label(name):
+            if is_b_class(name, attached) and not is_group_label(name) and not is_attached_character_name(name, attached):
                 continue
             if name in names:
                 continue
@@ -1391,13 +1240,6 @@ def collect_named_hits(
             if name in action:
                 fields.add("action")
             if name in dialogue:
-                fields.add("dialogue")
-
-        for token in extract_bare_brands(combined):
-            names.setdefault(token, "action")
-            if token in action:
-                fields.add("action")
-            if token in dialogue:
                 fields.add("dialogue")
 
         for name in extract_group_labels(combined):
@@ -1415,7 +1257,7 @@ def collect_named_hits(
                     "shot_id": shot_id,
                     "fields": field_list,
                     "kind": kind,
-                    "registerable": is_registerable_name(name),
+                    "registerable": is_registerable_name(name, attached),
                 }
             )
     return hits
@@ -1423,16 +1265,15 @@ def collect_named_hits(
 
 def resolve_hit_names(name: str, individual_pool: Iterable[str]) -> list[str]:
     glued = glue_paren_name(name)
-    if is_bare_prince_label(glued):
-        return expand_group("王子", individual_pool)
-    if is_group_label(glued) or is_generic_title(glued):
-        return expand_group(glued, individual_pool)
-    target = resolve_to_pool_name(glued, individual_pool)
+    pool = list(individual_pool)
+    if is_bare_prince_label(glued) or is_group_label(glued) or is_generic_title(glued):
+        return expand_group(glued, pool)
+    target = resolve_to_pool_name(glued, pool)
     if target:
         return [target]
-    if is_registerable_name(glued):
+    if is_registerable_name(glued, pool):
         return [strip_dirty_prefix(glued) or normalize_name(glued)]
-    folded = fold_brand_to_pool(glued, individual_pool)
+    folded = fold_to_attached_name(glued, pool)
     if folded:
         return [folded]
     return []
@@ -1498,8 +1339,9 @@ def collect_named_cast_issues(
         return []
     severity = named_cast_issue_severity(mode)
     by_name, _ = _cast_name_index(cast)
+    attached = attached_names_from_cast(cast)
     hits = collect_named_hits(rows, cast=cast, outline_body=outline_body)
-    a_class = infer_a_class_names(rows, outline_body=outline_body)
+    a_class = infer_a_class_names(rows, outline_body=outline_body, attached_names=attached)
     individual_pool = set(by_name) | {h["name"] for h in hits if h.get("registerable")} | set(a_class)
 
     issues: list[dict[str, Any]] = []
@@ -1520,7 +1362,7 @@ def collect_named_cast_issues(
         char_ids = [str(c) for c in ((row or {}).get("char_ids") or []) if str(c) != NONE_ID]
 
         if not resolved:
-            if is_b_class(hit["name"]) or is_group_label(hit["name"]):
+            if is_b_class(hit["name"], attached) or is_group_label(hit["name"]):
                 continue
             key = (shot_id, hit["name"])
             if key not in seen_missing:
@@ -1620,7 +1462,7 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
             if is_group_label(name) or is_generic_title(name):
                 mentioned.update(expand_group(name, pool))
                 continue
-            if is_b_class(name) and not is_bare_brand(name):
+            if is_b_class(name, pool) and not is_attached_character_name(name, pool):
                 continue
             target = resolve_to_pool_name(name, pool)
             if target:
@@ -1649,49 +1491,44 @@ def apply_char_id_wiring(rows: list[dict[str, Any]], name_to_id: dict[str, str])
     return out
 
 
-def _is_dirty_cast_name(name: str) -> bool:
-    if is_protected_lead(name) or is_a_tier_prince_name(name):
+def _is_dirty_cast_name(name: str, attached_names: Iterable[str] | None = None) -> bool:
+    if is_attached_character_name(name, attached_names):
         return False
     return (
-        is_banlist_name(name)
+        is_banlist_name(name, attached_names)
         or is_dialogue_fragment(name)
         or is_clause_fragment(name)
         or is_generic_title(name)
         or is_group_label(name)
         or is_system_speaker(name)
         or is_verb_phrase(name)
-        or is_bare_brand(name)
     )
 
 
-def _is_a_class_prince(name: str) -> bool:
-    if is_bare_brand(name):
-        return False
-    if is_a_tier_prince_name(name):
-        return True
-    if not is_registerable_name(name):
-        return False
+def _is_titled_cast_name(name: str) -> bool:
     key = normalize_name(name)
-    if "王子" in key:
-        return True
-    return brand_family(key) is not None
+    if not is_registerable_name(key):
+        return False
+    return any(key.endswith(title) for title in TITLES)
 
 
 def prune_dirty_cast_characters(cast: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Merge-time reject: drop B-class CHAR rows. Not a post-hoc dogfood edit.
-
-    Protects 程序员/豆包 and A-tier princes / library-backed rows.
-    """
+    """Merge-time reject: drop B-class CHAR rows. Never drop attached/library rows."""
     if not isinstance(cast, dict):
         return []
     chars = list(cast.get("characters") or [])
+    attached = attached_names_from_rows(chars)
     kept: list[dict[str, Any]] = []
     removed: list[dict[str, Any]] = []
     for row in chars:
         if not isinstance(row, dict):
             continue
         name = str(row.get("name") or "")
-        if row.get("library_ref") or is_protected_lead(name) or is_a_tier_prince_name(name) or is_registerable_name(name):
+        if (
+            row.get("library_ref")
+            or is_attached_character_name(name, attached)
+            or is_registerable_name(name, attached)
+        ):
             kept.append(row)
             continue
         removed.append({"id": row.get("id"), "name": name})
@@ -1701,23 +1538,16 @@ def prune_dirty_cast_characters(cast: dict[str, Any] | None) -> list[dict[str, A
     return removed
 
 
-def _shot_prince_signal(row: dict[str, Any]) -> bool:
-    """True when a shot mentions princes/brands after stripping system-voice spans."""
+def _shot_group_signal(row: dict[str, Any]) -> bool:
+    """True when a shot mentions a collection label or confrontation after stripping VO."""
     _action, _dialogue, combined = _row_prose(row)
     cleaned = strip_system_spans(combined)
     if not cleaned.strip():
         return False
     if extract_group_labels(cleaned):
         return True
-    if "王子" in cleaned:
-        return True
-    if LATIN_BRAND_TOKEN_RE.search(cleaned):
-        return True
     if any(marker in cleaned for marker in CONFRONTATION_MARKERS):
         return True
-    for name in extract_speakers(cleaned):
-        if is_bare_brand(name) or brand_family(name):
-            return True
     return False
 
 
@@ -1725,12 +1555,17 @@ def hang_orphan_princes(
     rows: list[dict[str, Any]],
     cast: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    """A-class prince rows in cast must appear on ≥1 prince-signal shot."""
+    """Unused attached/titled cast rows hang onto group-label shots."""
     by_name, _ = _cast_name_index(cast)
-    prince_ids = [cid for name, cid in by_name.items() if _is_a_class_prince(name)]
-    if not prince_ids:
+    attached = attached_names_from_cast(cast)
+    titled_ids = [
+        cid
+        for name, cid in by_name.items()
+        if _is_titled_cast_name(name) or is_attached_character_name(name, attached)
+    ]
+    if not titled_ids:
         return rows
-    appearance = {cid: 0 for cid in prince_ids}
+    appearance = {cid: 0 for cid in titled_ids}
     for row in rows:
         for cid in row.get("char_ids") or []:
             ident = str(cid)
@@ -1739,7 +1574,7 @@ def hang_orphan_princes(
     orphans = [cid for cid, count in appearance.items() if count == 0]
     if not orphans:
         return rows
-    signal_idxs = [idx for idx, row in enumerate(rows) if _shot_prince_signal(row)]
+    signal_idxs = [idx for idx, row in enumerate(rows) if _shot_group_signal(row)]
     if not signal_idxs:
         return rows
     out = [dict(row) for row in rows]
@@ -1753,11 +1588,17 @@ def hang_orphan_princes(
 
 
 def prune_dirty_char_ids(rows: list[dict[str, Any]], cast: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Drop half-line / generic-title ids from shots so S04-like rows only keep A slots."""
+    """Drop half-line / generic-title ids from shots. Keep attached rows."""
+    attached = attached_names_from_cast(cast)
     by_id = {
         str(row["id"]): str(row.get("name") or "")
         for row in ((cast or {}).get("characters") or [])
         if isinstance(row, dict) and row.get("id")
+    }
+    lib_ids = {
+        str(row["id"])
+        for row in ((cast or {}).get("characters") or [])
+        if isinstance(row, dict) and row.get("id") and row.get("library_ref")
     }
     out: list[dict[str, Any]] = []
     for row in rows:
@@ -1768,7 +1609,11 @@ def prune_dirty_char_ids(rows: list[dict[str, Any]], cast: dict[str, Any] | None
             if not ident or ident == NONE_ID:
                 continue
             name = by_id.get(ident) or ident
-            if _is_dirty_cast_name(name) or _is_dirty_cast_name(ident):
+            if ident in lib_ids or is_attached_character_name(name, attached):
+                if ident not in kept:
+                    kept.append(ident)
+                continue
+            if _is_dirty_cast_name(name, attached) or _is_dirty_cast_name(ident, attached):
                 continue
             if ident not in kept:
                 kept.append(ident)
@@ -1802,35 +1647,37 @@ def auto_merge_named_cast(
         return rows, []
     prune_dirty_cast_characters(cast)
     outline_body = (rec.get("outline") or {}).get("body_md")
+    attached = attached_names_from_cast(cast)
     hits = collect_named_hits(rows, cast=cast, outline_body=outline_body)
     by_name, _ = _cast_name_index(cast)
-    a_class = infer_a_class_names(rows, outline_body=outline_body)
+    a_class = infer_a_class_names(rows, outline_body=outline_body, attached_names=attached)
     individual_pool = set(by_name) | {h["name"] for h in hits if h.get("registerable")} | set(a_class)
 
     needed: list[str] = []
     for name in a_class:
-        target = resolve_to_pool_name(name, individual_pool) or fold_brand_to_pool(name, individual_pool) or name
-        if target not in by_name and target not in needed and is_registerable_name(target):
+        target = resolve_to_pool_name(name, individual_pool) or fold_to_attached_name(name, attached)
+        if target is None:
+            target = name
+        if fold_to_attached_name(target, attached):
+            continue
+        if target not in by_name and target not in needed and is_registerable_name(target, attached):
             needed.append(target)
     for hit in hits:
         for name in resolve_hit_names(hit["name"], individual_pool):
-            target = resolve_to_pool_name(name, individual_pool) or fold_brand_to_pool(name, individual_pool) or name
-            if target not in by_name and target not in needed and is_registerable_name(target):
+            target = resolve_to_pool_name(name, individual_pool) or fold_to_attached_name(name, attached)
+            if target is None:
+                target = name
+            if fold_to_attached_name(target, attached):
+                continue
+            if target not in by_name and target not in needed and is_registerable_name(target, attached):
                 needed.append(target)
     needed = fold_needed(needed)
 
-    canon_existing = _existing_canonical(by_name)
     filtered: list[str] = []
     for name in needed:
-        core = _title_core(name) or name.casefold()
-        if core in canon_existing:
-            # near-duplicate of an already-listed row — reuse, do not open CHAR
-            continue
-        fam = brand_family(name)
-        if fam and any(brand_family(existing) == fam for existing in by_name):
+        if fold_to_attached_name(name, attached) or fold_to_attached_name(name, by_name):
             continue
         filtered.append(name)
-        canon_existing[core] = name
     needed = filtered
 
     added: list[dict[str, Any]] = []

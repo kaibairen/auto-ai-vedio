@@ -667,8 +667,8 @@ paths:
             schema:
               $ref: '#/components/schemas/SidecarAddCharacterRequest'
             example:
-              name: CODEX王子
-              one_line: 弹窗反派
+              name: 预挂丙将军
+              one_line: 侧车配角
               actor: yangzhou
       responses:
         '200':

@@ -30,7 +30,7 @@ def _write(rows, **kw):
     return StoryboardWrite.model_validate({"rows": rows, **kw})
 
 
-def _prince_rows(scene: str, lead: str) -> list[dict]:
+def _titled_rows(scene: str, lead: str) -> list[dict]:
     return [
         sample_row(
             shot_id="S01",
@@ -38,14 +38,14 @@ def _prince_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             action="求婚式弹窗弹出",
-            dialogue="CODEX王子：嫁给我。",
+            dialogue="预挂丙将军：站住。",
         ),
         sample_row(
             shot_id="S02",
             seq=2,
             scene_id=scene,
             char_ids=[lead],
-            action="OPUS5.5王子破屏而入",
+            action="预挂丁将军破屏而入",
             dialogue=None,
         ),
         sample_row(
@@ -53,8 +53,8 @@ def _prince_rows(scene: str, lead: str) -> list[dict]:
             seq=3,
             scene_id=scene,
             char_ids=[lead],
-            action="身后两位王子怒吼追来",
-            dialogue="王子们：给我追！",
+            action="身后两位将军怒吼追来",
+            dialogue="将军们：给我追！",
         ),
         sample_row(
             shot_id="S04",
@@ -69,29 +69,29 @@ def _prince_rows(scene: str, lead: str) -> list[dict]:
 
 
 def test_extract_speakers_and_groups():
-    assert extract_speakers("CODEX王子：嫁给我。") == ["CODEX王子"]
+    assert extract_speakers("预挂丙将军：站住。") == ["预挂丙将军"]
     assert extract_speakers("系统音：通缉令发布。") == ["系统音"]
     hits = collect_named_hits(
         [
             {
                 "shot_id": "S01",
-                "action": "OPUS5.5王子破屏而入",
-                "dialogue": "CODEX王子：站住",
+                "action": "预挂丁将军破屏而入",
+                "dialogue": "预挂丙将军：站住",
                 "char_ids": [],
             },
             {
                 "shot_id": "S02",
-                "action": "王子们追来",
+                "action": "将军们追来",
                 "dialogue": None,
                 "char_ids": [],
             },
         ]
     )
     names = {h["name"] for h in hits}
-    assert "CODEX王子" in names
-    assert "OPUS5.5王子" in names
-    assert "王子们" in names
-    assert expand_group("王子们", ["CODEX王子", "OPUS5.5王子", "林晚"]) == ["CODEX王子", "OPUS5.5王子"]
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "将军们" in names
+    assert expand_group("将军们", ["预挂丙将军", "预挂丁将军", "林晚"]) == ["预挂丙将军", "预挂丁将军"]
 
 
 def test_collect_issues_system_vo_not_named_cast():
@@ -126,7 +126,7 @@ def test_o1_auto_merge_on_generate_keeps_g1b_and_outline(svc, monkeypatch):
     def fake_rows(settings, **kw):
         scene = (kw["cast"].get("scenes") or [{}])[0].get("id") or "SCENE-01"
         lead = (kw["cast"].get("characters") or [{}])[0].get("id") or "CHAR-01"
-        return _prince_rows(scene, lead)
+        return _titled_rows(scene, lead)
 
     monkeypatch.setattr("aiv_drama_n2.ops.generate_rows", fake_rows)
     env = svc.generate_storyboard(
@@ -134,9 +134,9 @@ def test_o1_auto_merge_on_generate_keeps_g1b_and_outline(svc, monkeypatch):
     )
     rec = svc._rec(pid, "EP01")
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
-    assert "CODEX王子" in by_name
-    assert "OPUS5.5王子" in by_name
-    assert "王子们" not in by_name
+    assert "预挂丙将军" in by_name
+    assert "预挂丁将军" in by_name
+    assert "将军们" not in by_name
     assert "系统音" not in by_name
     assert rec["cast"]["version"] == cast_ver + 1
     assert rec["cast"]["locked"] is True
@@ -149,10 +149,10 @@ def test_o1_auto_merge_on_generate_keeps_g1b_and_outline(svc, monkeypatch):
     assert rec["episode"]["locks"]["g1b"] is True
     assert rec["episode"]["status"] == "locked_g1b"
     rows = {r["shot_id"]: r for r in env["storyboard"]["rows"]}
-    assert by_name["CODEX王子"] in rows["S01"]["char_ids"]
-    assert by_name["OPUS5.5王子"] in rows["S02"]["char_ids"]
-    assert by_name["CODEX王子"] in rows["S03"]["char_ids"]
-    assert by_name["OPUS5.5王子"] in rows["S03"]["char_ids"]
+    assert by_name["预挂丙将军"] in rows["S01"]["char_ids"]
+    assert by_name["预挂丁将军"] in rows["S02"]["char_ids"]
+    assert by_name["预挂丙将军"] in rows["S03"]["char_ids"]
+    assert by_name["预挂丁将军"] in rows["S03"]["char_ids"]
     assert env.get("cast_changed") is True
     assert any(w["code"] == "named_cast_auto_merged" for w in env.get("validate_warnings") or [])
     val = svc.validate_storyboard(pid, "EP01")
@@ -173,8 +173,8 @@ def test_o2_sidecar_add_does_not_unlock_g1b_or_rewrite_outline(svc):
     env = svc.sidecar_add_character(
         pid,
         "EP01",
-        SidecarAddCharacterRequest(name="CODEX王子", one_line="弹窗反派", actor="yangzhou"),
-        raw={"name": "CODEX王子", "one_line": "弹窗反派"},
+        SidecarAddCharacterRequest(name="预挂丙将军", one_line="侧车配角", actor="yangzhou"),
+        raw={"name": "预挂丙将军", "one_line": "侧车配角"},
     )
     rec = svc._rec(pid, "EP01")
     assert rec["gate"]["locked"] is True
@@ -190,13 +190,13 @@ def test_o2_sidecar_add_does_not_unlock_g1b_or_rewrite_outline(svc):
     assert rec["episode"]["next_edges"] == ["D-N2"]
     assert env.get("cast_changed") is True
     assert any(h.get("code") == "cast_changed" for h in env.get("hints") or [])
-    prince = next(c for c in rec["cast"]["characters"] if c["name"] == "CODEX王子")
-    assert prince["one_line"] == "弹窗反派"
+    titled = next(c for c in rec["cast"]["characters"] if c["name"] == "预挂丙将军")
+    assert titled["one_line"] == "侧车配角"
     again = svc.sidecar_add_character(
-        pid, "EP01", SidecarAddCharacterRequest(name="CODEX王子"), raw={"name": "CODEX王子"}
+        pid, "EP01", SidecarAddCharacterRequest(name="预挂丙将军"), raw={"name": "预挂丙将军"}
     )
     assert again["cast"]["version"] == rec["cast"]["version"]
-    assert sum(1 for c in again["cast"]["characters"] if c["name"] == "CODEX王子") == 1
+    assert sum(1 for c in again["cast"]["characters"] if c["name"] == "预挂丙将军") == 1
 
 
 def test_o5_warn_valid_but_g2_product_gate_blocks(svc):
@@ -211,12 +211,12 @@ def test_o5_warn_valid_but_g2_product_gate_blocks(svc):
             scene_id=scene,
             char_ids=[lead],
             action="弹窗弹出",
-            dialogue="CODEX王子：嫁给我。",
+            dialogue="预挂丙将军：站住。",
         )
     ]
     env = svc.put_storyboard(pid, "EP01", _write(rows), raw={"rows": rows})
     assert env["ok"] is True
-    assert "CODEX王子" not in {c["name"] for c in svc._rec(pid, "EP01")["cast"]["characters"]}
+    assert "预挂丙将军" not in {c["name"] for c in svc._rec(pid, "EP01")["cast"]["characters"]}
     assert {c["name"] for c in svc._rec(pid, "EP01")["cast"]["characters"]} == names_before
     codes = {w["code"] for w in env.get("validate_warnings") or []}
     assert NAMED_CAST_MISSING in codes
@@ -244,7 +244,7 @@ def test_o5_error_mode_hard_fail_on_put(svc):
             scene_id=scene,
             char_ids=[lead],
             action="弹窗弹出",
-            dialogue="CODEX王子：嫁给我。",
+            dialogue="预挂丙将军：站住。",
         )
     ]
     exc = _err(lambda: svc.put_storyboard(pid, "EP01", _write(rows), raw={"rows": rows}))
@@ -264,7 +264,7 @@ def test_o5_off_does_not_emit_or_block_g2(svc):
             scene_id=scene,
             char_ids=[lead],
             action="弹窗弹出",
-            dialogue="CODEX王子：嫁给我。",
+            dialogue="预挂丙将军：站住。",
         )
     ]
     env = svc.put_storyboard(pid, "EP01", _write(rows), raw={"rows": rows})
@@ -284,16 +284,16 @@ def test_sidecar_then_put_wires_and_g2_can_pass(svc):
     scene = rec["cast"]["scenes"][0]["id"]
     lead = rec["cast"]["characters"][0]["id"]
     svc.sidecar_add_character(
-        pid, "EP01", SidecarAddCharacterRequest(name="CODEX王子"), raw={"name": "CODEX王子"}
+        pid, "EP01", SidecarAddCharacterRequest(name="预挂丙将军"), raw={"name": "预挂丙将军"}
     )
     rec = svc._rec(pid, "EP01")
-    prince = next(c for c in rec["cast"]["characters"] if c["name"] == "CODEX王子")
+    titled = next(c for c in rec["cast"]["characters"] if c["name"] == "预挂丙将军")
     rows = [
         sample_row(
             scene_id=scene,
-            char_ids=[lead, prince["id"]],
+            char_ids=[lead, titled["id"]],
             action="弹窗弹出",
-            dialogue="CODEX王子：嫁给我。",
+            dialogue="预挂丙将军：站住。",
         )
     ]
     svc.put_storyboard(pid, "EP01", _write(rows), raw={"rows": rows})
@@ -310,7 +310,7 @@ def test_named_cast_issue_shape_uses_named_cast_prefix():
             sample_row(
                 scene_id="SCENE-01",
                 char_ids=["CHAR-01"],
-                dialogue="CODEX王子：嫁给我。",
+                dialogue="预挂丙将军：站住。",
                 action="弹窗",
             )
         ],

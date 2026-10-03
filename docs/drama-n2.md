@@ -31,13 +31,13 @@
 | **O6** | `shot_cap` 继承 outline；硬上限 **≤12**；超限 `shot_cap_exceeded` |
 | **O7** | 景别/运镜 **英文短码**入库/落盘；中文标签仅 UI（本批无薄 FE） |
 | **O9** | `tool_profile` 可空不挡 G2；未选禁 `ready_for_n4` |
-| **020 P0-A** | B 档（`【系统音】`/弹窗/旁白/广播半截/动词短语/脏前缀）**不得**开 CHAR；A 档王子专名入表+挂镜；「两王子」解析到个体槽 |
+| **020 P0-A** | B 档（`【系统音】`/弹窗/旁白/广播半截/动词短语/脏前缀）**不得**开 CHAR；姓名只来自本集预挂人物卡，前缀/后缀折回同一 id；「两位将军」解析到已挂个体槽 |
 | **020 P0-B** | generate 时长默认吸附到 **{5,8,10}**（profile 空也吸附，bucket 仍 null）；选 `tool_profile` 后硬吸附且 duration↔bucket 同秒 |
 | **020 P0-C** | generate/GET/validate 落盘 `skill_paths` + `skill_excerpt` + `skill_trace`；`n2_request` 备证 |
-| **023 P0-A** | Banlist B-ACT/TAG/FRAG/GEN + 裸 CURSOR/CODEX **不得**开 CHAR；护 程序员/豆包 与 A 档王子专名。清零= classifier/merge，≠事后手删卡 |
+| **023 P0-A** | Banlist B-ACT/TAG/FRAG/GEN **不得**开 CHAR。无剧集专名白名单。已挂行不因通用头衔分类被丢掉。清零= classifier/merge，≠事后手删卡 |
 | **023 P1-3** | 类 D 运镜（HANDHELD/WHIP_*/ORBIT/DOLLY_ZOOM/ROLL）生成默认+吸附 **duration_s≥8**；有 profile 仍低于 8 → `duration_below_camera_floor` |
 | **025 A** | Class-D 闭集不变；D≥8 **不回退**。条数/种类加厚为 **SHOULD** warn（`class_d_count_below_suggest` / `class_d_kinds_below_suggest` / `class_d_monoculture`），**不**单独挡 `ready_for_n4`，不可 ForcePass |
-| **025 B** | named_cast **name 槽**扩 DENY（LK-01…06 近邻）；护 01–04 / Acc#1/#2；one_line/大纲散文「技术王子」「两位王子」**不**当 name 拒 |
+| **025 B** | named_cast **name 槽**：姓名只来自本集预挂卡；前缀/后缀折回同一 id；对不上则不硬折；漏库新角色仍按 §5.2 新开 id。one_line/大纲散文里的头衔**不**当 name 拒 |
 
 ---
 
@@ -74,7 +74,7 @@ aiv drama storyboard generate --project proj_01 --ep EP01 --provider fixture
 # export AIV_OPENAI_MODEL=deepseek-chat
 aiv drama storyboard generate --project proj_01 --ep EP01 --provider llm
 # 侧车加角（不拆 G1b / 不改大纲正文）
-aiv drama cast sidecar-add --project proj_01 --ep EP01 --name CODEX王子 --one-line 弹窗反派
+aiv drama cast sidecar-add --project proj_01 --ep EP01 --name 预挂丙将军 --one-line 侧车配角
 aiv drama storyboard validate --project proj_01 --ep EP01
 aiv drama g2 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 aiv drama storyboard get --project proj_01 --ep EP01

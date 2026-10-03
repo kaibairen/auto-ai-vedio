@@ -15,7 +15,9 @@ from aiv_drama_n2.named_cast import (
     auto_merge_named_cast,
     classify_char_banlist,
     collect_named_hits,
+    fold_to_attached_name,
     is_a_tier_prince_name,
+    is_attached_character_name,
     is_banlist_name,
     is_protected_lead,
     is_registerable_name,
@@ -23,7 +25,6 @@ from aiv_drama_n2.named_cast import (
     is_spatial_scene_name,
     is_system_speaker,
     resolve_hit_names,
-    resolve_to_pool_name,
 )
 from aiv_drama_n3.cards import materialize_cards
 from aiv_drama_n2.skill_evidence import excerpt_borrowed_dongman
@@ -42,59 +43,41 @@ from aiv_drama_n2.validate import (
 from tests.drama.helpers import lock_g1b, sample_row, seed_project_episode
 
 ALLOW_025 = (
-    "程序员",
-    "豆包",
-    "GPT(CODEX)王子",
-    "Opus5.5(CURSOR)王子",
-    "GPT王子",
-    "Opus5.5王子",
-    "CODEX王子",
-    "CURSOR(Opus5.5)王子",
+    "预挂甲",
+    "预挂乙",
+    "预挂丙将军",
+    "预挂丁将军",
 )
 
 DENY_025 = (
-    ("正统王子", "B-TAG"),
-    ("体验王子", "B-TAG"),
-    ("重构王子", "B-TAG"),
-    ("回滚王子", "B-TAG"),
-    ("弹窗王子", "B-TAG"),
-    ("破防王子", "B-TAG"),
-    ("联猎王子", "B-TAG"),
-    ("双屏王子", "B-TAG"),
-    ("窗口王子", "B-TAG"),
-    ("拆穿两位王子", "B-ACT"),
-    ("吐槽程序员", "B-ACT"),
-    ("吐槽程序员族", "B-ACT"),
-    ("端水豆包", "B-ACT"),
-    ("追杀程序员", "B-ACT"),
-    ("屏幕里两位王子", "B-GEN"),
-    ("弹幕里两位王子", "B-GEN"),
-    ("双窗两位王子", "B-GEN"),
-    ("IDE里两位王子", "B-GEN"),
-    ("门外两位王子", "B-GEN"),
-    ("幕外两位王子", "B-GEN"),
-    ("王子", "B-GEN"),
-    ("最优解", "B-TAG"),
-    ("最贵解", "B-TAG"),
-    ("联猎", "B-TAG"),
-    ("非技术型AI", "B-TAG"),
-    ("联猎非技术型AI", "B-TAG"),
+    ("弹窗将军", "B-TAG"),
+    ("双屏将军", "B-TAG"),
+    ("窗口将军", "B-TAG"),
+    ("爽点将军", "B-TAG"),
+    ("拆穿两位将军", "B-ACT"),
+    ("吐槽预挂甲", "B-ACT"),
+    ("端水预挂乙", "B-ACT"),
+    ("追杀预挂甲", "B-ACT"),
+    ("屏幕里两位将军", "B-GEN"),
+    ("弹幕里两位将军", "B-GEN"),
+    ("双窗两位将军", "B-GEN"),
+    ("门外两位将军", "B-GEN"),
+    ("幕外两位将军", "B-GEN"),
+    ("将军", "B-GEN"),
     ("代码库已冻结", "B-FRAG"),
     ("倒计时开始", "B-FRAG"),
-    ("清除非技术型AI", "B-FRAG"),
-    ("吐槽两位王子", "B-ACT"),
-    ("技术王子", "B-TAG"),
-    ("幕里两位王子", "B-GEN"),
+    ("吐槽两位将军", "B-ACT"),
+    ("幕里两位将军", "B-GEN"),
 )
 
 CAST_025 = {
     "characters": [
-        {"id": "CHAR-01", "name": "程序员", "one_line": "男主"},
-        {"id": "CHAR-02", "name": "豆包", "one_line": "破局"},
-        {"id": "CHAR-03", "name": "GPT(CODEX)王子", "one_line": "CODEX王国技术王子"},
-        {"id": "CHAR-04", "name": "Opus5.5(CURSOR)王子", "one_line": "CURSOR王国回滚王子"},
+        {"id": "CHAR-01", "name": "预挂甲", "one_line": "男主"},
+        {"id": "CHAR-02", "name": "预挂乙", "one_line": "破局"},
+        {"id": "CHAR-03", "name": "预挂丙将军", "one_line": "职司描述可写在一句话"},
+        {"id": "CHAR-04", "name": "预挂丁将军", "one_line": "旁观即可"},
     ],
-    "scenes": [{"id": "SCENE-01", "name": "侧边栏空间"}],
+    "scenes": [{"id": "SCENE-01", "name": "茶水间空间"}],
 }
 
 
@@ -135,11 +118,14 @@ def test_025_allow_guards_and_new_denies():
         assert classify_char_banlist(name) == "ALLOW", name
         assert is_registerable_name(name), name
         assert not is_banlist_name(name), name
-    assert is_protected_lead("程序员") and is_protected_lead("豆包")
-    assert is_a_tier_prince_name("GPT(CODEX)王子")
-    assert is_a_tier_prince_name("Opus5.5(CURSOR)王子")
-    assert not is_a_tier_prince_name("回滚王子")
-    assert not is_a_tier_prince_name("重构王子")
+    assert is_protected_lead("预挂甲", ALLOW_025) and is_protected_lead("预挂乙", ALLOW_025)
+    assert is_protected_lead("小预挂甲", ALLOW_025)
+    assert is_attached_character_name("预挂乙大人", ALLOW_025)
+    assert not is_protected_lead("预挂甲")
+    assert is_a_tier_prince_name("预挂丙将军", ALLOW_025)
+    assert not is_a_tier_prince_name("弹窗将军", ALLOW_025)
+    assert fold_to_attached_name("小预挂甲", ALLOW_025) == "预挂甲"
+    assert fold_to_attached_name("预挂戊", ALLOW_025) is None
     for name, code in DENY_025:
         assert classify_char_banlist(name) == code, (name, classify_char_banlist(name))
         assert is_banlist_name(name), name
@@ -150,8 +136,8 @@ def test_025_name_slot_only_prose_does_not_kill_allow_rows():
     rec = {
         "outline": {
             "body_md": (
-                "1. 开钩\n程序员与豆包\nCODEX王国技术王子与两位王子同时下达\n"
-                "CURSOR王国回滚王子旁观\n"
+                "1. 开钩\n预挂甲与预挂乙\n职司描述与两位将军同时下达\n"
+                "旁观即可写在一句话\n"
             )
         },
         "cast": {
@@ -174,49 +160,41 @@ def test_025_name_slot_only_prose_does_not_kill_allow_rows():
             seq=1,
             scene_id="SCENE-01",
             char_ids=["CHAR-01"],
-            action="两位王子同时下达，技术王子只是职司描述",
-            dialogue="程序员：最优解先放一边。",
+            action="两位将军同时下达，职司描述只写在一句话",
+            dialogue="预挂甲：口号先放一边。",
         )
     ]
     hits = collect_named_hits(rows, cast=rec["cast"], outline_body=rec["outline"]["body_md"])
     registerable = {h["name"] for h in hits if h.get("registerable")}
-    assert "技术王子" not in registerable
-    assert "回滚王子" not in registerable
-    assert "两位王子" not in registerable
-    assert "最优解" not in registerable
+    assert "两位将军" not in registerable
 
     out_rows, _added = auto_merge_named_cast(rec, rows, alloc_char=alloc)
     names = [c["name"] for c in rec["cast"]["characters"]]
-    assert "程序员" in names and "豆包" in names
-    assert "GPT(CODEX)王子" in names
-    assert "Opus5.5(CURSOR)王子" in names
-    assert "技术王子" not in names
-    assert "回滚王子" not in names
-    assert "两位王子" not in names
-    assert "最优解" not in names
+    assert "预挂甲" in names and "预挂乙" in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "两位将军" not in names
     by_id = {c["id"]: c["name"] for c in rec["cast"]["characters"]}
-    assert by_id["CHAR-03"] == "GPT(CODEX)王子"
-    assert "技术王子" in by_id["CHAR-03"] or rec["cast"]["characters"][2]["one_line"] == "CODEX王国技术王子"
-    assert rec["cast"]["characters"][3]["one_line"] == "CURSOR王国回滚王子"
+    assert by_id["CHAR-03"] == "预挂丙将军"
+    assert rec["cast"]["characters"][3]["one_line"] == "旁观即可"
     hung = {cid for r in out_rows for cid in r["char_ids"]}
     assert "CHAR-01" in hung
 
 
-def test_025_bare_prince_folds_to_existing_a_tier():
-    pool = ["GPT(CODEX)王子", "Opus5.5(CURSOR)王子", "程序员", "豆包"]
-    assert resolve_to_pool_name("Opus王子", pool) in {"Opus5.5(CURSOR)王子", "Opus5.5王子"}
-    folded = resolve_hit_names("王子", pool)
-    assert "GPT(CODEX)王子" in folded
-    assert "Opus5.5(CURSOR)王子" in folded
-    assert "王子" not in folded
-    assert classify_char_banlist("王子") == "B-GEN"
-    assert not is_registerable_name("王子")
+def test_025_bare_title_folds_to_existing_titled():
+    pool = ["预挂丙将军", "预挂丁将军", "预挂甲", "预挂乙"]
+    folded = resolve_hit_names("将军", pool)
+    assert "预挂丙将军" in folded
+    assert "预挂丁将军" in folded
+    assert "将军" not in folded
+    assert classify_char_banlist("将军") == "B-GEN"
+    assert not is_registerable_name("将军")
 
 
-def test_025_sidecar_rejects_leaks_keeps_a_tier(svc):
+def test_025_sidecar_rejects_leaks_keeps_new_registerable(svc):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
-    for dirty in ("回滚王子", "最优解", "弹幕里两位王子", "代码库已冻结"):
+    for dirty in ("吐槽两位将军", "弹幕里两位将军", "代码库已冻结"):
         exc = _err(
             lambda name=dirty: svc.sidecar_add_character(
                 pid, "EP01", SidecarAddCharacterRequest(name=name), raw={"name": name}
@@ -227,14 +205,14 @@ def test_025_sidecar_rejects_leaks_keeps_a_tier(svc):
     env = svc.sidecar_add_character(
         pid,
         "EP01",
-        SidecarAddCharacterRequest(name="Opus5.5(CURSOR)王子", one_line="CURSOR王国回滚王子"),
-        raw={"name": "Opus5.5(CURSOR)王子"},
+        SidecarAddCharacterRequest(name="预挂丙将军", one_line="职司写在一句话"),
+        raw={"name": "预挂丙将军"},
     )
     names = [c["name"] for c in env["cast"]["characters"]]
-    assert "Opus5.5(CURSOR)王子" in names
-    assert "回滚王子" not in names
-    prince = next(c for c in env["cast"]["characters"] if c["name"] == "Opus5.5(CURSOR)王子")
-    assert "回滚王子" in (prince.get("one_line") or "")
+    assert "预挂丙将军" in names
+    assert "吐槽两位将军" not in names
+    titled = next(c for c in env["cast"]["characters"] if c["name"] == "预挂丙将军")
+    assert "职司" in (titled.get("one_line") or "")
 
 
 def test_class_d_closed_set_excludes_push_pull():
@@ -247,7 +225,6 @@ def test_class_d_closed_set_excludes_push_pull():
 
 
 def test_class_d_suggest_warns_on_thin_12_shot_do_not_block_n4():
-    # eng-023 shape: 3 Class-D / 3 kinds on a 12-shot board.
     cameras = [
         "STATIC",
         "PUSH",
@@ -309,7 +286,6 @@ def test_class_d_monoculture_and_thick_board_clear():
             "TRACK",
         ]
     )
-    # 6 Class-D / 6 kinds, max 1 ≤ ceil(6/2)=3 → no suggest warns
     thick_issues = collect_class_d_suggest_issues(thick)
     assert thick_issues == []
 
@@ -318,7 +294,7 @@ def test_class_d_short_board_uses_lower_suggest():
     short = _board(["WHIP_PUSH", "ORBIT", "HANDHELD", "STATIC", "PUSH", "PULL"])
     assert len(short) <= 8
     issues = collect_class_d_suggest_issues(short)
-    assert issues == []  # 3 count / 3 kinds meets short-board SHOULD
+    assert issues == []
     thinner = _board(["WHIP_PUSH", "WHIP_PUSH", "STATIC", "PUSH", "PULL", "PAN_H"])
     thin_codes = {i["code"] for i in collect_class_d_suggest_issues(thinner)}
     assert CLASS_D_COUNT_BELOW_SUGGEST in thin_codes
@@ -366,7 +342,7 @@ def test_storyboard_skill_excerpt_has_class_d_guidance(svc):
     llm = Path(svc.settings.repo_root) / "packages" / "drama-n2-core" / "aiv_drama_n2" / "provider" / "llm.py"
     rules = llm.read_text(encoding="utf-8")
     assert "ceil(D_count/2)" in rules or "ceil" in rules
-    assert "回滚王子" in rules
+    assert "preattached character card" in rules
     assert "NAME slot only" in rules
 
 
@@ -404,42 +380,46 @@ def test_025_validate_suggest_on_generated_fixture_is_warn_only(svc):
     assert not any(i.get("severity") == "error" and i["code"] in CLASS_D_SUGGEST_CODES for i in val["issues"])
 
 
-def test_025_scene_popup_space_allow_char_popup_prince_deny():
-    """eng-025 live: SCENE 弹窗空间 must materialize; CHAR 弹窗王子 stays DENY."""
+def test_025_scene_popup_space_allow_char_popup_title_deny():
     assert is_spatial_scene_name("弹窗空间")
     assert not is_scene_b_class("弹窗空间")
-    # CHAR path still sees the 弹窗 prefix; SCENE bucket must not inherit that skip.
     assert is_system_speaker("弹窗空间")
     assert is_system_speaker("弹窗")
     assert is_scene_b_class("弹窗")
     assert is_scene_b_class("系统音")
-    assert classify_char_banlist("弹窗王子") == "B-TAG"
-    assert is_banlist_name("弹窗王子")
-    assert not is_registerable_name("弹窗王子")
+    assert classify_char_banlist("弹窗将军") == "B-TAG"
+    assert is_banlist_name("弹窗将军")
+    assert not is_registerable_name("弹窗将军")
     assert classify_char_banlist("弹窗") != "ALLOW"
     assert is_banlist_name("系统音") or is_system_speaker("系统音")
     for name in (
-        "侧边栏空间",
-        "避难所门厅",
-        "深夜IDE战场",
-        "侧边栏奶茶时刻",
-        "开源避难所入口",
+        "茶水间空间",
+        "营帐门厅",
+        "深夜战场",
+        "茶水间时刻",
+        "营帐入口",
     ):
         assert is_spatial_scene_name(name) or not is_scene_b_class(name), name
         assert not is_scene_b_class(name), name
 
     cast = {
         "characters": [
-            {"id": "CHAR-01", "name": "程序员", "one_line": "男主"},
-            {"id": "CHAR-05", "name": "弹窗王子", "one_line": "脏TAG"},
+            {"id": "CHAR-01", "name": "预挂甲", "one_line": "男主"},
+            {"id": "CHAR-05", "name": "弹窗将军", "one_line": "脏TAG"},
             {"id": "CHAR-06", "name": "系统音", "one_line": "VO"},
             {"id": "CHAR-07", "name": "弹窗", "one_line": "裸系统"},
+            {
+                "id": "CHAR-08",
+                "name": "弹窗将军",
+                "one_line": "已挂不得因头衔丢掉",
+                "library_ref": {"id": "CHAR-08", "version": 1},
+            },
         ],
         "scenes": [
-            {"id": "SCENE-01", "name": "侧边栏空间", "one_line": "陪伴"},
-            {"id": "SCENE-02", "name": "避难所门厅", "one_line": "门厅"},
+            {"id": "SCENE-01", "name": "茶水间空间", "one_line": "陪伴"},
+            {"id": "SCENE-02", "name": "营帐门厅", "one_line": "门厅"},
             {"id": "SCENE-03", "name": "弹窗空间", "one_line": "双窗对撞"},
-            {"id": "SCENE-04", "name": "深夜IDE战场", "one_line": "战场"},
+            {"id": "SCENE-04", "name": "深夜战场", "one_line": "战场"},
             {"id": "SCENE-05", "name": "系统音", "one_line": "误用系统名"},
         ],
     }
@@ -457,34 +437,34 @@ def test_025_scene_popup_space_allow_char_popup_prince_deny():
     assert "CHAR-05" not in char_ids
     assert "CHAR-06" not in char_ids
     assert "CHAR-07" not in char_ids
+    assert "CHAR-08" in char_ids
     assert "SCENE-03" in scene_ids
     assert "弹窗空间" in scene_names
     assert {"SCENE-01", "SCENE-02", "SCENE-04"} <= scene_ids
     assert "SCENE-05" not in scene_ids
     skipped_ids = {str(w.get("id") or "") for w in skipped if w.get("code") == "b_class_skipped"}
     assert "SCENE-03" not in skipped_ids
+    assert "CHAR-08" not in skipped_ids
     assert {"CHAR-05", "CHAR-06", "CHAR-07", "SCENE-05"} <= skipped_ids
 
 
 def test_029_scene_popup_courtroom_materializes_chrome_still_skips():
-    """DIR EVAL: 弹窗审判庭 is a space noun; do not skip SCENE-03 (S05/S06 hang)."""
     assert is_spatial_scene_name("弹窗审判庭")
     assert not is_scene_b_class("弹窗审判庭")
-    # CHAR/N2 chrome detector may still see the 弹窗 prefix; SCENE bucket must not inherit skip.
     assert is_system_speaker("弹窗审判庭")
     assert is_system_speaker("弹窗")
     assert is_system_speaker("系统音")
     assert is_scene_b_class("弹窗")
     assert is_scene_b_class("弹窗字")
     assert is_scene_b_class("系统音")
-    assert classify_char_banlist("弹窗王子") == "B-TAG"
-    assert is_banlist_name("弹窗王子")
-    assert is_scene_b_class("弹窗王子")
+    assert classify_char_banlist("弹窗将军") == "B-TAG"
+    assert is_banlist_name("弹窗将军")
+    assert is_scene_b_class("弹窗将军")
 
     cast = {
         "characters": [
-            {"id": "CHAR-01", "name": "程序员", "one_line": "男主"},
-            {"id": "CHAR-05", "name": "弹窗王子", "one_line": "脏TAG"},
+            {"id": "CHAR-01", "name": "预挂甲", "one_line": "男主"},
+            {"id": "CHAR-05", "name": "弹窗将军", "one_line": "脏TAG"},
             {"id": "CHAR-06", "name": "系统音", "one_line": "VO"},
         ],
         "scenes": [
@@ -513,5 +493,4 @@ def test_029_scene_popup_courtroom_materializes_chrome_still_skips():
     skipped_ids = {str(w.get("id") or "") for w in skipped if w.get("code") == "b_class_skipped"}
     assert "SCENE-03" not in skipped_ids
     assert {"CHAR-05", "CHAR-06", "SCENE-05", "SCENE-06"} <= skipped_ids
-    # Do not "fix green" by rewriting shot scene_ids.
     assert [row["scene_id"] for row in storyboard["rows"]] == ["SCENE-03", "SCENE-03"]

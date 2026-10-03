@@ -56,13 +56,13 @@ def test_cli_sidecar_add_after_demo(data_dir, monkeypatch):
             "--ep",
             "EP01",
             "--name",
-            "CODEX王子",
+            "预挂丙将军",
             "--one-line",
             "弹窗反派",
         ],
     )
     assert add.exit_code == 0, add.output
-    assert "CODEX王子" in add.output
+    assert "预挂丙将军" in add.output
     assert "cast_changed" in add.output
 
 

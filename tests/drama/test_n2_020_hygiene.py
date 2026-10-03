@@ -18,6 +18,7 @@ from aiv_drama_n2.named_cast import (
     extract_paren_entities,
     extract_proper_names,
     fold_brand_to_pool,
+    fold_to_attached_name,
     is_bare_brand,
     is_clause_fragment,
     is_dialogue_fragment,
@@ -44,7 +45,7 @@ def _dirty_019_rows(scene: str, lead: str) -> list[dict]:
             char_ids=[lead],
             duration_s=2,
             action="求婚式双弹窗弹出",
-            dialogue="【系统音】CODEX：嫁给我。",
+            dialogue="【系统音】锁定：开始。",
         ),
         sample_row(
             shot_id="S02",
@@ -53,7 +54,7 @@ def _dirty_019_rows(scene: str, lead: str) -> list[dict]:
             char_ids=[lead],
             duration_s=3,
             action="第二弹窗同步",
-            dialogue="/ 【系统音】CURSOR：同步锁定。",
+            dialogue="/ 【系统音】同步锁定。",
         ),
         sample_row(
             shot_id="S03",
@@ -61,7 +62,7 @@ def _dirty_019_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             duration_s=4,
-            action="指出两王子站在门口",
+            action="指出两将军站在门口",
             dialogue=None,
         ),
         sample_row(
@@ -71,7 +72,7 @@ def _dirty_019_rows(scene: str, lead: str) -> list[dict]:
             char_ids=[lead],
             duration_s=6,
             action="嘴炮对峙",
-            dialogue="两王子：退兵。",
+            dialogue="两将军：退兵。",
         ),
         sample_row(
             shot_id="S05",
@@ -80,7 +81,7 @@ def _dirty_019_rows(scene: str, lead: str) -> list[dict]:
             char_ids=["NONE"],
             duration_s=9,
             action="屏幕闪红",
-            dialogue="【系统音】联猎协议已启动,目标：锁定",
+            dialogue="【系统音】协议已启动,目标：锁定",
             notes="空镜/系统音",
         ),
         sample_row(
@@ -89,68 +90,62 @@ def _dirty_019_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             duration_s=8,
-            action="CODEX王子与CURSOR(Opus5.5)王子并肩",
-            dialogue="CODEX王子：联猎。",
+            action="预挂丙将军与预挂丁将军并肩",
+            dialogue="预挂丙将军：到齐。",
         ),
     ]
 
 
 def test_system_voice_and_dirty_prefix_not_registerable():
     assert is_system_speaker("系统音")
-    assert is_system_speaker("【系统音】CODEX")
-    assert is_system_speaker("/ 【系统音】CURSOR")
-    assert not is_registerable_name("【系统音】CODEX")
-    assert not is_registerable_name("/ 【系统音】CURSOR")
-    assert not is_registerable_name("【系统音】联猎协议已启动,目标")
-    assert not is_registerable_name("指出两王子")
-    assert not is_registerable_name("两王子")
-    assert is_registerable_name("CODEX王子")
-    assert is_registerable_name("CURSOR(Opus5.5)王子")
-    assert is_registerable_name("GPT王子")
-    assert is_registerable_name("Opus5.5王子")
-    assert is_bare_brand("CURSOR")
-    assert is_bare_brand("CODEX")
-    assert is_bare_brand("GPT")
-    assert not is_registerable_name("CURSOR")
-    assert not is_registerable_name("CODEX")
-    assert not is_registerable_name("GPT")
-    assert is_dialogue_fragment("你被双王子")
-    assert is_dialogue_fragment("而是两王子")
-    assert not is_registerable_name("你被双王子")
-    assert not is_registerable_name("而是两王子")
+    assert is_system_speaker("【系统音】锁定")
+    assert is_system_speaker("/ 【系统音】同步")
+    assert not is_registerable_name("【系统音】锁定")
+    assert not is_registerable_name("/ 【系统音】同步")
+    assert not is_registerable_name("【系统音】协议已启动,目标")
+    assert not is_registerable_name("指出两将军")
+    assert not is_registerable_name("两将军")
+    assert is_registerable_name("预挂丙将军")
+    assert is_registerable_name("预挂丁将军")
+    assert is_registerable_name("预挂甲")
+    assert not is_bare_brand("预挂甲")
+    assert is_dialogue_fragment("你被双将军")
+    assert is_dialogue_fragment("而是两将军")
+    assert not is_registerable_name("你被双将军")
+    assert not is_registerable_name("而是两将军")
     assert is_generic_title("王国王子")
-    assert is_generic_title("AI王子")
+    assert is_generic_title("AI将军")
     assert not is_registerable_name("王国王子")
-    assert not is_registerable_name("AI王子")
-    assert is_clause_fragment("豆包当众拆穿两个王子")
-    assert is_clause_fragment("包的开源权重反制两个闭源王子")
-    assert is_group_label("两侧王子") or is_generic_title("两侧王子")
-    assert not is_registerable_name("豆包当众拆穿两个王子")
-    assert not is_registerable_name("包的开源权重反制两个闭源王子")
-    assert not is_registerable_name("两侧王子")
+    assert not is_registerable_name("AI将军")
+    assert is_clause_fragment("预挂乙当众拆穿两个将军")
+    assert is_clause_fragment("预挂乙的随从反制两个将军")
+    assert is_group_label("两侧将军") or is_generic_title("两侧将军")
+    assert not is_registerable_name("预挂乙当众拆穿两个将军")
+    assert not is_registerable_name("预挂乙的随从反制两个将军")
+    assert not is_registerable_name("两侧将军")
 
 
-def test_collect_hits_skips_b_class_keeps_princes():
+def test_collect_hits_skips_b_class_keeps_titled():
     rows = _dirty_019_rows("SCENE-01", "CHAR-01")
     hits = collect_named_hits(
         rows,
-        cast={"characters": [{"id": "CHAR-01", "name": "林晚"}]},
-        outline_body="CODEX王子与CURSOR(Opus5.5)王子联猎",
+        cast={"characters": [{"id": "CHAR-01", "name": "预挂甲"}]},
+        outline_body="预挂丙将军与预挂丁将军出场",
     )
     names = {h["name"] for h in hits}
-    assert "【系统音】CODEX" not in names
-    assert "/ 【系统音】CURSOR" not in names
-    assert "【系统音】联猎协议已启动,目标" not in names
-    assert "CODEX王子" in names
-    assert "CURSOR(Opus5.5)王子" in names
-    assert "两王子" in names or "指出两王子" in names
+    assert "【系统音】锁定" not in names
+    assert "/ 【系统音】同步" not in names
+    assert "【系统音】协议已启动,目标" not in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "两将军" in names or "指出两将军" in names
 
 
-def test_auto_merge_skips_system_voice_half_line_adds_princes():
+def test_auto_merge_skips_system_voice_half_line_adds_titled():
     rec = {
-        "outline": {"body_md": "1. 开钩\nCODEX王子与CURSOR(Opus5.5)王子出场\n"},
+        "outline": {"body_md": "1. 开钩\n预挂丙将军与预挂丁将军出场\n"},
         "cast": {
-            "characters": [{"id": "CHAR-01", "name": "林晚"}, {"id": "CHAR-02", "name": "豆包"}],
+            "characters": [{"id": "CHAR-01", "name": "预挂甲"}, {"id": "CHAR-02", "name": "预挂乙"}],
             "scenes": [{"id": "SCENE-01"}],
             "version": 3,
             "locked": True,
@@ -165,22 +160,20 @@ def test_auto_merge_skips_system_voice_half_line_adds_princes():
 
     rows, added = auto_merge_named_cast(rec, _dirty_019_rows("SCENE-01", "CHAR-01"), alloc_char=alloc)
     names = {c["name"] for c in rec["cast"]["characters"]}
-    assert "CODEX王子" in names
-    assert "CURSOR(Opus5.5)王子" in names
-    assert "【系统音】CODEX" not in names
-    assert "【系统音】CURSOR" not in names
-    assert "/ 【系统音】CURSOR" not in names
-    assert "指出两王子" not in names
-    assert "两王子" not in names
-    assert "【系统音】联猎协议已启动,目标" not in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "【系统音】锁定" not in names
+    assert "指出两将军" not in names
+    assert "两将军" not in names
+    assert "【系统音】协议已启动,目标" not in names
     assert rec["cast"]["version"] == 4
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
     wired = {r["shot_id"]: r for r in rows}
-    assert by_name["CODEX王子"] in wired["S06"]["char_ids"]
-    assert by_name["CURSOR(Opus5.5)王子"] in wired["S06"]["char_ids"]
-    assert by_name["CODEX王子"] in wired["S04"]["char_ids"]
-    assert by_name["CURSOR(Opus5.5)王子"] in wired["S04"]["char_ids"]
-    assert by_name["CODEX王子"] not in wired["S01"]["char_ids"]
+    assert by_name["预挂丙将军"] in wired["S06"]["char_ids"]
+    assert by_name["预挂丁将军"] in wired["S06"]["char_ids"]
+    assert by_name["预挂丙将军"] in wired["S04"]["char_ids"]
+    assert by_name["预挂丁将军"] in wired["S04"]["char_ids"]
+    assert by_name["预挂丙将军"] not in wired["S01"]["char_ids"]
     assert added
 
 
@@ -188,7 +181,7 @@ def test_generate_hygiene_and_observability(svc, monkeypatch):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
     rec = svc._rec(pid, "EP01")
-    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\nCODEX王子 / CURSOR(Opus5.5)王子联猎\n"
+    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\n预挂丙将军 / 预挂丁将军出场\n"
     outline_body = rec["outline"]["body_md"]
     outline_ver = rec["outline"]["version"]
     cast_ver = rec["cast"]["version"]
@@ -204,11 +197,11 @@ def test_generate_hygiene_and_observability(svc, monkeypatch):
     )
     rec = svc._rec(pid, "EP01")
     names = {c["name"] for c in rec["cast"]["characters"]}
-    assert "CODEX王子" in names
-    assert "CURSOR(Opus5.5)王子" in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
     assert not any("系统音" in n for n in names)
-    assert "两王子" not in names
-    assert "指出两王子" not in names
+    assert "两将军" not in names
+    assert "指出两将军" not in names
     assert rec["cast"]["version"] == cast_ver + 1
     assert rec["gate"]["locked"] is True
     assert rec["outline"]["body_md"] == outline_body
@@ -232,8 +225,8 @@ def test_sidecar_warn_visible_on_get_validate_keeps_g1b(svc):
     env = svc.sidecar_add_character(
         pid,
         "EP01",
-        SidecarAddCharacterRequest(name="CODEX王子", one_line="弹窗反派"),
-        raw={"name": "CODEX王子"},
+        SidecarAddCharacterRequest(name="预挂丙将军", one_line="侧车配角"),
+        raw={"name": "预挂丙将军"},
     )
     rec = svc._rec(pid, "EP01")
     assert rec["gate"]["locked"] is True
@@ -350,15 +343,14 @@ def test_skill_excerpt_and_trace_persist_on_generate_get_validate(svc):
 
 
 def _eng020_half_line_rows(scene: str, lead: str, support: str) -> list[dict]:
-    """eng-020 S04/S11 pollution: question/narration slices + generic titles."""
     return [
         sample_row(
             shot_id="S04",
             seq=4,
             scene_id=scene,
             char_ids=[lead, support],
-            action="两大AI王国王子同时现身茶水间",
-            dialogue="你被双王子联猎了？",
+            action="两大王国将军同时现身茶水间",
+            dialogue="你被双将军围住了？",
         ),
         sample_row(
             shot_id="S11",
@@ -366,15 +358,15 @@ def _eng020_half_line_rows(scene: str, lead: str, support: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             action="停战现场",
-            dialogue="不是追杀，而是两王子同时伸出手。",
+            dialogue="不是追杀，而是两将军同时伸出手。",
         ),
         sample_row(
             shot_id="S05",
             seq=5,
             scene_id=scene,
             char_ids=[lead],
-            action="GPT王子与Opus5.5王子对峙",
-            dialogue="GPT王子：联猎协议。",
+            action="预挂丙将军与预挂丁将军对峙",
+            dialogue="预挂丙将军：到齐。",
         ),
     ]
 
@@ -382,12 +374,12 @@ def _eng020_half_line_rows(scene: str, lead: str, support: str) -> list[dict]:
 def test_half_line_fragments_never_open_char():
     rec = {
         "outline": {
-            "body_md": "1. 开钩\nCODEX王国GPT王子与CURSOR王国Opus5.5王子联猎\n两大AI王国王子\n"
+            "body_md": "1. 开钩\n预挂丙将军与预挂丁将军出场\n两大王国将军\n"
         },
         "cast": {
             "characters": [
-                {"id": "CHAR-01", "name": "林晚"},
-                {"id": "CHAR-02", "name": "豆包"},
+                {"id": "CHAR-01", "name": "预挂甲"},
+                {"id": "CHAR-02", "name": "预挂乙"},
             ],
             "scenes": [{"id": "SCENE-01"}],
             "version": 3,
@@ -405,57 +397,57 @@ def test_half_line_fragments_never_open_char():
         rec, _eng020_half_line_rows("SCENE-01", "CHAR-01", "CHAR-02"), alloc_char=alloc
     )
     names = {c["name"] for c in rec["cast"]["characters"]}
-    assert "林晚" in names and "豆包" in names
-    assert "GPT王子" in names
-    assert "Opus5.5王子" in names
-    assert "你被双王子" not in names
-    assert "而是两王子" not in names
+    assert "预挂甲" in names and "预挂乙" in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "你被双将军" not in names
+    assert "而是两将军" not in names
     assert "王国王子" not in names
-    assert "AI王子" not in names
+    assert "AI将军" not in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
     wired = {r["shot_id"]: r for r in rows}
     for shot in ("S04", "S11"):
         ids = wired[shot]["char_ids"]
-        assert by_name["GPT王子"] in ids
-        assert by_name["Opus5.5王子"] in ids
+        assert by_name["预挂丙将军"] in ids
+        assert by_name["预挂丁将军"] in ids
         assert "CHAR-01" in ids
-        assert all(by_name.get(dirty) not in ids for dirty in ("你被双王子", "而是两王子", "王国王子", "AI王子"))
+        assert all(by_name.get(dirty) not in ids for dirty in ("你被双将军", "而是两将军", "王国王子", "AI将军"))
         assert all(cid in by_name.values() for cid in ids if cid != "NONE")
     assert added
 
 
-def test_full_dialogue_shuang_wangzi_maps_to_prince_slots():
-    assert expand_group("双王子", ["GPT王子", "Opus5.5王子", "林晚"]) == ["GPT王子", "Opus5.5王子"]
+def test_full_dialogue_group_maps_to_titled_slots():
+    assert expand_group("双将军", ["预挂丙将军", "预挂丁将军", "预挂甲"]) == ["预挂丙将军", "预挂丁将军"]
     hits = collect_named_hits(
         [
             {
                 "shot_id": "S04",
                 "action": "茶水间对峙",
-                "dialogue": "你被双王子联猎了？",
+                "dialogue": "你被双将军围住了？",
                 "char_ids": ["CHAR-01"],
             }
         ],
         cast={
             "characters": [
-                {"id": "CHAR-01", "name": "林晚"},
-                {"id": "CHAR-04", "name": "GPT王子"},
-                {"id": "CHAR-05", "name": "Opus5.5王子"},
+                {"id": "CHAR-01", "name": "预挂甲"},
+                {"id": "CHAR-04", "name": "预挂丙将军"},
+                {"id": "CHAR-05", "name": "预挂丁将军"},
             ]
         },
-        outline_body="GPT王子 / Opus5.5王子",
+        outline_body="预挂丙将军 / 预挂丁将军",
     )
     names = {h["name"] for h in hits}
-    assert "你被双王子" not in names
-    assert "双王子" in names
+    assert "你被双将军" not in names
+    assert "双将军" in names
     resolved = {h["name"] for h in hits if h.get("registerable")}
-    assert "GPT王子" in resolved or "双王子" in names
+    assert "预挂丙将军" in resolved or "双将军" in names
 
 
 def test_generate_skips_half_line_and_generic_titles(svc, monkeypatch):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
     rec = svc._rec(pid, "EP01")
-    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\nCODEX王国GPT王子与CURSOR王国Opus5.5王子\n"
+    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\n预挂丙将军与预挂丁将军\n"
     lead = rec["cast"]["characters"][0]["id"]
     support = rec["cast"]["characters"][1]["id"]
     scene = rec["cast"]["scenes"][0]["id"]
@@ -471,18 +463,18 @@ def test_generate_skips_half_line_and_generic_titles(svc, monkeypatch):
     rec = svc._rec(pid, "EP01")
     names = {c["name"] for c in rec["cast"]["characters"]}
     assert leads <= names
-    assert "GPT王子" in names
-    assert "Opus5.5王子" in names
-    assert "你被双王子" not in names
-    assert "而是两王子" not in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
+    assert "你被双将军" not in names
+    assert "而是两将军" not in names
     assert "王国王子" not in names
-    assert "AI王子" not in names
+    assert "AI将军" not in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
     rows = {r["shot_id"]: r for r in env["storyboard"]["rows"]}
     for shot in ("S04", "S11"):
         ids = rows[shot]["char_ids"]
-        assert by_name["GPT王子"] in ids
-        assert by_name["Opus5.5王子"] in ids
+        assert by_name["预挂丙将军"] in ids
+        assert by_name["预挂丁将军"] in ids
         assert lead in ids
         assert all(cid in {c["id"] for c in rec["cast"]["characters"]} for cid in ids)
     assert env["storyboard"]["skill_excerpt"]
@@ -490,8 +482,7 @@ def test_generate_skips_half_line_and_generic_titles(svc, monkeypatch):
     assert all(d in {5, 8, 10} for d in durations)
 
 
-def _eng020r3_brand_rows(scene: str, lead: str) -> list[dict]:
-    """eng-020r2 residual: bare CURSOR/CODEX speakers + confrontation; system-vo must not hang."""
+def _prefix_fold_rows(scene: str, lead: str) -> list[dict]:
     return [
         sample_row(
             shot_id="S01",
@@ -499,7 +490,7 @@ def _eng020r3_brand_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             action="求婚式双弹窗弹出",
-            dialogue="【系统音】CODEX：嫁给我。",
+            dialogue="【系统音】锁定：开始。",
         ),
         sample_row(
             shot_id="S07",
@@ -507,15 +498,15 @@ def _eng020r3_brand_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             action="茶水间对峙",
-            dialogue="CURSOR：同步锁定。",
+            dialogue="小预挂丙将军：同步锁定。",
         ),
         sample_row(
             shot_id="S08",
             seq=8,
             scene_id=scene,
             char_ids=[lead],
-            action="CODEX挡在门口",
-            dialogue="CODEX：联猎协议。",
+            action="预挂丁将军挡在门口",
+            dialogue="预挂丁将军：到齐。",
         ),
         sample_row(
             shot_id="S09",
@@ -523,49 +514,46 @@ def _eng020r3_brand_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             action="嘴炮对峙",
-            dialogue="两王子：退兵。",
+            dialogue="两将军：退兵。",
         ),
     ]
 
 
-def test_bare_brand_folds_onto_prince_slots():
-    pool = ["GPT王子", "Opus5.5王子", "林晚"]
-    assert fold_brand_to_pool("CURSOR", pool) == "Opus5.5王子"
-    assert fold_brand_to_pool("CODEX", pool) == "GPT王子"
-    assert fold_brand_to_pool("GPT", pool) == "GPT王子"
-    assert names_are_aliases("CURSOR", "Opus5.5王子")
-    assert names_are_aliases("CODEX", "GPT王子")
-    assert names_are_aliases("CURSOR", "CURSOR(Opus5.5)王子")
-    assert resolve_hit_names("CURSOR", pool) == ["Opus5.5王子"]
-    assert resolve_hit_names("CODEX", pool) == ["GPT王子"]
-    assert fold_brand_to_pool("CURSOR", []) == "Opus5.5王子"
-    assert fold_brand_to_pool("CODEX", []) == "GPT王子"
+def test_prefix_suffix_folds_onto_attached_only():
+    pool = ["预挂丙将军", "预挂丁将军", "预挂甲"]
+    assert fold_to_attached_name("小预挂丙将军", pool) == "预挂丙将军"
+    assert fold_brand_to_pool("预挂丁将军大人", pool) == "预挂丁将军"
+    assert fold_to_attached_name("预挂戊", pool) is None
+    assert names_are_aliases("小预挂丙将军", "预挂丙将军")
+    assert names_are_aliases("预挂丁将军大人", "预挂丁将军")
+    assert not names_are_aliases("预挂戊", "预挂丙将军")
+    assert resolve_hit_names("小预挂丙将军", pool) == ["预挂丙将军"]
+    assert fold_brand_to_pool("预挂戊", pool) is None
 
 
 def test_paren_wrap_is_one_entity_not_two_rows():
-    names = extract_proper_names("CURSOR（Opus5.5王子）与CODEX（GPT王子）出场")
-    assert "CURSOR" not in names
-    assert "CODEX" not in names
-    assert names.count("Opus5.5王子") + names.count("CURSOR(Opus5.5)王子") == 1
-    assert names.count("GPT王子") + names.count("CODEX王子") == 1
-    glued = extract_paren_entities("CURSOR（Opus5.5王子）站在门口")
-    assert glued == ["Opus5.5王子"] or glued == ["CURSOR(Opus5.5)王子"]
-    assert "CURSOR" not in glued
-    titled = extract_proper_names("CODEX王子与CURSOR(Opus5.5)王子并肩")
-    assert "CURSOR" not in titled
-    assert "CURSOR(Opus5.5)王子" in titled
-    assert "CODEX王子" in titled
+    names = extract_proper_names("Jia（预挂丙将军）与Yi（预挂丁将军）出场")
+    assert "Jia" not in names
+    assert "Yi" not in names
+    assert names.count("预挂丙将军") == 1
+    assert names.count("预挂丁将军") == 1
+    glued = extract_paren_entities("Jia（预挂丙将军）站在门口")
+    assert glued == ["预挂丙将军"]
+    titled = extract_proper_names("预挂丙将军与预挂丁将军并肩")
+    assert "预挂丙将军" in titled
+    assert "预挂丁将军" in titled
 
 
-def test_auto_merge_folds_bare_brands_no_orphan_no_paren_split():
+def test_auto_merge_folds_prefix_no_orphan_no_paren_split():
     rec = {
         "outline": {
-            "body_md": "1. 开钩\nCURSOR（Opus5.5王子）与GPT王子联猎\n两大AI王国王子\n"
+            "body_md": "1. 开钩\nJia（预挂丙将军）与预挂丁将军出场\n两大王国将军\n"
         },
         "cast": {
             "characters": [
-                {"id": "CHAR-01", "name": "林晚"},
-                {"id": "CHAR-02", "name": "豆包"},
+                {"id": "CHAR-01", "name": "预挂甲"},
+                {"id": "CHAR-02", "name": "预挂乙"},
+                {"id": "CHAR-03", "name": "预挂丙将军"},
             ],
             "scenes": [{"id": "SCENE-01"}],
             "version": 3,
@@ -573,48 +561,47 @@ def test_auto_merge_folds_bare_brands_no_orphan_no_paren_split():
         },
         "gate": {"locked": True, "last_decision": "pass"},
     }
-    n = {"i": 2}
+    n = {"i": 3}
 
     def alloc(_rec):
         n["i"] += 1
         return f"CHAR-{n['i']:02d}"
 
     rows, added = auto_merge_named_cast(
-        rec, _eng020r3_brand_rows("SCENE-01", "CHAR-01"), alloc_char=alloc
+        rec, _prefix_fold_rows("SCENE-01", "CHAR-01"), alloc_char=alloc
     )
     names = [c["name"] for c in rec["cast"]["characters"]]
-    assert "CURSOR" not in names
-    assert "CODEX" not in names
-    assert "GPT王子" in names
-    assert "Opus5.5王子" in names or "CURSOR(Opus5.5)王子" in names
-    assert names.count("Opus5.5王子") + names.count("CURSOR(Opus5.5)王子") == 1
-    assert names.count("GPT王子") + names.count("CODEX王子") == 1
+    assert "小预挂丙将军" not in names
+    assert names.count("预挂丙将军") == 1
+    assert "预挂丁将军" in names
+    assert "你被双将军" not in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
-    opus_id = by_name.get("Opus5.5王子") or by_name.get("CURSOR(Opus5.5)王子")
-    gpt_id = by_name.get("GPT王子") or by_name.get("CODEX王子")
+    bing_id = by_name["预挂丙将军"]
+    ding_id = by_name["预挂丁将军"]
     wired = {r["shot_id"]: r for r in rows}
-    assert opus_id in wired["S07"]["char_ids"]
-    assert gpt_id in wired["S08"]["char_ids"]
-    assert opus_id in wired["S09"]["char_ids"]
-    assert gpt_id in wired["S09"]["char_ids"]
-    assert opus_id not in wired["S01"]["char_ids"]
-    assert gpt_id not in wired["S01"]["char_ids"]
+    assert bing_id in wired["S07"]["char_ids"]
+    assert ding_id in wired["S08"]["char_ids"]
+    assert bing_id in wired["S09"]["char_ids"]
+    assert ding_id in wired["S09"]["char_ids"]
+    assert bing_id not in wired["S01"]["char_ids"]
     hung = {cid for r in rows for cid in r["char_ids"]}
-    assert opus_id in hung and gpt_id in hung
+    assert bing_id in hung and ding_id in hung
     assert added
 
 
-def test_generate_folds_bare_brands_and_hangs_princes(svc, monkeypatch):
+def test_generate_folds_prefix_and_hangs_titled(svc, monkeypatch):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
     rec = svc._rec(pid, "EP01")
-    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\nCURSOR（Opus5.5王子）与GPT王子\n"
+    rec["outline"]["body_md"] = rec["outline"]["body_md"] + "\nJia（预挂丙将军）与预挂丁将军\n"
+    svc._register_char(rec, "CHAR-03")
+    rec["cast"]["characters"].append({"id": "CHAR-03", "name": "预挂丙将军", "one_line": "已挂", "library_ref": None})
     lead = rec["cast"]["characters"][0]["id"]
     scene = rec["cast"]["scenes"][0]["id"]
     leads = {rec["cast"]["characters"][0]["name"], rec["cast"]["characters"][1]["name"]}
 
     def fake_rows(settings, **kw):
-        return _eng020r3_brand_rows(scene, lead)
+        return _prefix_fold_rows(scene, lead)
 
     monkeypatch.setattr("aiv_drama_n2.ops.generate_rows", fake_rows)
     env = svc.generate_storyboard(
@@ -623,21 +610,18 @@ def test_generate_folds_bare_brands_and_hangs_princes(svc, monkeypatch):
     rec = svc._rec(pid, "EP01")
     names = [c["name"] for c in rec["cast"]["characters"]]
     assert leads <= set(names)
-    assert "CURSOR" not in names
-    assert "CODEX" not in names
-    assert "你被双王子" not in names
-    assert "王国王子" not in names
-    assert "GPT王子" in names
-    assert "Opus5.5王子" in names or "CURSOR(Opus5.5)王子" in names
+    assert "小预挂丙将军" not in names
+    assert names.count("预挂丙将军") == 1
+    assert "预挂丁将军" in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
-    opus_id = by_name.get("Opus5.5王子") or by_name.get("CURSOR(Opus5.5)王子")
-    gpt_id = by_name.get("GPT王子") or by_name.get("CODEX王子")
+    bing_id = by_name["预挂丙将军"]
+    ding_id = by_name["预挂丁将军"]
     rows = {r["shot_id"]: r for r in env["storyboard"]["rows"]}
-    assert opus_id in rows["S07"]["char_ids"]
-    assert gpt_id in rows["S08"]["char_ids"]
-    assert opus_id in rows["S09"]["char_ids"] and gpt_id in rows["S09"]["char_ids"]
+    assert bing_id in rows["S07"]["char_ids"]
+    assert ding_id in rows["S08"]["char_ids"]
+    assert bing_id in rows["S09"]["char_ids"] and ding_id in rows["S09"]["char_ids"]
     hung = {cid for r in env["storyboard"]["rows"] for cid in r["char_ids"]}
-    assert opus_id in hung and gpt_id in hung
+    assert bing_id in hung and ding_id in hung
     durations = [r["duration_s"] for r in env["storyboard"]["rows"]]
     assert all(d in {5, 8, 10} for d in durations)
     assert env["storyboard"]["skill_excerpt"]
@@ -645,23 +629,22 @@ def test_generate_folds_bare_brands_and_hangs_princes(svc, monkeypatch):
 
 
 def _eng020r4_clause_rows(scene: str, lead: str) -> list[dict]:
-    """eng-020r3 Acc#3: sentence-level outline leak + 两侧王子 generic."""
     return [
         sample_row(
             shot_id="S10",
             seq=10,
             scene_id=scene,
             char_ids=[lead],
-            action="豆包当众拆穿两个王子",
-            dialogue="两侧王子：退兵。",
+            action="预挂乙当众拆穿两个将军",
+            dialogue="两侧将军：退兵。",
         ),
         sample_row(
             shot_id="S11",
             seq=11,
             scene_id=scene,
             char_ids=[lead],
-            action="包的开源权重反制两个闭源王子",
-            dialogue="你被双王子联猎了？",
+            action="预挂乙的随从反制两个将军",
+            dialogue="你被双将军围住了？",
         ),
         sample_row(
             shot_id="S12",
@@ -669,57 +652,55 @@ def _eng020r4_clause_rows(scene: str, lead: str) -> list[dict]:
             scene_id=scene,
             char_ids=[lead],
             action="茶水间对峙",
-            dialogue="GPT王子：联猎协议。",
+            dialogue="预挂丙将军：到齐。",
         ),
     ]
 
 
 def test_clause_fragments_and_side_generic_never_open_char():
-    assert "豆包当众拆穿两个王子" not in extract_proper_names("豆包当众拆穿两个王子")
-    assert "包的开源权重反制两个闭源王子" not in extract_proper_names(
-        "包的开源权重反制两个闭源王子"
-    )
-    assert expand_group("两侧王子", ["GPT王子", "Opus5.5王子", "林晚", "豆包"]) == [
-        "GPT王子",
-        "Opus5.5王子",
+    assert "预挂乙当众拆穿两个将军" not in extract_proper_names("预挂乙当众拆穿两个将军")
+    assert "预挂乙的随从反制两个将军" not in extract_proper_names("预挂乙的随从反制两个将军")
+    assert expand_group("两侧将军", ["预挂丙将军", "预挂丁将军", "预挂甲", "预挂乙"]) == [
+        "预挂丙将军",
+        "预挂丁将军",
     ]
-    assert resolve_hit_names("两侧王子", ["GPT王子", "Opus5.5王子", "林晚"]) == [
-        "GPT王子",
-        "Opus5.5王子",
+    assert resolve_hit_names("两侧将军", ["预挂丙将军", "预挂丁将军", "预挂甲"]) == [
+        "预挂丙将军",
+        "预挂丁将军",
     ]
     hits = collect_named_hits(
         _eng020r4_clause_rows("SCENE-01", "CHAR-01"),
         cast={
             "characters": [
-                {"id": "CHAR-01", "name": "林晚"},
-                {"id": "CHAR-02", "name": "豆包"},
-                {"id": "CHAR-03", "name": "GPT王子"},
-                {"id": "CHAR-04", "name": "Opus5.5王子"},
+                {"id": "CHAR-01", "name": "预挂甲"},
+                {"id": "CHAR-02", "name": "预挂乙"},
+                {"id": "CHAR-03", "name": "预挂丙将军"},
+                {"id": "CHAR-04", "name": "预挂丁将军"},
             ]
         },
-        outline_body="CURSOR（Opus5.5王子）与GPT王子\n豆包当众拆穿两个王子\n",
+        outline_body="预挂丙将军与预挂丁将军\n预挂乙当众拆穿两个将军\n",
     )
     names = {h["name"] for h in hits}
-    assert "豆包当众拆穿两个王子" not in names
-    assert "包的开源权重反制两个闭源王子" not in names
-    assert "两侧王子" in names or "两王子" in names or "双王子" in names or "两个王子" in names
+    assert "预挂乙当众拆穿两个将军" not in names
+    assert "预挂乙的随从反制两个将军" not in names
+    assert "两侧将军" in names or "两将军" in names or "双将军" in names or "两个将军" in names
     registerable = {h["name"] for h in hits if h.get("registerable")}
-    assert "两侧王子" not in registerable
-    assert "GPT王子" in registerable or "两侧王子" in names
+    assert "两侧将军" not in registerable
+    assert "预挂丙将军" in registerable or "两侧将军" in names
 
 
-def test_auto_merge_rejects_clause_fragments_hangs_princes():
+def test_auto_merge_rejects_clause_fragments_hangs_titled():
     rec = {
         "outline": {
             "body_md": (
-                "1. 开钩\nCURSOR（Opus5.5王子）与GPT王子联猎\n"
-                "豆包当众拆穿两个王子\n包的开源权重反制两个闭源王子\n两侧王子对峙\n"
+                "1. 开钩\n预挂丙将军与预挂丁将军出场\n"
+                "预挂乙当众拆穿两个将军\n预挂乙的随从反制两个将军\n两侧将军对峙\n"
             )
         },
         "cast": {
             "characters": [
-                {"id": "CHAR-01", "name": "林晚"},
-                {"id": "CHAR-02", "name": "豆包"},
+                {"id": "CHAR-01", "name": "预挂甲"},
+                {"id": "CHAR-02", "name": "预挂乙"},
             ],
             "scenes": [{"id": "SCENE-01"}],
             "version": 3,
@@ -737,37 +718,35 @@ def test_auto_merge_rejects_clause_fragments_hangs_princes():
         rec, _eng020r4_clause_rows("SCENE-01", "CHAR-01"), alloc_char=alloc
     )
     names = [c["name"] for c in rec["cast"]["characters"]]
-    assert "林晚" in names and "豆包" in names
-    assert "豆包当众拆穿两个王子" not in names
-    assert "包的开源权重反制两个闭源王子" not in names
-    assert "两侧王子" not in names
-    assert "两王子" not in names
-    assert "双王子" not in names
-    assert "你被双王子" not in names
-    assert "CURSOR" not in names
-    assert "CODEX" not in names
-    assert "GPT王子" in names
-    assert "Opus5.5王子" in names or "CURSOR(Opus5.5)王子" in names
+    assert "预挂甲" in names and "预挂乙" in names
+    assert "预挂乙当众拆穿两个将军" not in names
+    assert "预挂乙的随从反制两个将军" not in names
+    assert "两侧将军" not in names
+    assert "两将军" not in names
+    assert "双将军" not in names
+    assert "你被双将军" not in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
-    opus_id = by_name.get("Opus5.5王子") or by_name.get("CURSOR(Opus5.5)王子")
-    gpt_id = by_name.get("GPT王子") or by_name.get("CODEX王子")
+    bing_id = by_name["预挂丙将军"]
+    ding_id = by_name["预挂丁将军"]
     wired = {r["shot_id"]: r for r in rows}
-    assert gpt_id in wired["S10"]["char_ids"]
-    assert opus_id in wired["S10"]["char_ids"]
-    assert gpt_id in wired["S11"]["char_ids"]
-    assert opus_id in wired["S11"]["char_ids"]
+    assert bing_id in wired["S10"]["char_ids"]
+    assert ding_id in wired["S10"]["char_ids"]
+    assert bing_id in wired["S11"]["char_ids"]
+    assert ding_id in wired["S11"]["char_ids"]
     hung = {cid for r in rows for cid in r["char_ids"]}
-    assert gpt_id in hung and opus_id in hung
+    assert bing_id in hung and ding_id in hung
     assert added
 
 
-def test_generate_skips_clause_fragments_keeps_brand_duration_skill(svc, monkeypatch):
+def test_generate_skips_clause_fragments_keeps_duration_skill(svc, monkeypatch):
     pid = seed_project_episode(svc)
     lock_g1b(svc, pid)
     rec = svc._rec(pid, "EP01")
     rec["outline"]["body_md"] = (
         rec["outline"]["body_md"]
-        + "\nCURSOR（Opus5.5王子）与GPT王子\n豆包当众拆穿两个王子\n包的开源权重反制两个闭源王子\n"
+        + "\n预挂丙将军与预挂丁将军\n预挂乙当众拆穿两个将军\n预挂乙的随从反制两个将军\n"
     )
     lead = rec["cast"]["characters"][0]["id"]
     scene = rec["cast"]["scenes"][0]["id"]
@@ -783,20 +762,19 @@ def test_generate_skips_clause_fragments_keeps_brand_duration_skill(svc, monkeyp
     rec = svc._rec(pid, "EP01")
     names = [c["name"] for c in rec["cast"]["characters"]]
     assert leads <= set(names)
-    assert "豆包当众拆穿两个王子" not in names
-    assert "包的开源权重反制两个闭源王子" not in names
-    assert "两侧王子" not in names
-    assert "你被双王子" not in names
-    assert "CURSOR" not in names
-    assert "GPT王子" in names
-    assert "Opus5.5王子" in names or "CURSOR(Opus5.5)王子" in names
+    assert "预挂乙当众拆穿两个将军" not in names
+    assert "预挂乙的随从反制两个将军" not in names
+    assert "两侧将军" not in names
+    assert "你被双将军" not in names
+    assert "预挂丙将军" in names
+    assert "预挂丁将军" in names
     by_name = {c["name"]: c["id"] for c in rec["cast"]["characters"]}
-    opus_id = by_name.get("Opus5.5王子") or by_name.get("CURSOR(Opus5.5)王子")
-    gpt_id = by_name.get("GPT王子") or by_name.get("CODEX王子")
+    bing_id = by_name["预挂丙将军"]
+    ding_id = by_name["预挂丁将军"]
     rows = {r["shot_id"]: r for r in env["storyboard"]["rows"]}
-    assert gpt_id in rows["S10"]["char_ids"] and opus_id in rows["S10"]["char_ids"]
+    assert bing_id in rows["S10"]["char_ids"] and ding_id in rows["S10"]["char_ids"]
     hung = {cid for r in env["storyboard"]["rows"] for cid in r["char_ids"]}
-    assert gpt_id in hung and opus_id in hung
+    assert bing_id in hung and ding_id in hung
     durations = [r["duration_s"] for r in env["storyboard"]["rows"]]
     assert all(d in {5, 8, 10} for d in durations)
     assert env["storyboard"]["skill_excerpt"]

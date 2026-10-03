@@ -121,7 +121,7 @@ def test_http_018c_path_episode_and_skill_and_g2_gate(client):
     assert env["lane_preference"] == "female"
     side = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/drama/cast/sidecar-add",
-        json={"name": "CODEX王子", "one_line": "弹窗反派"},
+        json={"name": "预挂丙将军", "one_line": "侧车配角"},
     )
     assert side.status_code == 200
     hint = (side.json().get("hints") or [{}])[0]
