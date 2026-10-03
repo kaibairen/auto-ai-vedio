@@ -122,7 +122,11 @@ def test_llm_prompt_includes_preattached_and_rules(tmp_path, monkeypatch):
     assert cards[1]["name"] == "豆包"
     assert any("大纲主角必须使用预挂角色的姓名" in r for r in user["rules"])
     assert any("禁止另造同名角色" in r for r in user["rules"])
-    assert "宫格" in "".join(user["rules"])
+    assert any("follow this episode's cast" in r for r in user["rules"])
+    rules_text = "".join(user["rules"])
+    assert "程序员/豆包" not in rules_text
+    assert "豆包" not in rules_text
+    assert "宫格" in rules_text
     assert draft.characters[0]["name"] == "程序员"
 
 
@@ -221,4 +225,69 @@ def test_generate_outline_passes_preattached_into_provider(svc, monkeypatch):
     assert names.count("豆包") == 1
     assert names.count("程序员") == 1
     assert "二皇子" in names
+    assert env["ok"] is True
+
+
+def test_generate_outline_sends_library_name_after_rename(svc, monkeypatch):
+    pid = svc.create_project(ProjectCreate(name="prompt-rename"))["project"]["id"]
+    svc.put_library_character(
+        pid, "CHAR-01", LibraryCharacterWrite(name="程序员", one_line="程序员·男", version=1)
+    )
+    svc.put_library_character(
+        pid, "CHAR-02", LibraryCharacterWrite(name="豆包", one_line="奶蛙脸陪聊破局者", version=1)
+    )
+    svc.create_episode(pid, EpisodeCreate(episode_id="EP01", pipeline_profile="drama"))
+    svc.put_brief(
+        pid,
+        "EP01",
+        DramaBriefWrite(title_intent="程序员与豆包", lane_preference="female", hero_one_line="程序员·男"),
+    )
+    svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=1))
+    svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-02", version=1))
+    svc.put_library_character(
+        pid,
+        "CHAR-02",
+        LibraryCharacterWrite(
+            name="奶蛙公主",
+            one_line="踢飞两大模型王子，带着程序员私奔",
+            version=2,
+        ),
+    )
+    persist_and_confirm_intent(svc, pid, follow_precast=True)
+
+    seen: dict = {}
+
+    class _Stub:
+        def generate(self, **kwargs):
+            seen.update(kwargs)
+            return GeneratedDraft(
+                body_md="# 大纲\n- 桥段序列：\n  1. 奶蛙公主登场\n",
+                lane="female",
+                shot_cap=12,
+                characters=[
+                    {"name": "程序员", "one_line": "预挂男主"},
+                    {"name": "豆包", "one_line": "奶蛙脸陪聊破局者"},
+                    {"name": "二皇子", "one_line": "温柔王子"},
+                ],
+                scenes=[{"name": "公司", "one_line": "开场"}],
+                source_skills=[SKILL_PATHS["female"]],
+            )
+
+    monkeypatch.setattr("aiv_drama.service.get_provider", lambda *a, **k: _Stub())
+    lane = svc._rec(pid, "EP01")["brief"]["lane_preference"]
+    env = svc.generate_outline(
+        pid,
+        "EP01",
+        OutlineGenerateRequest(lane=lane, provider="fixture"),
+        raw={"lane": lane, "provider": "fixture"},
+    )
+    cards = seen["brief"]["preattached_characters"]
+    frog_card = next(c for c in cards if c["id"] == "CHAR-02")
+    assert frog_card["name"] == "奶蛙公主"
+    assert frog_card["one_line"] == "踢飞两大模型王子，带着程序员私奔"
+    names = [c["name"] for c in env["cast"]["characters"]]
+    assert "豆包" not in names
+    frog = next(c for c in env["cast"]["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
     assert env["ok"] is True

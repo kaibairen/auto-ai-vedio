@@ -949,6 +949,19 @@ class DramaService(DramaN4Ops, DramaN2Ops):
     def _preattached_ids(self, rec: dict[str, Any]) -> list[str]:
         return list((rec.get("brief") or {}).get("preattached_character_ids") or [])
 
+    def _library_wins_identity(
+        self,
+        lib: dict[str, Any] | None,
+        existing: dict[str, Any] | None,
+        cid: str,
+    ) -> tuple[str, str]:
+        """Library name/one_line win over a stale episode-cast row."""
+        lib_name = ((lib or {}).get("name") or "").strip()
+        lib_line = ((lib or {}).get("one_line") or "").strip()
+        ex_name = ((existing or {}).get("name") or "").strip()
+        ex_line = ((existing or {}).get("one_line") or "").strip()
+        return lib_name or ex_name or cid, lib_line or ex_line or "预挂角色"
+
     def _resolve_preattached_characters(self, project_id: str, rec: dict[str, Any]) -> list[dict[str, Any]]:
         existing = {c["id"]: c for c in ((rec.get("cast") or {}).get("characters") or [])}
         cards: list[dict[str, Any]] = []
@@ -959,8 +972,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
             seen.add(cid)
             lib = self._latest_library(project_id, cid)
             ex = existing.get(cid)
-            name = (ex or {}).get("name") or (lib or {}).get("name") or cid
-            one_line = (ex or {}).get("one_line") or (lib or {}).get("one_line") or "预挂角色"
+            name, one_line = self._library_wins_identity(lib, ex, cid)
             ref = None
             if ex and ex.get("library_ref"):
                 ref = deepcopy(ex["library_ref"])
@@ -989,10 +1001,9 @@ class DramaService(DramaN4Ops, DramaN2Ops):
             if not row.get("library_ref") and lib:
                 row["library_ref"] = {"id": lib["id"], "version": lib["version"]}
             if lib:
-                if not (row.get("name") or "").strip() or row.get("name") == cid:
-                    row["name"] = lib["name"]
-                if (row.get("one_line") or "").strip() in PLACEHOLDER_ONE_LINES:
-                    row["one_line"] = lib["one_line"]
+                name, one_line = self._library_wins_identity(lib, row, cid)
+                row["name"] = name
+                row["one_line"] = one_line
             return row
         if lib:
             return {
@@ -1042,6 +1053,15 @@ class DramaService(DramaN4Ops, DramaN2Ops):
             if cid in have_ids:
                 continue
             _index(self._seed_preattached_row(rec, project_id, cid, existing_by_id.get(cid)))
+
+        # Leftover generated spelling of a renamed preattach folds onto that id;
+        # the library name/one_line already on the row stay.
+        for ident, prev in existing_by_id.items():
+            if ident not in have_ids:
+                continue
+            old_key = normalize_cast_name(prev.get("name") or "")
+            if old_key and old_key not in used_names:
+                used_names[old_key] = next(c for c in characters if c["id"] == ident)
 
         bound = [c for c in characters if c.get("library_ref")]
         lead: dict[str, Any] | None = next((c for c in bound if is_protagonist_row(c)), None)
