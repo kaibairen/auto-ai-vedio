@@ -8,10 +8,15 @@ from aiv_drama_n2.models import StoryboardGenerateRequest, StoryboardWrite
 from aiv_drama_n2.named_cast import (
     NAMED_CAST_GATE,
     NAMED_CAST_MISSING,
+    auto_merge_named_cast,
+    apply_char_id_wiring,
     blocking_named_cast_issues,
     collect_named_hits,
     expand_group,
     extract_speakers,
+    prune_dirty_char_ids,
+    resolve_hit_names,
+    resolve_to_pool_name,
 )
 from aiv_drama_n2.validate import collect_issues, issue
 
@@ -302,6 +307,146 @@ def test_sidecar_then_put_wires_and_g2_can_pass(svc):
     gate = svc.confirm_gate_g2(pid, "EP01", {"decision": "pass", "actor": "yangzhou"})
     assert gate["gate"]["locked"] is True
     assert svc._rec(pid, "EP01")["outline"]["body_md"] == outline_body
+
+
+def _preattached_frog_cast() -> dict:
+    return {
+        "characters": [
+            {"id": "CHAR-01", "name": "林晚", "one_line": "女主", "library_ref": "CHAR-01"},
+            {
+                "id": "CHAR-02",
+                "name": "奶蛙公主",
+                "one_line": "预挂配角",
+                "library_ref": "CHAR-02",
+            },
+            {"id": "CHAR-03", "name": "豆包", "one_line": "助手", "library_ref": "CHAR-03"},
+            {"id": "CHAR-04", "name": "GPT王子", "one_line": "弹窗王子", "library_ref": "CHAR-04"},
+        ],
+        "scenes": [{"id": "SCENE-01"}],
+        "version": 4,
+        "locked": True,
+    }
+
+
+def test_preattached_generic_title_stays_on_id_after_prune():
+    """Exact preattached 奶蛙公主 is B-GEN but must stay on CHAR-02 after prune."""
+    cast = _preattached_frog_cast()
+    frog = next(c for c in cast["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    one_line = frog["one_line"]
+    pool = ["林晚", "奶蛙公主", "豆包", "GPT王子"]
+    assert resolve_hit_names("奶蛙公主", pool) == ["奶蛙公主"]
+    assert resolve_to_pool_name("奶蛙公主", pool) == "奶蛙公主"
+    rows = [
+        sample_row(
+            shot_id="S01",
+            scene_id="SCENE-01",
+            char_ids=["NONE"],
+            action="奶蛙公主抬手示意",
+            dialogue="奶蛙公主：跟我走。",
+        )
+    ]
+    wired = apply_char_id_wiring(rows, {c["name"]: c["id"] for c in cast["characters"]})
+    assert "CHAR-02" in wired[0]["char_ids"]
+    pruned = prune_dirty_char_ids(wired, cast)
+    assert "CHAR-02" in pruned[0]["char_ids"]
+    assert next(c["name"] for c in cast["characters"] if c["id"] == "CHAR-02") == "奶蛙公主"
+    assert next(c["one_line"] for c in cast["characters"] if c["id"] == "CHAR-02") == one_line
+
+
+def test_modifier_phrases_fold_onto_preattached_and_do_not_open_ids():
+    """圆身奶蛙公主 / 围攻奶蛙公主 stay on CHAR-02; no CHAR-07/08."""
+    rec = {
+        "outline": {
+            "body_md": "1. 开钩\n黄色圆身奶蛙公主跳下台阶\n围攻奶蛙公主的侍卫散开\n"
+        },
+        "cast": _preattached_frog_cast(),
+        "gate": {"locked": True, "last_decision": "pass"},
+    }
+    outline_body = rec["outline"]["body_md"]
+    n = {"i": 4}
+
+    def alloc(_rec):
+        n["i"] += 1
+        return f"CHAR-{n['i']:02d}"
+
+    rows = [
+        sample_row(
+            shot_id="S01",
+            scene_id="SCENE-01",
+            char_ids=["NONE"],
+            action="奶蛙公主抬手",
+            dialogue=None,
+        ),
+        sample_row(
+            shot_id="S02",
+            seq=2,
+            scene_id="SCENE-01",
+            char_ids=["NONE"],
+            action="黄色圆身奶蛙公主跳下台阶",
+            dialogue=None,
+        ),
+        sample_row(
+            shot_id="S03",
+            seq=3,
+            scene_id="SCENE-01",
+            char_ids=["NONE"],
+            action="围攻奶蛙公主的侍卫散开",
+            dialogue=None,
+        ),
+    ]
+    out, added = auto_merge_named_cast(rec, rows, alloc_char=alloc)
+    names = [c["name"] for c in rec["cast"]["characters"]]
+    ids = {c["id"] for c in rec["cast"]["characters"]}
+    frog = next(c for c in rec["cast"]["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "预挂配角"
+    assert "圆身奶蛙公主" not in names
+    assert "围攻奶蛙公主" not in names
+    assert "CHAR-07" not in ids and "CHAR-08" not in ids
+    assert added == []
+    wired = {r["shot_id"]: r for r in out}
+    assert "CHAR-02" in wired["S01"]["char_ids"]
+    assert "CHAR-02" in wired["S02"]["char_ids"]
+    assert "CHAR-02" in wired["S03"]["char_ids"]
+    assert rec["outline"]["body_md"] == outline_body
+
+
+def test_name_that_only_contains_frog_stem_does_not_bind_char02():
+    """奶蛙脸 / 奶蛙卫 contain 奶蛙 but are not 奶蛙公主 — stay off CHAR-02."""
+    cast = _preattached_frog_cast()
+    pool = [c["name"] for c in cast["characters"]]
+    assert resolve_to_pool_name("奶蛙脸", pool) != "奶蛙公主"
+    assert "奶蛙公主" not in resolve_hit_names("奶蛙脸", pool)
+    assert resolve_to_pool_name("奶蛙卫", pool) != "奶蛙公主"
+    rec = {
+        "outline": {"body_md": "1. 开钩\n奶蛙脸特写，石中奶蛙卫走过\n"},
+        "cast": cast,
+        "gate": {"locked": True, "last_decision": "pass"},
+    }
+    n = {"i": 4}
+
+    def alloc(_rec):
+        n["i"] += 1
+        return f"CHAR-{n['i']:02d}"
+
+    rows = [
+        sample_row(
+            shot_id="S04",
+            scene_id="SCENE-01",
+            char_ids=["CHAR-01"],
+            action="奶蛙脸特写，石中奶蛙卫走过",
+            dialogue=None,
+        )
+    ]
+    out, added = auto_merge_named_cast(rec, rows, alloc_char=alloc)
+    frog = next(c for c in rec["cast"]["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert "CHAR-02" not in out[0]["char_ids"]
+    names = [c["name"] for c in rec["cast"]["characters"]]
+    assert "奶蛙脸" not in names
+    assert "奶蛙卫" not in names
+    assert added == []
 
 
 def test_named_cast_issue_shape_uses_named_cast_prefix():

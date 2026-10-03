@@ -1240,10 +1240,45 @@ def fold_needed(names: Iterable[str]) -> list[str]:
     return out
 
 
+def _fold_onto_existing_full_name(name: str, existing: Iterable[str]) -> str | None:
+    """Bind a phrase to an existing full name, never a 2-char title core.
+
+    Exact match stays. A longer phrase that ends with that full name
+    (圆身奶蛙公主 / 围攻奶蛙公主 → 奶蛙公主) folds onto it. Bare titles
+    (公主 / 王子) are not hosts, so this does not match 奶蛙 against
+    奶蛙脸 or other people.
+    """
+    key = glue_paren_name(strip_dirty_prefix(normalize_name(name)))
+    if not key:
+        return None
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for raw in existing:
+        host = normalize_name(raw)
+        if not host or host in seen:
+            continue
+        seen.add(host)
+        hosts.append(host)
+    hosts.sort(key=len, reverse=True)
+    for host in hosts:
+        if host == key:
+            continue
+        if host in BARE_TITLES or host in BARE_PRINCE_LABELS:
+            continue
+        if key.endswith(host):
+            return host
+    if key in seen:
+        return key
+    return None
+
+
 def resolve_to_pool_name(name: str, pool: Iterable[str]) -> str | None:
     key = glue_paren_name(normalize_name(name))
     cleaned = glue_paren_name(strip_dirty_prefix(key))
     ordered = [normalize_name(p) for p in pool if normalize_name(p)]
+    hosted = _fold_onto_existing_full_name(cleaned or key, ordered)
+    if hosted:
+        return hosted
     if key in ordered:
         return key
     if cleaned in ordered:
@@ -1423,6 +1458,9 @@ def collect_named_hits(
 
 def resolve_hit_names(name: str, individual_pool: Iterable[str]) -> list[str]:
     glued = glue_paren_name(name)
+    hosted = _fold_onto_existing_full_name(glued, individual_pool)
+    if hosted:
+        return [hosted]
     if is_bare_prince_label(glued):
         return expand_group("王子", individual_pool)
     if is_group_label(glued) or is_generic_title(glued):
@@ -1769,6 +1807,11 @@ def prune_dirty_char_ids(rows: list[dict[str, Any]], cast: dict[str, Any] | None
                 continue
             name = by_id.get(ident) or ident
             if _is_dirty_cast_name(name) or _is_dirty_cast_name(ident):
+                # Exact existing row: B-GEN / generic-title must not unbind.
+                if ident in by_id and (is_generic_title(name) or is_b_gen(name)):
+                    if ident not in kept:
+                        kept.append(ident)
+                    continue
                 continue
             if ident not in kept:
                 kept.append(ident)
