@@ -65,6 +65,15 @@ EN_IDENTITY_ANCHOR = (
     "Output a single 3:2 landscape turnaround sheet image."
 )
 
+# Cards that say 无官方人脸: attached refs are costume pin/crest marks, not a face photo.
+NO_OFFICIAL_FACE_MARK = "无官方人脸"
+EN_COSTUME_MARK_ANCHOR = (
+    "The attached reference images are costume pin/crest shape-and-color anchors, not a face photo. "
+    "Put each mark on the same costume as a visible pin or crest. "
+    "Do not leave a mark floating alone as the only subject. "
+    "Do not replace the person's face with a mark."
+)
+
 OUTPUT_SHEET_LINE = "输出单张3:2横版合板"
 
 WARDROBE_PREFIX = "角色穿着："
@@ -154,6 +163,45 @@ def card_identity_fields(card: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _card_text_blobs(card: dict[str, Any]) -> list[str]:
+    blobs: list[str] = []
+    for key in (
+        "immutable",
+        "wardrobe",
+        "appearance",
+        "one_line",
+        "notes",
+        "identity_note",
+        "face_note",
+        "face_status",
+    ):
+        blobs.append(_nonempty(card.get(key)))
+    for tag in card.get("status_tags") or []:
+        blobs.append(str(tag).strip())
+    for ref in card.get("refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        for key in ("note", "notes", "role", "label"):
+            blobs.append(_nonempty(ref.get(key)))
+    return blobs
+
+
+def card_says_no_official_face(card: dict[str, Any] | None) -> bool:
+    """True when the card states 无官方人脸 (refs are costume marks, not a face)."""
+    card = card or {}
+    flag = card.get("no_official_face")
+    if flag is True or str(flag).strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    return any(NO_OFFICIAL_FACE_MARK in blob for blob in _card_text_blobs(card) if blob)
+
+
+def identity_anchor_for_card(card: dict[str, Any] | None) -> str:
+    """Face-identity sentence, or costume pin/crest rules when the card has no official face."""
+    if card_says_no_official_face(card):
+        return EN_COSTUME_MARK_ANCHOR
+    return EN_IDENTITY_ANCHOR
+
+
 def assemble_gold_a_sheet_prompt(card: dict[str, Any] | None) -> str:
     """Shared prompt assemble. CLI and workbench/HTTP must call this function.
 
@@ -178,7 +226,7 @@ def assemble_gold_a_sheet_prompt(card: dict[str, Any] | None) -> str:
     if fields["height"]:
         blocks.append(fields["height"])
     blocks.append(format_negatives())
-    blocks.append(f"{EN_IDENTITY_ANCHOR}\n{OUTPUT_SHEET_LINE}")
+    blocks.append(f"{identity_anchor_for_card(card)}\n{OUTPUT_SHEET_LINE}")
     return "\n\n".join(blocks) + "\n"
 
 
@@ -197,7 +245,7 @@ def assemble_sections(card: dict[str, Any] | None) -> list[tuple[str, str]]:
     if fields["height"]:
         sections.append(("height", fields["height"]))
     sections.append(("negatives", format_negatives()))
-    sections.append(("en_identity_anchor", EN_IDENTITY_ANCHOR))
+    sections.append(("en_identity_anchor", identity_anchor_for_card(card)))
     sections.append(("output_sheet_line", OUTPUT_SHEET_LINE))
     return sections
 

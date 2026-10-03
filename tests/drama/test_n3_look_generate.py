@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from aiv_cli.cli import app
 from aiv_drama.errors import AppError
 from aiv_drama_n3.gold_sheet import (
+    EN_COSTUME_MARK_ANCHOR,
     EN_IDENTITY_ANCHOR,
     OUTPUT_SHEET_LINE,
     PROMPT_ORDER,
@@ -18,7 +19,9 @@ from aiv_drama_n3.gold_sheet import (
     STYLE_BANANA_PHOTOREAL_FINAL,
     assemble_gold_a_sheet_prompt,
     assemble_sections,
+    card_says_no_official_face,
     format_negatives,
+    identity_anchor_for_card,
     load_look_card,
     md5_text,
     verify_face_ref_md5,
@@ -114,6 +117,8 @@ def test_constants_immutable_and_prompt_order():
     assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "97cd5c4fae718fac65e1a81174c00e1d"
     assert md5_text(format_negatives()) == "2bf2300e5dfc0e261e46316c7b7e73ec"
     assert md5_text(EN_IDENTITY_ANCHOR) == "950e43999e7556a7b51199e42b663009"
+    assert "ONLY identity anchor" not in EN_COSTUME_MARK_ANCHOR
+    assert "visible pin or crest" in EN_COSTUME_MARK_ANCHOR
     assert md5_text(OUTPUT_SHEET_LINE) == "6a435c3686c78abc0a8bc03faa152b98"
 
 
@@ -131,6 +136,50 @@ def test_assemble_matches_eng031_gold_prompt():
     names = [n for n, _ in assemble_sections(_gold_card())]
     assert names == list(PROMPT_ORDER)
     assert md5_text(prompt) == GOLD_PROMPT_MD5
+
+
+def _no_official_face_card() -> dict:
+    card = _sheet_card()
+    card["id"] = "CHAR-02"
+    card["immutable"] = f"{card['immutable']}；无官方人脸，胸针/纹章为形色锚而非人脸。"
+    return card
+
+
+def test_identity_anchor_for_card_face_vs_no_official_face():
+    gold = _gold_card()
+    assert card_says_no_official_face(gold) is False
+    assert identity_anchor_for_card(gold) == EN_IDENTITY_ANCHOR
+    assert "ONLY identity anchor" in identity_anchor_for_card(gold)
+    none = _no_official_face_card()
+    assert card_says_no_official_face(none) is True
+    assert identity_anchor_for_card(none) == EN_COSTUME_MARK_ANCHOR
+    assert "ONLY identity anchor" not in identity_anchor_for_card(none)
+    assert "same costume as a visible pin or crest" in EN_COSTUME_MARK_ANCHOR
+    assert "floating alone as the only subject" in EN_COSTUME_MARK_ANCHOR
+    assert "replace the person's face" in EN_COSTUME_MARK_ANCHOR
+    flagged = _sheet_card()
+    flagged["no_official_face"] = True
+    assert identity_anchor_for_card(flagged) == EN_COSTUME_MARK_ANCHOR
+
+
+def test_assemble_no_official_face_uses_costume_mark_anchor():
+    face_prompt = assemble_gold_a_sheet_prompt(_gold_card())
+    assert EN_IDENTITY_ANCHOR in face_prompt
+    assert EN_COSTUME_MARK_ANCHOR not in face_prompt
+    assert md5_text(face_prompt) == GOLD_PROMPT_MD5
+    none_prompt = assemble_gold_a_sheet_prompt(_no_official_face_card())
+    assert EN_COSTUME_MARK_ANCHOR in none_prompt
+    assert "ONLY identity anchor" not in none_prompt
+    assert "Use the attached reference photo as the ONLY identity anchor for the face" not in none_prompt
+    assert "same costume as a visible pin or crest" in none_prompt
+    assert "floating alone as the only subject" in none_prompt
+    assert "replace the person's face" in none_prompt
+    assert none_prompt.index("禁令：") < none_prompt.index(EN_COSTUME_MARK_ANCHOR)
+    assert none_prompt.index(EN_COSTUME_MARK_ANCHOR) < none_prompt.index(OUTPUT_SHEET_LINE)
+    names = [n for n, text in assemble_sections(_no_official_face_card())]
+    assert names == list(PROMPT_ORDER)
+    section = dict(assemble_sections(_no_official_face_card()))
+    assert section["en_identity_anchor"] == EN_COSTUME_MARK_ANCHOR
 
 
 def test_adapter_off_matches_gold_prompt_md5(monkeypatch):
@@ -179,6 +228,30 @@ def test_generate_look_adapter_off_writes_gold_prompt(tmp_path, monkeypatch):
     assert look.get("prompt_adapter") is None
     assert md5_text(written) == GOLD_PROMPT_MD5
     assert written == GOLD_PROMPT.read_text(encoding="utf-8")
+    assert "ONLY identity anchor" in written
+    assert EN_COSTUME_MARK_ANCHOR not in written
+
+
+def test_generate_look_no_official_face_writes_costume_anchor(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", "off")
+    face = _face(tmp_path)
+    face2 = _face(tmp_path, payload=b"\xff\xd8crest-bytes", name="CHAR-02-crest.jpg")
+    look = generate_gold_a_sheet(
+        card=_no_official_face_card(),
+        face_ref=face,
+        face_ref_2=face2,
+        out_dir=tmp_path / "looks",
+        api_key=None,
+        dry_run=True,
+    )
+    written = Path(look["prompt_path"]).read_text(encoding="utf-8")
+    assert look["usable_for_n4"] is False
+    assert EN_COSTUME_MARK_ANCHOR in written
+    assert "ONLY identity anchor" not in written
+    assert written == assemble_gold_a_sheet_prompt(_no_official_face_card())
+    recorded = json.loads(Path(look["recorded_path"]).read_text(encoding="utf-8"))
+    assert isinstance(recorded["image"], list)
+    assert len(recorded["image"]) == 2
 
 
 def test_assemble_does_not_invent_wardrobe():

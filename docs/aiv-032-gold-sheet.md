@@ -25,6 +25,8 @@
 
 wardrobe / immutable / height **只**从厚卡字段读取。缺服装字段 → `look_card_incomplete`，禁助手自写合板正文。
 
+卡面写 **无官方人脸**（或 `no_official_face`）时，`identity_anchor_for_card` **不**追加「Use the attached reference photo as the ONLY identity anchor for the face」；改为服装 pin/crest 形色锚：各标贴在同一套服装上可见，禁止单独漂浮当唯一主体，禁止顶替人脸。有脸 ref 的卡仍用原 EN identity 句。
+
 ## L3 adapter（default ON · post-assemble）
 
 live-r1（无 adapter）**FAIL L3**：`INSPECT-AIV-032-CAM-002` — 左区仅正+侧，缺全身 90° 真背（右区后脑头槽不可顶替）。

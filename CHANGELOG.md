@@ -2,7 +2,7 @@
 
 ## 0.2.11 — generate-look optional second face ref (same Ark `image` array)
 
-Optional `--face-ref-2` / `face_ref_2` on `aiv drama n3 generate-look` and HTTP generate-look. One ref still posts Ark `image` as a string; a second ref posts `image` as a two-item array in the **same** generate-look call. Prompt stays `assemble_gold_a_sheet_prompt` + `generate_gold_a_sheet` (no parallel builder). Does **not** flip `usable_for_n4`. ForcePass=never. No live Ark in tests.
+Optional `--face-ref-2` / `face_ref_2` on `aiv drama n3 generate-look` and HTTP generate-look. One ref still posts Ark `image` as a string; a second ref posts `image` as a two-item array in the **same** generate-look call. Prompt stays `assemble_gold_a_sheet_prompt` + `generate_gold_a_sheet` (no parallel builder). Cards that say **无官方人脸** swap the EN face-identity sentence for costume pin/crest mark rules via `identity_anchor_for_card` (still no side prompt script). Face-ref cards keep the existing ONLY-identity-anchor sentence. Does **not** flip `usable_for_n4`. ForcePass=never. No live Ark in tests.
 
 ## 0.2.10 — AIV-032 gold-A 3:2 CHAR turnaround look-generate (docs≠PASS)
 
