@@ -53,7 +53,7 @@ class LlmProvider:
             "Do NOT write 提示词, 宫格, Seedance, 分镜表, or 成稿台词",
             f"shot_cap hard cap {shot_cap}",
             "Ceiling is outline/beats only (D-N1), not D-N2",
-            "characters[].name must look like a person (程序员/豆包/GPT(CODEX)王子/Opus5.5(CURSOR)王子). Never open CHAR from 吐槽两位王子/技术王子/幕里两位王子/两位王子/两侧王子/幕里…王子/正统王子/体验王子/重构王子/回滚王子/弹窗王子/破防王子/联猎王子/拆穿两位王子/吐槽程序员/弹幕里两位王子/最优解/最贵解/联猎/非技术型AI/代码库已冻结 or bare CURSOR/CODEX. NAME slot only — outline/one_line may say 技术王子/两位王子",
+            "characters[].name follows this episode's preattached cards. Use whatever name is on the card. Do not keep leftover names that are not on those cards. Never open CHAR from 吐槽两位王子/技术王子/幕里两位王子/两位王子/两侧王子/幕里…王子/正统王子/体验王子/重构王子/回滚王子/弹窗王子/破防王子/联猎王子/拆穿两位王子/吐槽程序员/弹幕里两位王子/最优解/最贵解/联猎/非技术型AI/代码库已冻结 or bare CURSOR/CODEX. NAME slot only — outline/one_line may say 技术王子/两位王子",
             "scenes[].name must be a spatial noun (侧边栏空间/避难所门厅/深夜IDE战场). Events/props/actions go in one_line. Avoid 侧边栏奶茶时刻 / 开源避难所入口 as the field name",
         ]
         if preattached:
@@ -62,6 +62,7 @@ class LlmProvider:
                     "大纲主角必须使用预挂角色的姓名；禁止另造同名角色",
                     "Reuse preattached names as story subjects; do not invent a parallel protagonist",
                     "Same-name extras merge onto the preattached id; never allocate a second id for that name",
+                    "Character names follow this episode's preattached cast; do not keep leftover names that are not on those cards",
                 ]
             )
 

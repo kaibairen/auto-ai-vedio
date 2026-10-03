@@ -129,6 +129,114 @@ def test_merge_used_names_dedups_generated_without_preattach(svc):
     assert named[0]["library_ref"] is None
 
 
+def test_merge_library_rename_overwrites_stale_cast_name_and_one_line(svc):
+    pid = _seed_programmer_doubao(svc)
+    rec = svc._rec(pid, "EP01")
+    stale = next(c for c in rec["cast"]["characters"] if c["id"] == "CHAR-02")
+    stale["one_line"] = "奶蛙脸陪聊破局者"
+    assert stale["name"] == "豆包"
+    svc.put_library_character(
+        pid,
+        "CHAR-02",
+        LibraryCharacterWrite(
+            name="奶蛙公主",
+            one_line="踢飞两大模型王子，带着程序员私奔",
+            version=2,
+        ),
+    )
+    warnings: list[str] = []
+    cast = svc._merge_generated_cast(
+        rec,
+        _draft(
+            [
+                {"name": "程序员", "one_line": "被模型改写的程序员"},
+                {"name": "豆包", "one_line": "奶蛙脸陪聊破局者"},
+            ]
+        ),
+        pid,
+        warnings=warnings,
+    )
+    names = [c["name"] for c in cast["characters"]]
+    assert "豆包" not in names
+    frog = next(c for c in cast["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
+    assert frog["library_ref"] == {"id": "CHAR-02", "version": 1}
+    assert any("folded generated name '豆包' onto CHAR-02" in w for w in warnings)
+
+
+def test_resolve_preattached_uses_library_identity_after_rename(svc):
+    pid = _seed_programmer_doubao(svc)
+    rec = svc._rec(pid, "EP01")
+    stale = next(c for c in rec["cast"]["characters"] if c["id"] == "CHAR-02")
+    stale["one_line"] = "奶蛙脸陪聊破局者"
+    svc.put_library_character(
+        pid,
+        "CHAR-02",
+        LibraryCharacterWrite(
+            name="奶蛙公主",
+            one_line="踢飞两大模型王子，带着程序员私奔",
+            version=2,
+        ),
+    )
+    cards = svc._resolve_preattached_characters(pid, rec)
+    frog = next(c for c in cards if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
+
+
+def test_generate_after_rename_does_not_stale_confirmed_intent(svc):
+    pid = _seed_programmer_doubao(svc)
+    persist_and_confirm_intent(svc, pid, follow_precast=True)
+    rec = svc._rec(pid, "EP01")
+    svc.put_library_character(
+        pid,
+        "CHAR-02",
+        LibraryCharacterWrite(
+            name="奶蛙公主",
+            one_line="踢飞两大模型王子，带着程序员私奔",
+            version=2,
+        ),
+    )
+    lane = rec["brief"]["lane_preference"]
+    env = svc.generate_outline(
+        pid,
+        "EP01",
+        OutlineGenerateRequest(lane=lane, provider="fixture"),
+        raw={"lane": lane, "provider": "fixture"},
+    )
+    assert env["ok"] is True
+    names = [c["name"] for c in env["cast"]["characters"]]
+    assert "豆包" not in names
+    frog = next(c for c in env["cast"]["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
+
+
+def test_fixture_generate_library_rename_reaches_episode_cast(svc):
+    pid = _seed_programmer_doubao(svc)
+    rec = svc._rec(pid, "EP01")
+    next(c for c in rec["cast"]["characters"] if c["id"] == "CHAR-02")["one_line"] = "奶蛙脸陪聊破局者"
+    svc.put_library_character(
+        pid,
+        "CHAR-02",
+        LibraryCharacterWrite(
+            name="奶蛙公主",
+            one_line="踢飞两大模型王子，带着程序员私奔",
+            version=2,
+        ),
+    )
+    persist_and_confirm_intent(svc, pid, follow_precast=True)
+    env = generate_ready(svc, pid, svc._rec(pid, "EP01")["brief"]["lane_preference"])
+    names = [c["name"] for c in env["cast"]["characters"]]
+    assert "豆包" not in names
+    frog = next(c for c in env["cast"]["characters"] if c["id"] == "CHAR-02")
+    assert frog["name"] == "奶蛙公主"
+    assert frog["one_line"] == "踢飞两大模型王子，带着程序员私奔"
+    assert "奶蛙公主" in env["outline"]["body_md"]
+    assert env["ok"] is True
+
+
 def test_merge_never_overwrites_library_ref(svc):
     pid = seed_project_episode(svc)
     svc.attach_character(pid, "EP01", AttachRequest(character_id="CHAR-01", version=3))
