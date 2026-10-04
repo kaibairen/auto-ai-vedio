@@ -43,8 +43,8 @@ from tests.drama.helpers import lock_g2, seed_project_episode
 ROOT = Path(__file__).resolve().parents[2]
 GOLD_PROMPT = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-doubao-sheet-r1-prompt.txt"
 GOLD_CARD = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-card.yaml"
-GOLD_PROMPT_MD5 = "a0a20b978f064880e0c1698edb73cd54"
-LIVE_R2_PROMPT_MD5 = "2fc8277f992fe21654303cf389d895f7"
+GOLD_PROMPT_MD5 = "0bf96c30c244f8f6c3410df03dd2d61a"
+LIVE_R2_PROMPT_MD5 = "46afeece34398ba9d433fdc6eb497b19"
 runner = CliRunner()
 
 
@@ -96,13 +96,18 @@ def test_constants_immutable_and_prompt_order():
     assert "全身正视站姿" in RECIPE_TURNAROUND_TEMPLATE
     assert "全身90°侧视站姿" in RECIPE_TURNAROUND_TEMPLATE
     assert "全身90°背视站姿" in RECIPE_TURNAROUND_TEMPLATE
-    assert "右侧（约40%宽度）：2×3 网格六张头部小图：" in RECIPE_TURNAROUND_TEMPLATE
-    assert "1）头部正面（neutral）" in RECIPE_TURNAROUND_TEMPLATE
-    assert "2）头部背面（back of head，用于发型与头型一致性）" in RECIPE_TURNAROUND_TEMPLATE
-    assert "3）头部左45°（neutral）" in RECIPE_TURNAROUND_TEMPLATE
-    assert "4）头部右45°（neutral）" in RECIPE_TURNAROUND_TEMPLATE
-    assert "5）表情特写：开心/愉悦（happy，笑但克制不夸张）" in RECIPE_TURNAROUND_TEMPLATE
-    assert "6）表情特写：生气/愤怒（angry，眉眼紧张但不夸张变形）" in RECIPE_TURNAROUND_TEMPLATE
+    assert "右侧（约40%宽度）：2×3 网格正好六张头部小图，顺序为正、背、左45、右45、笑、生气：" in RECIPE_TURNAROUND_TEMPLATE
+    assert "1）正" in RECIPE_TURNAROUND_TEMPLATE
+    assert "2）背" in RECIPE_TURNAROUND_TEMPLATE
+    assert "3）左45" in RECIPE_TURNAROUND_TEMPLATE
+    assert "4）右45" in RECIPE_TURNAROUND_TEMPLATE
+    assert "5）笑" in RECIPE_TURNAROUND_TEMPLATE
+    assert "6）生气" in RECIPE_TURNAROUND_TEMPLATE
+    assert "正、背、左45、右45、笑、生气" in RECIPE_TURNAROUND_TEMPLATE
+    assert "3×3" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "九" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "头部正面（neutral）" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "表情特写" not in RECIPE_TURNAROUND_TEMPLATE
     assert "六张小图必须是同一张脸同一发际线。" in RECIPE_TURNAROUND_TEMPLATE
     assert OUTPUT_SHEET_LINE == "输出单张3:2横版合板"
     assert "ONLY identity anchor" in EN_IDENTITY_ANCHOR
@@ -122,9 +127,13 @@ def test_constants_immutable_and_prompt_order():
     assert "左侧三张全身并排" in gold
     assert "从左到右正面、侧面、背面" in gold
     assert "两张大图上下排列" not in gold
+    assert "2×3" in gold
+    assert "正、背、左45、右45、笑、生气" in gold
+    assert "3×3" not in gold
+    assert "九" not in gold
     # Pin SoT hashes so silent STYLE/RECIPE edits fail (升 ADDENDUM/RECIPE 另拍)
     assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
-    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "b26a0791b577545df976a2506a92b34f"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "5655230d5694991640fe9cf2a75d4548"
     assert md5_text(format_negatives()) == "2bf2300e5dfc0e261e46316c7b7e73ec"
     assert md5_text(EN_IDENTITY_ANCHOR) == "950e43999e7556a7b51199e42b663009"
     assert md5_text(OUTPUT_SHEET_LINE) == "6a435c3686c78abc0a8bc03faa152b98"
@@ -137,7 +146,10 @@ def test_assemble_matches_eng031_gold_prompt():
     assert "左侧三张全身并排" in prompt
     assert "从左到右正面、侧面、背面" in prompt
     assert "两张大图上下排列" not in prompt
-    assert "2×3 网格六张头部小图" in prompt
+    assert "2×3" in prompt
+    assert "正、背、左45、右45、笑、生气" in prompt
+    assert "3×3" not in prompt
+    assert "九" not in prompt
     assert prompt.index(STYLE_BANANA_PHOTOREAL_FINAL) == 0
     assert prompt.index(RECIPE_TURNAROUND_TEMPLATE) > 0
     assert prompt.index("角色穿着：") < prompt.index("不可变：")
@@ -177,7 +189,7 @@ def test_adapter_on_default_appends_l3_and_differs_from_gold(monkeypatch):
     assert md5_text(prompt) != GOLD_PROMPT_MD5
     assert md5_text(prompt) == LIVE_R2_PROMPT_MD5
     assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
-    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "b26a0791b577545df976a2506a92b34f"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "5655230d5694991640fe9cf2a75d4548"
     monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", "l3")
     assert md5_text(_maybe_append_prompt_adapter(base)) == LIVE_R2_PROMPT_MD5
 
