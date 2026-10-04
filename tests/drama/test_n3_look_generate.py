@@ -43,8 +43,9 @@ from tests.drama.helpers import lock_g2, seed_project_episode
 ROOT = Path(__file__).resolve().parents[2]
 GOLD_PROMPT = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-doubao-sheet-r1-prompt.txt"
 GOLD_CARD = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-card.yaml"
-GOLD_PROMPT_MD5 = "4cd224525bdf108b020756ea665be8dc"
-LIVE_R2_PROMPT_MD5 = "3260df75170ea5a5cbc3f0cc8dc331e7"
+GOLD_PROMPT_MD5 = "decd7e13cda3856dcadd2723789d8aa1"
+LIVE_R2_PROMPT_MD5 = "318a03840ac88a708e791685d42b170e"
+LAYOUT_BACK_LOCK = "左栏第三张是背面全身，不能省、不能换成头"
 runner = CliRunner()
 
 
@@ -91,7 +92,12 @@ def test_constants_immutable_and_prompt_order():
     assert "禁豆包拟人IP插画与矢量吉祥物立绘感。" in STYLE_BANANA_PHOTOREAL_FINAL
     assert RECIPE_TURNAROUND_TEMPLATE.startswith("3:2 横版角色设定卡/转面板")
     assert "两张大图上下排列" in RECIPE_TURNAROUND_TEMPLATE
+    assert "全身正视站姿" in RECIPE_TURNAROUND_TEMPLATE
+    assert "全身90°侧视站姿" in RECIPE_TURNAROUND_TEMPLATE
+    assert "全身90°背视站姿" in RECIPE_TURNAROUND_TEMPLATE
+    assert RECIPE_TURNAROUND_TEMPLATE.count(LAYOUT_BACK_LOCK) == 1
     assert "六张小图必须是同一张脸同一发际线。" in RECIPE_TURNAROUND_TEMPLATE
+    assert LAYOUT_BACK_LOCK not in GOLD_CARD.read_text(encoding="utf-8")
     assert OUTPUT_SHEET_LINE == "输出单张3:2横版合板"
     assert "ONLY identity anchor" in EN_IDENTITY_ANCHOR
     assert PROMPT_ORDER == (
@@ -109,7 +115,7 @@ def test_constants_immutable_and_prompt_order():
     assert RECIPE_TURNAROUND_TEMPLATE in gold
     # Pin SoT hashes so silent STYLE/RECIPE edits fail (升 ADDENDUM/RECIPE 另拍)
     assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
-    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "97cd5c4fae718fac65e1a81174c00e1d"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "ed797d4c078c9cb36b3de89759eaa129"
     assert md5_text(format_negatives()) == "2bf2300e5dfc0e261e46316c7b7e73ec"
     assert md5_text(EN_IDENTITY_ANCHOR) == "950e43999e7556a7b51199e42b663009"
     assert md5_text(OUTPUT_SHEET_LINE) == "6a435c3686c78abc0a8bc03faa152b98"
@@ -158,7 +164,7 @@ def test_adapter_on_default_appends_l3_and_differs_from_gold(monkeypatch):
     assert md5_text(prompt) != GOLD_PROMPT_MD5
     assert md5_text(prompt) == LIVE_R2_PROMPT_MD5
     assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
-    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "97cd5c4fae718fac65e1a81174c00e1d"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "ed797d4c078c9cb36b3de89759eaa129"
     monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", "l3")
     assert md5_text(_maybe_append_prompt_adapter(base)) == LIVE_R2_PROMPT_MD5
 
