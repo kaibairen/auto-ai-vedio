@@ -39,10 +39,12 @@ from aiv_drama_n3.models import (
     LibrarySceneWrite,
     N3AttachRequest,
     N3GenerateLookRequest,
+    N3GenerateSceneRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
     N3ThickenRequest,
 )
+from aiv_drama_n3.scene_look import generate_scene_plate
 from aiv_drama_n3.seedream import ARK_IMAGES_URL
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 
@@ -663,6 +665,59 @@ def n3_generate_heads(
             )
         )
     )
+
+
+@n3_app.command("generate-scene")
+def n3_generate_scene(
+    project_id: Optional[str] = typer.Option(None, "--project"),
+    ep: Optional[str] = typer.Option(None, "--ep"),
+    ident: Optional[str] = typer.Option(None, "--id", help="SCENE-* (episode path)"),
+    card: Optional[str] = typer.Option(None, "--card", help="Standalone SCENE card yaml/json"),
+    out: Optional[str] = typer.Option(None, "--out", help="Output dir for plate + prompt + md5"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Assemble + recorded Ark body; no HTTP"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+) -> None:
+    """Opt-in SCENE location plate from name+one_line. No face ref. Not generate-look."""
+
+    def _run() -> dict:
+        settings = Settings.from_env()
+        endpoint = f"{settings.ark_base_url}/images/generations" if settings.ark_base_url else ARK_IMAGES_URL
+        if card:
+            loaded = load_look_card(card)
+            ident_local = loaded.get("id") or Path(card).stem
+            dest = Path(out) if out else Path.cwd() / "looks" / ident_local
+            look = generate_scene_plate(
+                card=loaded,
+                out_dir=dest,
+                api_key=settings.ark_api_key,
+                dry_run=dry_run,
+                endpoint=endpoint,
+            )
+            return {
+                "ok": True,
+                "mode": "standalone",
+                "node": "D-N3",
+                "usable_for_n4": False,
+                "look_usable_for_n4": False,
+                "auto_flipped_usable": False,
+                **look,
+            }
+        if not project_id or not ep or not ident:
+            raise AppError(
+                422,
+                "validation",
+                "episode path needs --project --ep --id; or pass --card",
+                node="D-N3",
+            )
+        body = N3GenerateSceneRequest(
+            id=ident,
+            dry_run=dry_run,
+            out_dir=out,
+            actor=actor,
+        )
+        return _service().generate_n3_scene(project_id, ep, body, raw=body.model_dump(exclude_none=True))
+
+    _print(_guard(_run))
 
 
 @n3_app.command("crop")

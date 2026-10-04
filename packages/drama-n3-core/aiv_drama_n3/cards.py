@@ -48,6 +48,13 @@ def binding_label(library_ref: dict[str, Any] | None) -> str:
     return "attached"
 
 
+# Character usable roles are closed: face / full. Scene cards accept any role
+# that has path+md5 and is not missing_file. Project convention for a generated
+# scene ref is role=plate (N4 helpers / attach_real_refs).
+SCENE_REF_ROLE = "plate"
+CHAR_USABLE_REF_ROLES = frozenset({"face", "full"})
+
+
 def has_usable_ref(card: dict[str, Any]) -> bool:
     kind = card.get("kind")
     for ref in card.get("refs") or []:
@@ -58,7 +65,7 @@ def has_usable_ref(card: dict[str, Any]) -> bool:
         if not path or not md5:
             continue
         role = (ref.get("role") or "").strip()
-        if kind == "character" and role not in {"face", "full"}:
+        if kind == "character" and role not in CHAR_USABLE_REF_ROLES:
             continue
         if not ref.get("missing_file", False):
             return True

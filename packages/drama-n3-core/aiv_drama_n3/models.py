@@ -38,6 +38,18 @@ class N3GenerateLookRequest(BaseModel):
     unlock_edit: bool = False
 
 
+class N3GenerateSceneRequest(BaseModel):
+    """Opt-in SCENE plate. name+one_line only. No face ref. Never flips usable_for_n4."""
+
+    model_config = {"extra": "forbid"}
+
+    id: str = Field(min_length=1)
+    dry_run: bool = False
+    out_dir: str | None = None
+    actor: str | None = None
+    unlock_edit: bool = False
+
+
 class N3AttachRequest(BaseModel):
     model_config = {"extra": "forbid"}
 

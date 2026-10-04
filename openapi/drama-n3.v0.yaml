@@ -24,6 +24,9 @@ info:
       - **032**：`POST .../drama/n3/cards/generate-look` 金样 A **单张 3:2** 合板（Ark Seedream）。
         与 CLI `aiv drama n3 generate-look` 共用 assemble+generate。禁 `sequential_image_generation`；
         禁拆 CU/LS 冒充合板；`usable_for_n4` **不自翻**。SCENE 另轨。
+      - **SCENE plate**：`POST .../drama/n3/cards/generate-scene` 与 CLI `aiv drama n3 generate-scene`
+        共用 Seedream/flash 链。prompt 仅 SCENE `name` + `one_line`；不要求脸 ref。
+        落盘 episode `looks/` 并写卡 `refs.role=plate`。opt-in；不改 CHAR generate。
 
     ## 硬规则
     - G2 未锁 → D-N3 写路径 **409 `upstream_unlocked`**
@@ -166,6 +169,42 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/N3GenerateLookRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/generate-scene:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N3Cards]
+      operationId: generateN3Scene
+      summary: 本集 SCENE 空场参考板（Ark Seedream · 与 CLI 共用 assemble）
+      description: |
+        Opt-in SCENE 另轨。读本集 SCENE 卡 `name` + `one_line`（不要脸 ref）→ 与 CLI
+        `aiv drama n3 generate-scene` 共用 assemble + Ark Seedream/flash 链。
+        size=`2048x1365`。禁 `sequential_image_generation`。
+        产物写 episode `looks/{id}`，并在该 SCENE 卡 `refs` 记 `role=plate`（`has_usable_ref` 可见）。
+        不改 CHAR 卡。`look.usable_for_n4=false`，不自翻集级 usable。
+        `dry_run=true`：落盘 prompt + recorded 请求（无 Key / 无像素 / 不写 plate ref）。
+        ForcePass=never。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3GenerateSceneRequest'
       responses:
         '200':
           description: OK
@@ -377,6 +416,7 @@ components:
         - material_bind
         - look_card_incomplete
         - scene_look_forbidden
+        - char_look_forbidden
     ErrorBody:
       type: object
       required: [code, message]
@@ -432,6 +472,17 @@ components:
         id: { type: string, description: CHAR-* }
         face_ref: { type: string, description: 本地脸 ref 路径；缺省可回落到卡上 role=face }
         expected_md5: { type: string, description: 32-hex；有则先于 generate 核验 }
+        dry_run: { type: boolean, default: false }
+        out_dir: { type: string }
+        actor: { type: string }
+        unlock_edit: { type: boolean, default: false }
+    N3GenerateSceneRequest:
+      type: object
+      required: [id]
+      additionalProperties: false
+      description: SCENE 参考板。additionalProperties=false 拒绝 force_pass / sequential_image_generation / face_ref
+      properties:
+        id: { type: string, description: SCENE-* }
         dry_run: { type: boolean, default: false }
         out_dir: { type: string }
         actor: { type: string }
