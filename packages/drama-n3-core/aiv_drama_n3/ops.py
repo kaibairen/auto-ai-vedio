@@ -7,7 +7,7 @@ from typing import Any
 from aiv_drama.errors import AppError
 from aiv_drama.models import LibraryCharacterWrite
 from aiv_drama.validate import now_iso
-from aiv_drama_n3.cards import all_cards, is_scene_id, materialize_cards
+from aiv_drama_n3.cards import all_cards, is_scene_id, materialize_cards, upsert_one_scene_card
 from aiv_drama_n3.crop import crop_view
 from aiv_drama_n3.library import (
     KIND_CHAR,
@@ -29,6 +29,7 @@ from aiv_drama_n3.models import (
     N3GenerateLookRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
+    N3PutSceneRequest,
     N3ThickenRequest,
 )
 from aiv_drama_n3.seedream import ARK_IMAGES_URL
@@ -309,6 +310,161 @@ class DramaN3Ops:
             f"n3_materialize:{project_id}:{ep}",
             self.n3_envelope(rec, warnings=warns or None),
         )
+
+    def put_n3_scene(
+        self,
+        project_id: str,
+        ep: str,
+        body: N3PutSceneRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or update one SCENE work card. Does not rebuild CHAR cards or looks."""
+        reject_force_keys_n3(raw)
+        reject_image_gen_n3(raw)
+        req = body or N3PutSceneRequest.model_validate(raw or {})
+        ident = (req.id or "").strip()
+        cached = self._idem_get(idempotency_key, f"n3_put_scene:{project_id}:{ep}:{ident}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, ep)
+        self._require_g2_for_n3(rec)
+        self._require_n3_unlock(rec, req.unlock_edit)
+        if not is_scene_id(ident):
+            raise AppError(422, "validation", "scene_id must match SCENE-##", id=ident, node=NODE_DN3)
+        self._ensure_n3_fields(rec)
+        n3 = rec.get("n3")
+        if not n3:
+            rec["n3"] = {}
+            n3 = rec["n3"]
+        cards = n3.get("cards")
+        if not cards:
+            cards = empty_n3_cards(rec)
+            n3["cards"] = cards
+        if cards.get("characters") is None:
+            cards["characters"] = []
+        if cards.get("scenes") is None:
+            cards["scenes"] = []
+        looks_before = deepcopy(n3.get("looks"))
+        card, row, skipped = upsert_one_scene_card(
+            ident,
+            rec.get("cast"),
+            rec.get("storyboard"),
+            cards,
+            name=req.name,
+            one_line=req.one_line,
+        )
+        if skipped:
+            first = skipped[0]
+            raise AppError(
+                422,
+                "validation",
+                first.get("message") or "不合规 SCENE 不开场景卡",
+                id=ident,
+                name=row.get("name"),
+                skipped_code=first.get("code"),
+                node=NODE_DN3,
+            )
+        if not (row.get("name") or "").strip():
+            raise AppError(
+                422,
+                "card_incomplete",
+                "卡必须有稳定称谓",
+                id=ident,
+                field="name",
+                node=NODE_DN3,
+            )
+        if not (row.get("one_line") or "").strip():
+            raise AppError(
+                422,
+                "card_incomplete",
+                "卡必须有一句职司/空间功能（one_line）",
+                id=ident,
+                field="one_line",
+                node=NODE_DN3,
+            )
+        if card is None:
+            raise AppError(422, "validation", "不合规 SCENE 不开场景卡", id=ident, node=NODE_DN3)
+        created = True
+        scenes = list(cards.get("scenes") or [])
+        for i, existing in enumerate(scenes):
+            if existing.get("id") == ident:
+                scenes[i] = card
+                created = False
+                break
+        else:
+            scenes.append(card)
+        cards["scenes"] = scenes
+        self._upsert_cast_scene_row(rec, row)
+        self._register_scene(rec, ident)
+        cards["materialized"] = True
+        cards["version"] = (cards.get("version") or 0) + 1
+        cards["stale"] = False
+        cards["locked"] = False
+        cards["confirmed_by"] = None
+        cards["updated_at"] = now_iso()
+        cards["updated_by"] = req.actor
+        rec["gate_g3"]["state"] = "ready" if (cards.get("characters") or cards.get("scenes")) else "idle"
+        rec["gate_g3"]["locked"] = False
+        rec["episode"]["locks"]["g3"] = False
+        rec["episode"]["next_edges"] = [NODE_DN3]
+        rec["episode"]["versions"]["cards"] = cards["version"]
+        if looks_before is not None:
+            n3["looks"] = looks_before
+        self._refresh_usable(rec)
+        self._touch_episode(rec)
+        self._commit(rec)
+        issues = collect_n3_issues(rec)
+        warns = [i for i in issues if i.get("severity") == "warn"]
+        extra = {
+            "put_scene": {"id": ident, "created": created, "kind": KIND_SCENE},
+            "rewrote_characters": False,
+        }
+        return self._idem_put(
+            idempotency_key,
+            f"n3_put_scene:{project_id}:{ep}:{ident}",
+            self.n3_envelope(rec, warnings=warns or None, extra=extra),
+        )
+
+    def _upsert_cast_scene_row(self, rec: dict[str, Any], row: dict[str, Any]) -> None:
+        """Keep G3 cast-only invariant without rewriting CHAR cast rows."""
+        cast = rec.get("cast")
+        if not cast:
+            raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)
+        scenes = list(cast.get("scenes") or [])
+        ident = row["id"]
+        payload = {
+            "id": ident,
+            "name": row.get("name") or ident,
+            "one_line": row.get("one_line") or "",
+            "library_ref": deepcopy(row.get("library_ref")) if row.get("library_ref") else None,
+        }
+        changed = False
+        for i, existing in enumerate(scenes):
+            if existing.get("id") != ident:
+                continue
+            next_row = dict(existing)
+            if payload["name"] and next_row.get("name") != payload["name"]:
+                next_row["name"] = payload["name"]
+                changed = True
+            if payload["one_line"] and next_row.get("one_line") != payload["one_line"]:
+                next_row["one_line"] = payload["one_line"]
+                changed = True
+            if payload["library_ref"] is not None and next_row.get("library_ref") != payload["library_ref"]:
+                next_row["library_ref"] = payload["library_ref"]
+                changed = True
+            scenes[i] = next_row
+            break
+        else:
+            scenes.append(payload)
+            changed = True
+        if not changed:
+            return
+        cast["scenes"] = scenes
+        cast["version"] = (cast.get("version") or 0) + 1
+        cast["updated_at"] = now_iso()
+        rec["episode"]["versions"]["cast"] = cast["version"]
 
     def thicken_n3_cards(
         self,

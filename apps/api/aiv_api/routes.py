@@ -39,6 +39,7 @@ from aiv_drama_n3.models import (
     N3GenerateLookRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
+    N3PutSceneRequest,
     N3ThickenRequest,
 )
 from aiv_drama_n3.validate import reject_force_keys_n3, reject_image_gen_n3
@@ -513,6 +514,18 @@ async def materialize_n3_cards(
     raw = await _raw_n3(request)
     body = N3MaterializeRequest.model_validate(raw) if raw else N3MaterializeRequest()
     return _svc(request).materialize_n3_cards(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/put-scene")
+async def put_n3_scene(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n3(request)
+    body = N3PutSceneRequest.model_validate(raw)
+    return _svc(request).put_n3_scene(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 @router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/thicken")

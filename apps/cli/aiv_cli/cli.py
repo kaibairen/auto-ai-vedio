@@ -41,6 +41,7 @@ from aiv_drama_n3.models import (
     N3GenerateLookRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
+    N3PutSceneRequest,
     N3ThickenRequest,
 )
 from aiv_drama_n3.seedream import ARK_IMAGES_URL
@@ -502,6 +503,21 @@ def n3_materialize(
 ) -> None:
     body = N3MaterializeRequest(actor=actor, unlock_edit=unlock_edit)
     _print(_guard(lambda: _service().materialize_n3_cards(project_id, ep, body, raw=body.model_dump())))
+
+
+@n3_app.command("put-scene")
+def n3_put_scene(
+    project_id: str = typer.Option(..., "--project"),
+    ep: str = typer.Option(..., "--ep"),
+    ident: str = typer.Option(..., "--id", help="SCENE-* to create or update"),
+    name: Optional[str] = typer.Option(None, "--name"),
+    one_line: Optional[str] = typer.Option(None, "--one-line"),
+    actor: Optional[str] = typer.Option(None, "--actor"),
+    unlock_edit: bool = typer.Option(False, "--unlock-edit"),
+) -> None:
+    """Create or update one SCENE work card. Does not rewrite CHAR cards or looks."""
+    body = N3PutSceneRequest(id=ident, name=name, one_line=one_line, actor=actor, unlock_edit=unlock_edit)
+    _print(_guard(lambda: _service().put_n3_scene(project_id, ep, body, raw=body.model_dump(exclude_none=True))))
 
 
 @n3_app.command("thicken")
