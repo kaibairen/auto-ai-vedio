@@ -106,6 +106,39 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /projects/{project_id}/episodes/{ep}/drama/n3/cards/put-scene:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N3Cards]
+      operationId: putN3SceneCard
+      summary: 新增或更新一张本集 SCENE 工作卡（不重写 CHAR）
+      description: |
+        按 SCENE-* id 创建或更新 **一张** 场景工作副本。不重建 CHAR 卡，不丢 looks，不调 LLM / 生图。
+        可从本集 cast.scenes 取名，或用 body name/one_line 补一行 cast.scenes（故事板 scene_id 只作 used-set）。
+        既有 `materialize` 全量行为不变；本路径 opt-in。
+        G2 须锁定。G3 已锁须 unlock_edit。force_pass / image_gen → 400。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N3PutSceneRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N3Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
   /projects/{project_id}/episodes/{ep}/drama/n3/cards/thicken:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -411,6 +444,17 @@ components:
       properties:
         actor: { type: string }
         unlock_edit: { type: boolean, default: false }
+    N3PutSceneRequest:
+      type: object
+      required: [id]
+      additionalProperties: false
+      description: 单张 SCENE 工作卡 upsert。additionalProperties=false 拒绝 force_pass / image_gen
+      properties:
+        id: { type: string, description: SCENE-* }
+        name: { type: string }
+        one_line: { type: string }
+        actor: { type: string }
+        unlock_edit: { type: boolean, default: false }
     N3ThickenRequest:
       type: object
       additionalProperties: false
@@ -516,6 +560,8 @@ components:
         look: { type: object, additionalProperties: true }
         look_usable_for_n4: { type: boolean, enum: [false] }
         auto_flipped_usable: { type: boolean, enum: [false] }
+        put_scene: { type: object, additionalProperties: true }
+        rewrote_characters: { type: boolean, enum: [false] }
     GateG3Status:
       type: object
       required: [gate_id, state, locked, version]
