@@ -1,7 +1,8 @@
 """Gold-A 3:2 CHAR turnaround-sheet prompt contract (BRIEF-AIV-032).
 
-STYLE终句 and RECIPE §4 body are frozen SoT strings — do not rewrite.
-Wardrobe / immutable / height come only from thick-card fields.
+STYLE终句 (Doubao look-style ban) is frozen — do not rewrite.
+RECIPE_TURNAROUND_TEMPLATE is the shared layout + image-quality prompt.
+Run-specific task notes are caller input and must not live in the template.
 Never invent CHAR clothing or sheet body text.
 """
 
@@ -26,11 +27,11 @@ STYLE_BANANA_PHOTOREAL_FINAL = (
     "禁二次元、赛璐璐、动漫卡通、萌系大眼；禁豆包拟人IP插画与矢量吉祥物立绘感。"
 )
 
-# RECIPE-AIV-031-BANANA-LOCAL-v0 §4 turnaround template · 一字不改（含教材「两张大图」笔误）
+# Shared layout + image-quality template. Run notes stay outside this literal.
 RECIPE_TURNAROUND_TEMPLATE = """\
-3:2 横版角色设定卡/转面板（turnaround sheet / model sheet），纯白干净棚拍背景。以参考图角色为唯一身份锚点：脸型轮廓（下颌线、颧骨、下巴形状）、眼型、眉形、鼻梁与鼻翼、嘴唇厚薄与嘴角形状、年龄气质必须严格一致；发际线与发型尽量一致。只允许同一个角色，禁止换脸、禁止五官漂移。
+3:2 横版角色设定卡/转面板（turnaround sheet / model sheet），纯白干净棚拍背景。
 
-版式（单张合成图，干净网格，无实线，统一光影与色彩）：
+版式（单张合成图，干净网格，无实线）：
 左侧（约60%宽度）：两张大图上下排列：
 1）全身正视站姿（中性站姿，手臂自然下垂）
 2）全身90°侧视站姿（中性站姿，手臂自然下垂）
@@ -38,15 +39,15 @@ RECIPE_TURNAROUND_TEMPLATE = """\
 
 右侧（约40%宽度）：2×3 网格六张头部小图：
 1）头部正面（neutral）
-2）头部背面按这张角色卡的遮挡画。角色卡没写遮挡时，露出后脑头型
+2）头部背面按角色卡的遮挡画。卡没写遮挡就露出后脑
 3）头部左45°（neutral）
 4）头部右45°（neutral）
-5）表情特写：开心只抬眼皮，嘴保持这张角色卡写的嘴型，不许另改嘴
-6）表情特写：生气只把眼皮压低，眉和嘴保持角色卡，不许皱眉，不许改嘴型
+5）按角色卡的嘴型和眉。不许自行张嘴或皱眉
+6）按角色卡的嘴型和眉。不许自行张嘴或皱眉
 
-质感与画质：高端写实棚拍/电影级人像质感，眼睛清晰锐利对焦，真实皮肤微观质感（毛孔与细纹，不磨皮不塑料），全图各分区曝光与色彩一致，8K细节，轻胶片颗粒，超干净白底，脚下干净柔和投影。
+质感与画质：高端写实棚拍/电影级人像质感，眼睛清晰锐利对焦，真实皮肤微观质感（毛孔与细纹，不磨皮不塑料），光一致，颜色按角色卡，8K细节，轻胶片颗粒，超干净白底，脚下干净柔和投影。
 
-强约束：画面内不允许任何可读文字（不要 FRONT/SIDE 等标签），不要字幕、不要logo、不要UI叠层、不要水印块；不要卡通二次元；不要多余人物；不要畸形手指/多肢体/脸崩；六张小图必须是同一张脸同一发际线。"""
+强约束：画面内不允许任何可读文字（不要 FRONT/SIDE 等标签），不要字幕、不要logo、不要UI叠层、不要水印块；不要卡通二次元；不要多余人物；不要畸形手指/多肢体/脸崩。"""
 
 # ADDENDUM negative patch (two source lines; joined for the 禁令 row as eng-031 gold)
 STYLE_NEGATIVE_LINE_1 = (
@@ -85,6 +86,12 @@ PROMPT_ORDER = (
     "negatives",
     "en_identity_anchor",
     "output_sheet_line",
+)
+
+TASK_NOTE_PROMPT_ORDER = (
+    "style_final",
+    "recipe_turnaround",
+    "task_note",
 )
 
 LOOK_KIND = "gold_a_turnaround_sheet"
@@ -154,12 +161,37 @@ def card_identity_fields(card: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def assemble_gold_a_sheet_prompt(card: dict[str, Any] | None) -> str:
+def normalize_task_note(value: str | None) -> str | None:
+    """Caller-facing run note. Empty / whitespace-only is treated as absent."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def load_task_note_file(path: str | Path) -> str:
+    """Read one task note from a local file. Not a shared template literal."""
+    raw_path = Path(path)
+    if not raw_path.is_file():
+        raise AppError(422, "validation", f"task-note file not found: {raw_path}", node=NODE_DN3)
+    note = normalize_task_note(raw_path.read_text(encoding="utf-8"))
+    if not note:
+        raise AppError(422, "validation", "task-note file is empty", node=NODE_DN3)
+    return note
+
+
+def assemble_gold_a_sheet_prompt(
+    card: dict[str, Any] | None,
+    task_note: str | None = None,
+) -> str:
     """Shared prompt assemble. CLI and workbench/HTTP must call this function.
 
-    Order (BRIEF-AIV-032):
-      1. STYLE终句  2. RECIPE§4  3. wardrobe/immutable from card
+    Without task_note (BRIEF-AIV-032):
+      1. STYLE终句  2. RECIPE layout/quality  3. wardrobe/immutable from card
       4. height if present  5. negatives  6. EN identity  7. 输出单张3:2横版合板
+
+    With task_note: STYLE + RECIPE + that note once. Do not paste the card
+    appearance/immutable block again after the note.
     """
     card = card or {}
     fields = card_identity_fields(card)
@@ -172,6 +204,10 @@ def assemble_gold_a_sheet_prompt(card: dict[str, Any] | None) -> str:
             card_id=card.get("id"),
         )
     blocks = [STYLE_BANANA_PHOTOREAL_FINAL, RECIPE_TURNAROUND_TEMPLATE]
+    note = normalize_task_note(task_note)
+    if note:
+        blocks.append(note)
+        return "\n\n".join(blocks) + "\n"
     identity_lines = [line for line in (fields["wardrobe"], fields["immutable"]) if line]
     if identity_lines:
         blocks.append("\n".join(identity_lines))
@@ -182,7 +218,10 @@ def assemble_gold_a_sheet_prompt(card: dict[str, Any] | None) -> str:
     return "\n\n".join(blocks) + "\n"
 
 
-def assemble_sections(card: dict[str, Any] | None) -> list[tuple[str, str]]:
+def assemble_sections(
+    card: dict[str, Any] | None,
+    task_note: str | None = None,
+) -> list[tuple[str, str]]:
     """Machine-checkable order for tests. Same strings as assemble_gold_a_sheet_prompt."""
     card = card or {}
     fields = card_identity_fields(card)
@@ -190,6 +229,10 @@ def assemble_sections(card: dict[str, Any] | None) -> list[tuple[str, str]]:
         ("style_final", STYLE_BANANA_PHOTOREAL_FINAL),
         ("recipe_turnaround", RECIPE_TURNAROUND_TEMPLATE),
     ]
+    note = normalize_task_note(task_note)
+    if note:
+        sections.append(("task_note", note))
+        return sections
     if fields["wardrobe"]:
         sections.append(("wardrobe", fields["wardrobe"]))
     if fields["immutable"]:
