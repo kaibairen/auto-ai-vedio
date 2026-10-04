@@ -34,6 +34,7 @@ from aiv_drama_n2.models import (
 )
 from aiv_drama_n3.gold_sheet import load_look_card
 from aiv_drama_n3.look_generate import generate_gold_a_sheet
+from aiv_drama_n3.split_look import generate_split_look
 from aiv_drama_n3.models import (
     LibrarySceneWrite,
     N3AttachRequest,
@@ -581,6 +582,87 @@ def n3_generate_look(
         return _service().generate_n3_look(project_id, ep, body, raw=body.model_dump(exclude_none=True))
 
     _print(_guard(_run))
+
+
+def _standalone_split_look(
+    *,
+    kind: str,
+    card: str,
+    face_ref: str,
+    expected_md5: Optional[str],
+    out: Optional[str],
+    dry_run: bool,
+) -> dict:
+    settings = Settings.from_env()
+    endpoint = f"{settings.ark_base_url}/images/generations" if settings.ark_base_url else ARK_IMAGES_URL
+    loaded = load_look_card(card)
+    ident_local = loaded.get("id") or Path(card).stem
+    dest = Path(out) if out else Path.cwd() / "looks" / ident_local
+    look = generate_split_look(
+        kind=kind,  # type: ignore[arg-type]
+        card=loaded,
+        face_ref=face_ref,
+        expected_md5=expected_md5,
+        out_dir=dest,
+        api_key=settings.ark_api_key,
+        dry_run=dry_run,
+        endpoint=endpoint,
+    )
+    return {
+        "ok": True,
+        "mode": "standalone",
+        "node": "D-N3",
+        "usable_for_n4": False,
+        "look_usable_for_n4": False,
+        "auto_flipped_usable": False,
+        **look,
+    }
+
+
+@n3_app.command("generate-fullbody")
+def n3_generate_fullbody(
+    card: str = typer.Option(..., "--card", help="Standalone thick-card yaml/json"),
+    face_ref: str = typer.Option(..., "--face-ref", help="Local face ref image (BIND before generate)"),
+    expected_md5: Optional[str] = typer.Option(None, "--expected-md5"),
+    out: Optional[str] = typer.Option(None, "--out", help="Output dir for sheet + prompt + md5"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Assemble + bind + recorded Ark body; no HTTP"),
+) -> None:
+    """Three full-body views only (front/side/back). Not generate-look. No model/skip-flash switch."""
+    _print(
+        _guard(
+            lambda: _standalone_split_look(
+                kind="fullbody",
+                card=card,
+                face_ref=face_ref,
+                expected_md5=expected_md5,
+                out=out,
+                dry_run=dry_run,
+            )
+        )
+    )
+
+
+@n3_app.command("generate-heads")
+def n3_generate_heads(
+    card: str = typer.Option(..., "--card", help="Standalone thick-card yaml/json"),
+    face_ref: str = typer.Option(..., "--face-ref", help="Local face ref image (BIND before generate)"),
+    expected_md5: Optional[str] = typer.Option(None, "--expected-md5"),
+    out: Optional[str] = typer.Option(None, "--out", help="Output dir for sheet + prompt + md5"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Assemble + bind + recorded Ark body; no HTTP"),
+) -> None:
+    """2×3 head grid only (正、背、左45、右45、笑、生气). Not generate-look. No model/skip-flash switch."""
+    _print(
+        _guard(
+            lambda: _standalone_split_look(
+                kind="heads",
+                card=card,
+                face_ref=face_ref,
+                expected_md5=expected_md5,
+                out=out,
+                dry_run=dry_run,
+            )
+        )
+    )
 
 
 @n3_app.command("crop")

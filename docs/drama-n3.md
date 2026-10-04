@@ -30,7 +30,7 @@ KEEP（仓内若存在）：`.prompt/consistency/人物卡模板/*`、`.prompt/c
 1. 先走完 D-N2，**门 G2 pass**。未锁时物化/attach/GET N3 → **409 `upstream_unlocked`**。
 2. **POST** `.../drama/n3/cards/materialize`：只从本集 cast 的 CHAR-*/SCENE-* 挂出工作副本。系统音/群杂/CHAR 脏名不开 CHAR。SCENE 与 CHAR **分桶**：合法空间短名（含 茶水间时刻 / 营帐入口 / **弹窗审判庭**）不得因 CHAR `弹窗*` 半截规则 `b_class_skipped`。裸 `弹窗` / `系统音` 仍跳过。已挂 library_ref 的 CHAR 行不得因通用头衔分类被丢掉。禁以 cast 名手补丁当 G3 产品解。
 3. **POST** `.../drama/n3/cards/thicken`（029 · 文字加厚）：`provider=llm` 填 CHAR `appearance`+`immutable`、SCENE 空间 `appearance`+`light_anchor`。KEEP 人物卡模板进 `prompt_paths`。可选 `--include-bio-skill` 进 `thicken_skill_paths`（**不**写回 N1/N2 `skill_paths`）。SCENE 模板 `provisional_inline`。CAM 扩展槽软并入 appearance/light_anchor。`refs` 可仍空；**不**翻转 `usable_for_n4`；**不** assemble N4。狗粮默认 **G3 锁前** thicken。
-4. **POST** `.../drama/n3/cards/generate-look`（032 · 金样 A 3:2 单张合板）：厚卡 + 脸 ref（md5 先于 generate）→ 与 CLI 共用 `assemble_gold_a_sheet_prompt` + Ark Seedream。拼装后默认追加 L3 真背硬约束（`AIV_LOOK_PROMPT_ADAPTER` default ON；`off`/`0`/空串关闭）。禁 `sequential_image_generation`；禁拆 CU/LS。合板 `usable_for_n4=false`，**不**自翻集级 usable。SCENE 另轨。无 Key 用 `dry_run`。见 [`aiv-032-gold-sheet.md`](aiv-032-gold-sheet.md)。
+4. **POST** `.../drama/n3/cards/generate-look`（032 · 金样 A 3:2 单张合板）：厚卡 + 脸 ref（md5 先于 generate）→ 与 CLI 共用 `assemble_gold_a_sheet_prompt` + Ark Seedream。拼装后默认追加 L3 真背硬约束（`AIV_LOOK_PROMPT_ADAPTER` default ON；`off`/`0`/空串关闭）。禁 `sequential_image_generation`；禁拆 CU/LS。合板 `usable_for_n4=false`，**不**自翻集级 usable。SCENE 另轨。无 Key 用 `dry_run`。见 [`aiv-032-gold-sheet.md`](aiv-032-gold-sheet.md)。全身裁脚时用独立 CLI `generate-fullbody` / `generate-heads`（不经 generate-look，合板行为不变）。
 5. 故事板裁剪 **GET** `.../drama/n3/storyboard-crop` = 既有 D-N2 列只读投影（seq/shot_id/duration/shot_size/camera/action/char_ids/scene_id/dialogue/notes）。不扩 N2 schema。
 6. **门 G3**：`{ decision: pass|reject, actor, note? }`。
    - pass → cards `locked=true`，`next_edges=["D-N4"]`，**不**创建 D-N4 job。
@@ -50,6 +50,8 @@ aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
 aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
 aiv drama n3 generate-look --project proj_01 --ep EP01 --id CHAR-01 --face-ref /path/to/face.jpg --dry-run
+aiv drama n3 generate-fullbody --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --expected-md5 a8c70f3b4cb7855284d3d4d2bd3c906d --out ./looks/CHAR-01 --dry-run
+aiv drama n3 generate-heads --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --expected-md5 a8c70f3b4cb7855284d3d4d2bd3c906d --out ./looks/CHAR-01 --dry-run
 aiv drama n3 get --project proj_01 --ep EP01
 aiv drama n3 attach --project proj_01 --ep EP01 --id CHAR-01 --version 3
 aiv drama n3 promote --project proj_01 --ep EP01 --id CHAR-01

@@ -1,0 +1,27 @@
+统一画风：高端写实棚拍定妆，电影级人像质感，soft studio lighting，真实皮肤纹理与布料材质，photographic portrait look，商业写真向；2×3 头部网格构图，白底干净棚拍；禁二次元、赛璐璐、动漫卡通、萌系大眼；禁豆包拟人IP插画与矢量吉祥物立绘感。
+
+横版头部网格，纯白干净棚拍背景。以参考图角色为唯一身份锚点：脸型轮廓（下颌线、颧骨、下巴形状）、眼型、眉形、鼻梁与鼻翼、嘴唇厚薄与嘴角形状、年龄气质必须严格一致；发际线与发型尽量一致。只允许同一个角色，禁止换脸、禁止五官漂移。
+
+版式（单张图，仅 2×3 网格，干净无实线，统一光影与色彩）：
+2×3 网格六张头图，从左到右、从上到下顺序：正、背、左45、右45、笑、生气。
+1）正
+2）背
+3）左45
+4）右45
+5）笑
+6）生气
+六张必须是同一张脸同一发际线。
+
+质感与画质：高端写实棚拍/电影级人像质感，眼睛清晰锐利对焦，真实皮肤微观质感（毛孔与细纹，不磨皮不塑料），全图各分区曝光与色彩一致，8K细节，轻胶片颗粒，超干净白底。
+
+强约束：画面内不允许任何可读文字（不要 FRONT/SIDE 等标签），不要字幕、不要logo、不要UI叠层、不要水印块；不要卡通二次元；不要多余人物；不要畸形手指/多肢体/脸崩。本图只输出 2×3 头部网格。
+
+角色穿着：灰色连帽卫衣（帽子常半扣在脑后）、深色宽松工装裤、白色旧运动鞋；圆框黑边眼镜，镜片可有反光；黑色微乱短发，刘海压到眉骨，发际线略后移；瘦削窄肩；定妆站姿中性、手臂自然下垂（勿蹲蜷捂脸哭戏）。
+不可变：圆框黑边眼镜；灰色连帽卫衣+深色工装裤+白鞋；黑色微乱短发与略后移发际线。
+
+人物身高1.75米
+
+禁令：no anime, no cel shading, no cartoon coloring, no 2D illustration look, no oversized anime eyes, no moe face, no doubao-style mascot anthro, no chibi, no clean vector character art as identity, no brand logo watermark, no readable text on image
+
+Use the attached reference photo as the ONLY identity anchor for the face. Match facial structure, features, age, and hairstyle from the reference. Output a single 2x3 head-shot grid image.
+输出单张2×3头部网格

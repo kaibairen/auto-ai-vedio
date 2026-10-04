@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.12 — split full-body / heads look generate (docs≠PASS)
+
+`generate-look` stays the Gold-A 3:2 combined 3+6 sheet. Two new standalone CLI commands assemble and generate **separate** images so full bodies are not cropped by the head grid.
+
+- `aiv drama n3 generate-fullbody` — three full-body views side by side (front / side / back), head-to-toe, feet not cropped. Prompt does not ask for six heads or a 2×3 head grid.
+- `aiv drama n3 generate-heads` — 2×3 head grid only, order 正、背、左45、右45、笑、生气. Prompt does not ask for three full-body views, does not say 3×3, and does not contain 九.
+- Same card path / face-ref / expected md5 / out / dry-run as standalone `generate-look`. Dry-run writes the prompt and recorded Ark body; no image API. Live uses the existing Seedream chain, flash first. No `--model` / skip-flash switch.
+- Appearance still comes from the thick card (`wardrobe`/`appearance` + `immutable` + height). Templates do not hardcode episode names, costume details, or extra bans.
+- Tests: `tests/drama/test_n3_split_look.py` plus existing `tests/drama/test_n3_look_generate.py` for the combined sheet.
+- ForcePass=never. Does **not** merge to main. Does not flip `usable_for_n4`.
+
 ## 0.2.11 — library-only character names (docs≠PASS)
 
 Shared pipeline no longer rivets one dogfood episode's proper names or look assets. Names live only on this project's this episode's preattached character cards. A generated name that is that full name plus a prefix or suffix folds to the same id; otherwise do not force-fold. A genuinely new character still gets a new id under DRAMA-N0N1-PRD §5.2. An already-attached row is not dropped because a generic-title classifier matches. ForcePass=never. Do **not** merge until the control seat reviews the head.
