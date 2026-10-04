@@ -27,10 +27,12 @@ from aiv_drama_n3.models import (
     N3AttachRequest,
     N3ForkRequest,
     N3GenerateLookRequest,
+    N3GenerateSceneRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
     N3ThickenRequest,
 )
+from aiv_drama_n3.scene_look import SCENE_PLATE_KIND, SCENE_PLATE_ROLE, generate_scene_plate
 from aiv_drama_n3.seedream import ARK_IMAGES_URL
 from aiv_drama_n3.thicken import normalize_thicken_provider, thicken_cards
 from aiv_drama_n3.policy import default_project_scope, hanging_bundle, project_scope_capability
@@ -519,6 +521,95 @@ class DramaN3Ops:
         return self._idem_put(
             idempotency_key,
             f"n3_look:{project_id}:{ep}:{req.id}:{int(req.dry_run)}",
+            self.n3_envelope(rec, warnings=warns or None, extra=extra),
+        )
+
+    def generate_n3_scene(
+        self,
+        project_id: str,
+        ep: str,
+        body: N3GenerateSceneRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        post: Any | None = None,
+        get: Any | None = None,
+    ) -> dict[str, Any]:
+        """Opt-in SCENE plate. Shared generate_scene_plate. Records role=plate. Never flips usable_for_n4."""
+        reject_force_keys_n3(raw)
+        if isinstance(raw, dict) and "sequential_image_generation" in raw:
+            raise AppError(
+                400,
+                "validation",
+                "forbidden: sequential_image_generation",
+                node=NODE_DN3,
+                field="sequential_image_generation",
+            )
+        req = body or N3GenerateSceneRequest.model_validate(raw or {})
+        cached = self._idem_get(idempotency_key, f"n3_scene:{project_id}:{ep}:{req.id}:{int(req.dry_run)}")
+        if cached:
+            return cached
+        rec = self._rec(project_id, ep)
+        self._require_g2_for_n3(rec)
+        self._require_writable_episode(rec)
+        cards = (rec.get("n3") or {}).get("cards")
+        if not cards or not cards.get("materialized"):
+            raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)
+        kind = parse_kind(req.id, None)
+        if kind != KIND_SCENE:
+            raise AppError(
+                422,
+                "char_look_forbidden",
+                "场景参考板仅 SCENE；CHAR 走 generate-look / generate-fullbody / generate-heads",
+                id=req.id,
+                node=NODE_DN3,
+            )
+        card = self._find_card(rec, req.id, KIND_SCENE)
+        if card is None:
+            raise AppError(422, "card_id_not_in_cast", CAST_ONLY_MESSAGE, id=req.id, node=NODE_DN3)
+        ep_id = rec["episode"]["episode_id"]
+        out_dir = Path(req.out_dir) if req.out_dir else self.store.episode_dir(project_id, ep_id) / "looks" / req.id
+        endpoint = f"{getattr(self.settings, 'ark_base_url', None) or ARK_IMAGES_URL.rsplit('/images', 1)[0]}/images/generations"
+        look = generate_scene_plate(
+            card=card,
+            out_dir=out_dir,
+            api_key=getattr(self.settings, "ark_api_key", None),
+            dry_run=bool(req.dry_run),
+            endpoint=endpoint,
+            post=post,
+            get=get,
+        )
+        rec["n3"].setdefault("looks", {})
+        rec["n3"]["looks"][req.id] = {k: v for k, v in look.items() if k != "ok"}
+        slim = {
+            "kind": SCENE_PLATE_KIND,
+            "role": SCENE_PLATE_ROLE,
+            "sheet_path": look.get("sheet_path"),
+            "sheet_md5": look.get("sheet_md5"),
+            "prompt_path": look.get("prompt_path"),
+            "prompt_md5": look.get("prompt_md5"),
+            "usable_for_n4": False,
+            "dry_run": look.get("dry_run"),
+            "model": look.get("model"),
+        }
+        existing = [x for x in (card.get("looks") or []) if isinstance(x, dict) and x.get("kind") != SCENE_PLATE_KIND]
+        card["looks"] = existing + [slim]
+        cards["updated_at"] = now_iso()
+        cards["updated_by"] = req.actor
+        # Live plate write records refs on this SCENE card only. Do not unlock G3 or bump cards.version.
+        self._refresh_usable(rec)
+        self._touch_episode(rec)
+        self._commit(rec)
+        issues = collect_n3_issues(rec)
+        warns = [i for i in issues if i.get("severity") == "warn"]
+        extra = {
+            "look": look,
+            "look_usable_for_n4": False,
+            "auto_flipped_usable": False,
+        }
+        return self._idem_put(
+            idempotency_key,
+            f"n3_scene:{project_id}:{ep}:{req.id}:{int(req.dry_run)}",
             self.n3_envelope(rec, warnings=warns or None, extra=extra),
         )
 

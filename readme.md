@@ -51,6 +51,7 @@ aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogf
 aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
 aiv drama n3 generate-fullbody --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
 aiv drama n3 generate-heads --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run
+aiv drama n3 generate-scene --project proj_01 --ep EP01 --id SCENE-01 --dry-run
 # live: ARK_API_KEY in env or ~/.config/aiv/ARK_API_KEY — never echo / never commit
 aiv drama g3 confirm --project proj_01 --ep EP01 --decision pass --actor yangzhou
 ```

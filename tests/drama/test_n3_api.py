@@ -40,6 +40,7 @@ def test_openapi_n3_copy_served(client):
     assert "force_pass_forbidden" in res.text
     assert "cards/thicken" in res.text
     assert "cards/generate-look" in res.text
+    assert "cards/generate-scene" in res.text
     assert "thicken_skill_paths" in res.text
     assert "provisional_inline" in res.text
     assert "2048x1365" in res.text

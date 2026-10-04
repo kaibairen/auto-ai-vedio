@@ -37,6 +37,7 @@ from aiv_drama_n3.models import (
     N3AttachRequest,
     N3ForkRequest,
     N3GenerateLookRequest,
+    N3GenerateSceneRequest,
     N3MaterializeRequest,
     N3PromoteRequest,
     N3ThickenRequest,
@@ -537,6 +538,18 @@ async def generate_n3_look(
     raw = await _raw_n3_look(request)
     body = N3GenerateLookRequest.model_validate(raw)
     return _svc(request).generate_n3_look(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/drama/n3/cards/generate-scene")
+async def generate_n3_scene(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_n3_look(request)
+    body = N3GenerateSceneRequest.model_validate(raw)
+    return _svc(request).generate_n3_scene(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
 @router.get("/projects/{project_id}/episodes/{ep}/drama/n3/storyboard-crop")

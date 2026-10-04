@@ -255,6 +255,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "金样 A 合板仅 CHAR；SCENE 另轨。",
         "en": "Gold-A sheet is CHAR-only; SCENE is a separate track.",
     },
+    "char_look_forbidden": {
+        "zh": "场景参考板仅 SCENE；CHAR 走 generate-look / generate-fullbody / generate-heads。",
+        "en": "Scene plate is SCENE-only; CHAR uses generate-look / generate-fullbody / generate-heads.",
+    },
 }
 
 

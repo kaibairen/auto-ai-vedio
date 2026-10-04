@@ -55,21 +55,28 @@ def face_to_data_url(path: str | Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def ark_body_keys(*, has_image: bool) -> list[str]:
+    if has_image:
+        return list(ARK_BODY_KEYS)
+    return [key for key in ARK_BODY_KEYS if key != "image"]
+
+
 def build_ark_body(
     *,
     model: str,
     prompt: str,
-    image_data_url: str,
+    image_data_url: str | None = None,
     size: str = SHEET_SIZE,
 ) -> dict[str, Any]:
-    body = {
+    body: dict[str, Any] = {
         "model": model,
         "prompt": prompt,
         "size": size,
         "watermark": False,
         "response_format": "url",
-        "image": image_data_url,
     }
+    if image_data_url:
+        body["image"] = image_data_url
     leaked = FORBIDDEN_ARK_KEYS.intersection(body)
     if leaked:
         raise AppError(
@@ -86,13 +93,14 @@ def recorded_ark_request(
     *,
     model: str,
     prompt: str,
-    face_md5: str,
-    image_bytes_len: int,
+    face_md5: str | None = None,
+    image_bytes_len: int | None = None,
     size: str = SHEET_SIZE,
     endpoint: str = ARK_IMAGES_URL,
 ) -> dict[str, Any]:
     """Dry-run / CI recorded contract. No key, no data-URL payload."""
-    return {
+    has_image = bool(face_md5) and image_bytes_len is not None
+    recorded: dict[str, Any] = {
         "provider": "ark",
         "endpoint": endpoint,
         "method": "POST",
@@ -101,13 +109,15 @@ def recorded_ark_request(
         "size": size,
         "watermark": False,
         "response_format": "url",
-        "body_keys": list(ARK_BODY_KEYS),
+        "body_keys": ark_body_keys(has_image=has_image),
         "forbidden_absent": sorted(FORBIDDEN_ARK_KEYS),
-        "image": f"data-url redacted · bytes={image_bytes_len} · md5={face_md5}",
         "prompt_chars": len(prompt),
         "sequential_image_generation": False,
         "split_cu_ls": False,
     }
+    if has_image:
+        recorded["image"] = f"data-url redacted · bytes={image_bytes_len} · md5={face_md5}"
+    return recorded
 
 
 def _status_code(resp: Any) -> int | None:
@@ -135,7 +145,7 @@ def generate_seedream_sheet(
     *,
     api_key: str,
     prompt: str,
-    image_data_url: str,
+    image_data_url: str | None = None,
     models: Sequence[str] = SEEDREAM_SKU_CHAIN,
     size: str = SHEET_SIZE,
     endpoint: str = ARK_IMAGES_URL,

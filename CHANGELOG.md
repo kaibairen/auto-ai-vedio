@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.13 — opt-in SCENE plate generate (docs≠PASS)
+
+Character look commands stay CHAR-only (`scene_look_forbidden`). SCENE refs are a separate track: one location plate per scene card, written under the episode looks path and recorded as `refs.role=plate` so `has_usable_ref` can see it.
+
+- `aiv drama n3 generate-scene` — prompt from SCENE `name` + `one_line` only. No face ref. Same Seedream/flash chain as CHAR looks. No `--model` / skip-flash switch.
+- Episode path writes `episodes/{ep}/looks/{SCENE-*}` and attaches `role=plate` on that scene card only. Character cards are not touched.
+- Dry-run writes the prompt + recorded Ark body and does not call the image API.
+- HTTP: `POST …/drama/n3/cards/generate-scene`. Tests: `tests/drama/test_n3_scene_look.py`.
+- ForcePass=never. Does **not** merge to main. Does not flip `usable_for_n4`.
+
 ## 0.2.12 — split full-body / heads look generate (docs≠PASS)
 
 `generate-look` stays the Gold-A 3:2 combined 3+6 sheet. Two new standalone CLI commands assemble and generate **separate** images so full bodies are not cropped by the head grid.
