@@ -8,7 +8,14 @@ from typing import Any
 from aiv_drama.errors import AppError
 from aiv_drama.validate import now_iso
 from aiv_drama_look.materialize import materialize_look_bytes, read_meta
-from aiv_drama_look.paths import default_role, default_view, looks_absdir, validate_role, validate_view
+from aiv_drama_look.paths import (
+    default_role,
+    default_view,
+    looks_absdir,
+    reject_hotlink_path,
+    validate_role,
+    validate_view,
+)
 from aiv_drama_look.prompt import assemble_look_prompt
 from aiv_drama_look.provider.base import FrozenParams, ImageProvider, default_frozen_params
 from aiv_drama_look.refs import append_ref
@@ -20,6 +27,25 @@ from aiv_drama_look.sku import (
     resolve_sku,
 )
 from aiv_schema.models import NODE_DN3
+
+
+def one_ref_image(path: str | None) -> list[dict[str, Any]]:
+    """Optional single local reference image. Empty means no ref is sent."""
+    text = (path or "").strip()
+    if not text:
+        return []
+    reject_hotlink_path(text)
+    raw = Path(text)
+    if not raw.is_file() or raw.stat().st_size <= 0:
+        raise AppError(
+            422,
+            "validation",
+            "ref 须为本地已存在的一张参考图",
+            field="ref",
+            path=text,
+            node=NODE_DN3,
+        )
+    return [{"local_path": str(raw.resolve())}]
 
 
 def ensure_cost_cap(look_state: dict[str, Any] | None, card_id: str) -> None:
@@ -72,6 +98,7 @@ def generate_look_for_card(
     upgrade_reason: str | None = None,
     look_state: dict[str, Any] | None = None,
     frozen: FrozenParams | None = None,
+    ref: str | None = None,
 ) -> dict[str, Any]:
     kind = card.get("kind") or "character"
     card_id = card["id"]
@@ -96,7 +123,7 @@ def generate_look_for_card(
     params = frozen or default_frozen_params(watermark=False)
     result = image_provider.generate(
         assembled["prompt"],
-        [],
+        one_ref_image(ref),
         params,
         chosen_seed,
         sku=chosen_sku,

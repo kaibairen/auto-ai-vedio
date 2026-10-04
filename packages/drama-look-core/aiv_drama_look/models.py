@@ -27,3 +27,4 @@ class LookGenerateRequest(BaseModel):
     upgrade_reason: UpgradeReason | None = None
     watermark: bool | None = False
     seed: int | None = Field(default=None, ge=0, le=2147483647)
+    ref: str | None = None

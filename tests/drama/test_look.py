@@ -14,6 +14,7 @@ from aiv_drama_look.provider.base import FrozenParams, ImageResult, default_froz
 from aiv_drama_look.provider.dashscope import DashScopeWanClient
 from aiv_drama_look.provider.errors import classify_http_error
 from aiv_drama_look.provider.select import build_image_provider
+from aiv_drama_look.generate import one_ref_image
 from aiv_drama_look.refs import append_ref, make_ref, md5_bytes, only_provenance_roles
 from aiv_drama_look.seed import derive_seed, seed_for_card
 from aiv_drama_look.sku import DEFAULT_SKU, SKU_L1, next_sku, reject_upgrade_reason, resolve_sku
@@ -75,6 +76,20 @@ def _materialize(svc, pid, *, tool_profile="seedance_2"):
 
 
 # ----- path / md5 / role -------------------------------------------------------
+
+
+def test_one_ref_image_optional_and_local_only(tmp_path):
+    assert one_ref_image(None) == []
+    assert one_ref_image("") == []
+    src = tmp_path / "one.png"
+    src.write_bytes(MINIMAL_PNG)
+    hung = one_ref_image(str(src))
+    assert len(hung) == 1
+    assert Path(hung[0]["local_path"]) == src.resolve()
+    missing = _err(lambda: one_ref_image(str(tmp_path / "nope.png")))
+    assert missing.status_code == 422
+    hot = _err(lambda: one_ref_image("https://cdn.example/face.png"))
+    assert hot.status_code == 400
 
 
 def test_n3_image_providers_remain_hooks():
@@ -200,8 +215,45 @@ def test_ark_client_sends_flash_sku_watermark_off(settings, monkeypatch):
     assert "sk-should-not-appear" not in str(captured)
     assert captured["json"]["watermark"] is False
     assert captured["json"]["model"] == DEFAULT_SKU
-    assert captured["json"]["sequential_image_generation"] == "disabled"
+    assert "sequential_image_generation" not in captured["json"]
+    assert "image" not in captured["json"]
     assert captured["json"]["seed"] == 11
+
+
+def test_ark_flash_uploads_exactly_one_ref(settings, monkeypatch, tmp_path):
+    captured: dict = {}
+    b64 = base64.b64encode(MINIMAL_PNG).decode("ascii")
+    src = tmp_path / "face.png"
+    src.write_bytes(MINIMAL_PNG)
+    extra = tmp_path / "second.png"
+    extra.write_bytes(MINIMAL_PNG + b"x")
+
+    class _Resp:
+        status_code = 200
+        text = "{}"
+
+        def json(self):
+            return {"data": [{"b64_json": b64, "seed": 7}]}
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
+        captured["json"] = json
+        return _Resp()
+
+    monkeypatch.setattr("aiv_drama_look.provider.ark.httpx.post", fake_post)
+    cfg = replace(settings, ark_api_key="ark-test-key")
+    client = ArkSeedreamClient(cfg)
+    client.generate(
+        "prompt",
+        [{"local_path": str(src)}, {"local_path": str(extra)}],
+        default_frozen_params(),
+        11,
+        sku=DEFAULT_SKU,
+    )
+    image = captured["json"]["image"]
+    assert isinstance(image, str)
+    assert image.startswith("data:image/png;base64,")
+    assert image == f"data:image/png;base64,{b64}"
+    assert "sequential_image_generation" not in captured["json"]
 
 
 def test_dashscope_client_beijing_wan(settings, monkeypatch):
@@ -238,6 +290,26 @@ def test_dashscope_client_beijing_wan(settings, monkeypatch):
 # ----- generate + N4 409 -------------------------------------------------------
 
 
+def test_generate_look_optional_ref_is_uploaded_once(svc, data_dir, tmp_path):
+    pid = seed_project_episode(svc)
+    _materialize(svc, pid)
+    _fill_must(svc, pid)
+    cid, _sid = _first_ids(svc, pid)
+    src = tmp_path / "one.png"
+    src.write_bytes(MINIMAL_PNG)
+    fake = FakeLookProvider()
+    env = svc.generate_look(
+        pid,
+        "EP01",
+        LookGenerateRequest(id=cid, actor="eng-031", ref=str(src)),
+        raw={"id": cid, "actor": "eng-031", "ref": str(src)},
+        image_provider=fake,
+    )
+    assert env["usable_for_n4"] is False
+    assert len(fake.calls[0]["refs"]) == 1
+    assert Path(fake.calls[0]["refs"][0]["local_path"]) == src.resolve()
+
+
 def test_generate_look_hangs_ref_does_not_flip_usable(svc, data_dir):
     pid = seed_project_episode(svc)
     _materialize(svc, pid)
@@ -270,6 +342,7 @@ def test_generate_look_hangs_ref_does_not_flip_usable(svc, data_dir):
     assert meta.is_file()
     assert "ARK_API_KEY" not in meta.read_text(encoding="utf-8")
     assert fake.calls[0]["frozen"].watermark is False
+    assert fake.calls[0]["refs"] == []
 
 
 def test_n4_409_when_refs_empty(svc, data_dir):

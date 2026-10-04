@@ -76,6 +76,7 @@ components:
         view: { type: string, enum: [front, side, three_quarter, empty, ls] }
         role: { type: string, enum: [face, full, plate, look, style_ref, web_source] }
         style_ref: { type: string, description: 整句替换 STYLE-REF（可配置） }
+        ref: { type: string, description: 可选本地参考图路径（恰好一张；省略则不传图） }
         unlock_edit: { type: boolean, default: false }
         upgrade_reason: { type: string, enum: [identity_drift, api_fail, quality_gate] }
         watermark: { type: boolean, default: false, description: 必须为 false }

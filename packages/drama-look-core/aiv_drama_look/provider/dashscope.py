@@ -48,7 +48,7 @@ class DashScopeWanClient:
     ) -> ImageResult:
         model = sku or SKU_F0
         content: list[dict[str, Any]] = []
-        for item in _local_ref_payloads(refs)[: self.max_refs]:
+        for item in _local_ref_payloads(refs)[:1]:
             content.append({"image": item})
         content.append({"text": prompt})
         body: dict[str, Any] = {

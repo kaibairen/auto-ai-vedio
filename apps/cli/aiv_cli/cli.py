@@ -598,6 +598,7 @@ def look_generate(
     view: Optional[str] = typer.Option(None, "--view"),
     role: Optional[str] = typer.Option(None, "--role"),
     style_ref: Optional[str] = typer.Option(None, "--style-ref"),
+    ref: Optional[str] = typer.Option(None, "--ref", help="Optional local reference image (exactly one)"),
     unlock_edit: bool = typer.Option(False, "--unlock-edit"),
     upgrade_reason: Optional[str] = typer.Option(None, "--upgrade-reason"),
     seed: Optional[int] = typer.Option(None, "--seed"),
@@ -610,6 +611,7 @@ def look_generate(
         view=view,  # type: ignore[arg-type]
         role=role,  # type: ignore[arg-type]
         style_ref=style_ref,
+        ref=ref,
         unlock_edit=unlock_edit,
         upgrade_reason=upgrade_reason,  # type: ignore[arg-type]
         seed=seed,

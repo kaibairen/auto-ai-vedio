@@ -44,7 +44,7 @@ class DramaLookOps:
         req = body or LookGenerateRequest(id="")
         if req.watermark is True:
             raise AppError(422, "validation", "入库水印默认关；禁止 watermark=true", node=NODE_DN3, field="watermark")
-        cached = self._idem_get(idempotency_key, f"look_generate:{project_id}:{ep}:{req.id}")
+        cached = self._idem_get(idempotency_key, f"look_generate:{project_id}:{ep}:{req.id}:{req.ref or ''}")
         if cached:
             return cached
         rec = self._rec(project_id, ep)
@@ -76,6 +76,7 @@ class DramaLookOps:
             seed=req.seed,
             upgrade_reason=req.upgrade_reason,
             look_state=look_state,
+            ref=req.ref,
         )
         updated = result["card"]
         bucket = "characters" if kind == KIND_CHAR else "scenes"
@@ -120,4 +121,4 @@ class DramaLookOps:
             for hung in all_cards({"cards": env["cards"]}):
                 hung.pop("usable_for_n4", None)
         env["has_usable_ref"] = has_usable_ref(updated)
-        return self._idem_put(idempotency_key, f"look_generate:{project_id}:{ep}:{req.id}", env)
+        return self._idem_put(idempotency_key, f"look_generate:{project_id}:{ep}:{req.id}:{req.ref or ''}", env)

@@ -10,10 +10,17 @@ from aiv_drama.config import Settings
 from aiv_drama.errors import AppError
 from aiv_drama_look.provider.base import FrozenParams, ImageResult
 from aiv_drama_look.provider.errors import decode_b64_image, look_provider_error
-from aiv_drama_look.sku import DEFAULT_SKU
+from aiv_drama_look.sku import DEFAULT_SKU, SKU_L0
 from aiv_schema.models import NODE_DN3
 
 ARK_DEFAULT_BASE = "https://ark.cn-beijing.volces.com/api/v3"
+_FLASH_MARK = "flash"
+
+
+def _supports_sequential(model: str) -> bool:
+    """Seedream flash rejects sequential_image_generation (HTTP 400 InvalidParameter)."""
+    name = (model or "").strip().lower()
+    return bool(name) and name != SKU_L0.lower() and _FLASH_MARK not in name
 
 
 class ArkSeedreamClient:
@@ -54,15 +61,16 @@ class ArkSeedreamClient:
             "size": frozen_params.size,
             "watermark": False,
             "response_format": frozen_params.response_format,
-            "sequential_image_generation": frozen_params.sequential_image_generation,
         }
+        if _supports_sequential(model):
+            body["sequential_image_generation"] = frozen_params.sequential_image_generation
         if frozen_params.output_format:
             body["output_format"] = frozen_params.output_format
         if seed is not None:
             body["seed"] = int(seed)
-        images_in = _local_ref_payloads(refs)
+        images_in = _local_ref_payloads(refs)[:1]
         if images_in:
-            body["image"] = images_in if len(images_in) > 1 else images_in[0]
+            body["image"] = images_in[0]
 
         url = f"{self.base_url}/images/generations"
         try:
@@ -103,6 +111,12 @@ def _local_ref_payloads(refs: list[dict[str, Any]]) -> list[str]:
     import base64
     from pathlib import Path
 
+    mime_by_suffix = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
     out: list[str] = []
     for ref in refs or []:
         path = (ref.get("local_path") or ref.get("abs_path") or "").strip()
@@ -111,8 +125,9 @@ def _local_ref_payloads(refs: list[dict[str, Any]]) -> list[str]:
         raw = Path(path)
         if not raw.is_file():
             continue
+        mime = mime_by_suffix.get(raw.suffix.lower(), "image/png")
         b64 = base64.b64encode(raw.read_bytes()).decode("ascii")
-        out.append(f"data:image/png;base64,{b64}")
+        out.append(f"data:{mime};base64,{b64}")
     return out
 
 
