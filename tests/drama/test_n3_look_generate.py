@@ -16,6 +16,7 @@ from aiv_drama_n3.gold_sheet import (
     PROMPT_ORDER,
     RECIPE_TURNAROUND_TEMPLATE,
     STYLE_BANANA_PHOTOREAL_FINAL,
+    TASK_NOTE_PROMPT_ORDER,
     assemble_gold_a_sheet_prompt,
     assemble_sections,
     format_negatives,
@@ -43,8 +44,9 @@ from tests.drama.helpers import lock_g2, seed_project_episode
 ROOT = Path(__file__).resolve().parents[2]
 GOLD_PROMPT = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-doubao-sheet-r1-prompt.txt"
 GOLD_CARD = ROOT / "fixtures" / "drama" / "gold-a" / "CHAR-01-card.yaml"
-GOLD_PROMPT_MD5 = "4cd224525bdf108b020756ea665be8dc"
-LIVE_R2_PROMPT_MD5 = "3260df75170ea5a5cbc3f0cc8dc331e7"
+GOLD_PROMPT_MD5 = "2f8a4a42a75a99c36b9a80f280f41793"
+LIVE_R2_PROMPT_MD5 = "8f953ff4627ff4a5407d1dfdd33b4795"
+RECIPE_MD5 = "4f2fbf9e8d4f75d111b0eb697ca3d72a"
 runner = CliRunner()
 
 
@@ -91,7 +93,21 @@ def test_constants_immutable_and_prompt_order():
     assert "禁豆包拟人IP插画与矢量吉祥物立绘感。" in STYLE_BANANA_PHOTOREAL_FINAL
     assert RECIPE_TURNAROUND_TEMPLATE.startswith("3:2 横版角色设定卡/转面板")
     assert "两张大图上下排列" in RECIPE_TURNAROUND_TEMPLATE
-    assert "六张小图必须是同一张脸同一发际线。" in RECIPE_TURNAROUND_TEMPLATE
+    assert "头部背面按角色卡的遮挡画。卡没写遮挡就露出后脑" in RECIPE_TURNAROUND_TEMPLATE
+    assert RECIPE_TURNAROUND_TEMPLATE.count("按角色卡的嘴型和眉。不许自行张嘴或皱眉") == 2
+    assert "光一致，颜色按角色卡" in RECIPE_TURNAROUND_TEMPLATE
+    assert "全身背面必须露出头型/发际线" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "必须看出表情" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "眉眼紧张" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "全图色彩一致" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "全图各分区色彩一致" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "全图各分区曝光与色彩一致" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "表情特写：开心只抬眼皮，嘴保持这张角色卡写的嘴型，不许另改嘴" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "表情特写：生气只把眼皮压低，眉和嘴保持角色卡，不许皱眉，不许改嘴型" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "头部背面按这张角色卡的遮挡画。角色卡没写遮挡时，露出后脑头型" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "开心/愉悦（happy，笑但克制不夸张）" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "生气/愤怒（angry，眉眼紧张但不夸张变形）" not in RECIPE_TURNAROUND_TEMPLATE
+    assert "back of head，用于发型与头型一致性" not in RECIPE_TURNAROUND_TEMPLATE
     assert OUTPUT_SHEET_LINE == "输出单张3:2横版合板"
     assert "ONLY identity anchor" in EN_IDENTITY_ANCHOR
     assert PROMPT_ORDER == (
@@ -109,7 +125,7 @@ def test_constants_immutable_and_prompt_order():
     assert RECIPE_TURNAROUND_TEMPLATE in gold
     # Pin SoT hashes so silent STYLE/RECIPE edits fail (升 ADDENDUM/RECIPE 另拍)
     assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
-    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "97cd5c4fae718fac65e1a81174c00e1d"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == RECIPE_MD5
     assert md5_text(format_negatives()) == "2bf2300e5dfc0e261e46316c7b7e73ec"
     assert md5_text(EN_IDENTITY_ANCHOR) == "950e43999e7556a7b51199e42b663009"
     assert md5_text(OUTPUT_SHEET_LINE) == "6a435c3686c78abc0a8bc03faa152b98"
@@ -158,7 +174,7 @@ def test_adapter_on_default_appends_l3_and_differs_from_gold(monkeypatch):
     assert md5_text(prompt) != GOLD_PROMPT_MD5
     assert md5_text(prompt) == LIVE_R2_PROMPT_MD5
     assert md5_text(STYLE_BANANA_PHOTOREAL_FINAL) == "5dea838ce0d0baae09a15febcf475ef1"
-    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == "97cd5c4fae718fac65e1a81174c00e1d"
+    assert md5_text(RECIPE_TURNAROUND_TEMPLATE) == RECIPE_MD5
     monkeypatch.setenv("AIV_LOOK_PROMPT_ADAPTER", "l3")
     assert md5_text(_maybe_append_prompt_adapter(base)) == LIVE_R2_PROMPT_MD5
 
@@ -183,6 +199,110 @@ def test_assemble_does_not_invent_wardrobe():
     exc = _err(lambda: assemble_gold_a_sheet_prompt({"id": "CHAR-02", "kind": "character"}))
     assert exc.code == "look_card_incomplete"
     assert "自写" in exc.message
+
+
+def test_shared_turnaround_template_keeps_card_identity_interpolation():
+    card = {
+        "id": "CHAR-GEN",
+        "wardrobe": "plain wool coat, dark trousers, lace-up boots",
+        "immutable": "round wire glasses; short dark hair",
+        "height": "1.70米",
+    }
+    prompt = assemble_gold_a_sheet_prompt(card)
+    assert "按角色卡的嘴型和眉。不许自行张嘴或皱眉" in prompt
+    assert "头部背面按角色卡的遮挡画。卡没写遮挡就露出后脑" in prompt
+    assert "光一致，颜色按角色卡" in prompt
+    assert "角色穿着：plain wool coat, dark trousers, lace-up boots" in prompt
+    assert "不可变：round wire glasses; short dark hair" in prompt
+    assert "人物身高1.70米" in prompt
+    assert "禁豆包拟人IP插画与矢量吉祥物立绘感。" in prompt
+
+
+def test_task_note_appended_once_without_repeating_card_block():
+    card = {
+        "id": "CHAR-GEN",
+        "wardrobe": "plain wool coat, dark trousers, lace-up boots",
+        "immutable": "round wire glasses; closed mouth line; no extra banners",
+        "height": "1.70米",
+    }
+    note = "Keep the coat brown on every view. Do not add a second face."
+    prompt = assemble_gold_a_sheet_prompt(card, task_note=note)
+    assert prompt.count(note) == 1
+    assert prompt.index(RECIPE_TURNAROUND_TEMPLATE) < prompt.index(note)
+    assert prompt.startswith(STYLE_BANANA_PHOTOREAL_FINAL)
+    assert "角色穿着：" not in prompt
+    assert "不可变：" not in prompt
+    assert "plain wool coat" not in prompt
+    assert "round wire glasses" not in prompt
+    assert "人物身高1.70米" not in prompt
+    assert prompt.count("禁令：") == 0
+    names = [n for n, _ in assemble_sections(card, task_note=note)]
+    assert names == list(TASK_NOTE_PROMPT_ORDER)
+    assert "禁豆包拟人IP插画与矢量吉祥物立绘感。" in prompt
+
+
+def test_generate_look_task_note_skips_l3_and_card_block(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIV_LOOK_PROMPT_ADAPTER", raising=False)
+    face = _face(tmp_path)
+    note = "Keep the coat brown on every view. Do not add a second face."
+    look = generate_gold_a_sheet(
+        card=_sheet_card(),
+        face_ref=face,
+        out_dir=tmp_path / "looks",
+        api_key=None,
+        dry_run=True,
+        task_note=note,
+    )
+    written = Path(look["prompt_path"]).read_text(encoding="utf-8")
+    assert written.count(note) == 1
+    assert look.get("prompt_adapter") is None
+    assert "【L3硬约束】" not in written
+    assert "角色穿着：" not in written
+    assert "不可变：" not in written
+    assert RECIPE_TURNAROUND_TEMPLATE in written
+    assert "禁豆包拟人IP插画与矢量吉祥物立绘感。" in written
+
+
+def test_cli_standalone_task_note_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIV_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.delenv("ARK_API_KEY", raising=False)
+    face = _face(tmp_path)
+    digest = hashlib.md5(face.read_bytes()).hexdigest()
+    card_path = tmp_path / "CHAR-GEN-card.yaml"
+    card_path.write_text(
+        "id: CHAR-GEN\nkind: character\nwardrobe: plain wool coat\nimmutable: round glasses\n",
+        encoding="utf-8",
+    )
+    note = "Keep the coat brown on every view. Do not add a second face."
+    note_path = tmp_path / "task-note.txt"
+    note_path.write_text(note + "\n", encoding="utf-8")
+    out = tmp_path / "sheet-out"
+    res = runner.invoke(
+        app,
+        [
+            "drama",
+            "n3",
+            "generate-look",
+            "--card",
+            str(card_path),
+            "--face-ref",
+            str(face),
+            "--expected-md5",
+            digest,
+            "--out",
+            str(out),
+            "--dry-run",
+            "--task-note-file",
+            str(note_path),
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    written = Path(payload["prompt_path"]).read_text(encoding="utf-8")
+    assert written.count(note) == 1
+    assert "角色穿着：" not in written
+    assert payload.get("prompt_adapter") is None
+    assert "sk-" not in res.output
 
 
 def test_face_md5_gate_before_generate(tmp_path, monkeypatch):
@@ -363,6 +483,23 @@ def test_http_generate_look_force_and_sequential(client, tmp_path):
     spec = client.get("/openapi/drama-n3.v0.yaml")
     assert "cards/generate-look" in spec.text
     assert "2048x1365" in spec.text
+    assert "task_note" in spec.text
+    note = "Keep the coat brown on every view. Do not add a second face."
+    noted = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/generate-look",
+        json={
+            "id": "CHAR-01",
+            "face_ref": str(face),
+            "dry_run": True,
+            "actor": "eng-032",
+            "task_note": note,
+        },
+    )
+    assert noted.status_code == 200, noted.text
+    noted_prompt = Path(noted.json()["look"]["prompt_path"]).read_text(encoding="utf-8")
+    assert noted_prompt.count(note) == 1
+    assert "角色穿着：" not in noted_prompt
+    assert "【L3硬约束】" not in noted_prompt
 
 
 def test_cli_standalone_dry_run(tmp_path, monkeypatch):

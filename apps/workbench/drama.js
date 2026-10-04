@@ -1194,6 +1194,7 @@ if ($("btn-n3-look")) {
     const ident = $("h-look-char")?.value;
     const face = $("h-face-ref")?.value?.trim();
     const md5 = $("h-face-md5")?.value?.trim();
+    const note = $("h-task-note")?.value?.trim();
     const dry = Boolean($("h-look-dry")?.checked);
     if (!ident) {
       showBanner("请选择 CHAR", false, "error");
@@ -1202,6 +1203,7 @@ if ($("btn-n3-look")) {
     const payload = { id: ident, dry_run: dry, actor: "yangzhou" };
     if (face) payload.face_ref = face;
     if (md5) payload.expected_md5 = md5;
+    if (note) payload.task_note = note;
     const data = await api(
       "POST",
       `/projects/${state.projectId}/episodes/${state.ep}/drama/n3/cards/generate-look`,

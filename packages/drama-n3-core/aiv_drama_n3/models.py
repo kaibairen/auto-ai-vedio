@@ -36,6 +36,7 @@ class N3GenerateLookRequest(BaseModel):
     out_dir: str | None = None
     actor: str | None = None
     unlock_edit: bool = False
+    task_note: str | None = None
 
 
 class N3AttachRequest(BaseModel):

@@ -436,6 +436,7 @@ components:
         out_dir: { type: string }
         actor: { type: string }
         unlock_edit: { type: boolean, default: false }
+        task_note: { type: string, description: 本跑一次性备注，拼在共用模板后且只出现一次；不是模板正文 }
     N3AttachRequest:
       type: object
       required: [id, version]

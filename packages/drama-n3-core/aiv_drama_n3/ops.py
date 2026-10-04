@@ -483,6 +483,7 @@ class DramaN3Ops:
             out_dir=out_dir,
             api_key=getattr(self.settings, "ark_api_key", None),
             dry_run=bool(req.dry_run),
+            task_note=req.task_note,
             endpoint=endpoint,
             post=post,
             get=get,

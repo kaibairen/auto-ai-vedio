@@ -20,6 +20,7 @@ from aiv_drama_n3.gold_sheet import (
     md5_bytes,
     md5_text,
     normalize_md5,
+    normalize_task_note,
     verify_face_ref_md5,
 )
 from aiv_drama_n3.seedream import (
@@ -81,6 +82,7 @@ def generate_gold_a_sheet(
     api_key: str | None,
     expected_md5: str | None = None,
     dry_run: bool = False,
+    task_note: str | None = None,
     endpoint: str = ARK_IMAGES_URL,
     post: Any | None = None,
     get: Any | None = None,
@@ -89,6 +91,9 @@ def generate_gold_a_sheet(
 
     usable_for_n4 on the look record is always false. No sequential_image_generation.
     No CU/LS split. No key in the returned envelope.
+    task_note is one run-specific suffix after the shared template; it is not
+    stored in RECIPE_TURNAROUND_TEMPLATE. When present, L3 is skipped so the
+    note is not fought by a second back-of-head rule.
     """
     kind = (card.get("kind") or "character").strip()
     ident = (card.get("id") or "CHAR").strip()
@@ -105,8 +110,14 @@ def generate_gold_a_sheet(
         expected_md5=normalize_md5(expected_md5),
         card=card,
     )
-    prompt = _maybe_append_prompt_adapter(assemble_gold_a_sheet_prompt(card))
-    adapter = resolve_look_prompt_adapter()
+    note = normalize_task_note(task_note)
+    assembled = assemble_gold_a_sheet_prompt(card, task_note=note)
+    if note:
+        prompt = assembled
+        adapter = None
+    else:
+        prompt = _maybe_append_prompt_adapter(assembled)
+        adapter = resolve_look_prompt_adapter()
     dest = Path(out_dir)
     dest.mkdir(parents=True, exist_ok=True)
     prompt_path = dest / f"{ident}-doubao-sheet-prompt.txt"
