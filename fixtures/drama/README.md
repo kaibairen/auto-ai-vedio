@@ -6,4 +6,4 @@
 
 - `outline-female.md` — 女频对照
 - `outline-male.md` — 男频对照
-- `gold-a/` — AIV-032 金样 A 合板：RECIPE 厚卡字段 + eng-031 prompt 全文（禁 Key）
+- `gold-a/` — AIV-032 金样 A 合板：RECIPE 厚卡字段 + eng-031 combined-sheet prompt 全文（禁 Key）；另有 `CHAR-01-fullbody-prompt.txt` / `CHAR-01-heads-prompt.txt`（拆图，不经 generate-look）
