@@ -28,6 +28,7 @@ SEEDREAM_SKU_CHAIN = (SEEDREAM_SKU_PRIMARY, *SEEDREAM_SKU_FALLBACK)
 SHEET_SIZE = "2048x1365"
 ARK_BODY_KEYS = ("model", "prompt", "size", "watermark", "response_format", "image")
 FORBIDDEN_ARK_KEYS = frozenset({"sequential_image_generation", "output_format"})
+DEFAULT_MAX_REFS = 3
 
 _BEARER_RE = re.compile(r"Bearer\s+\S+", re.I)
 _DATA_URL_RE = re.compile(r"data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+")
@@ -61,14 +62,25 @@ def build_ark_body(
     prompt: str,
     image_data_url: str,
     size: str = SHEET_SIZE,
+    extra_image_data_urls: list[str] | None = None,
+    max_refs: int = DEFAULT_MAX_REFS,
 ) -> dict[str, Any]:
+    extras = list(extra_image_data_urls or [])
+    total_refs = 1 + len(extras)
+    if total_refs > max_refs:
+        raise ValueError(
+            f"at most {max_refs} reference images allowed (primary + extras), got {total_refs}"
+        )
+    image: str | list[str] = image_data_url
+    if extras:
+        image = [image_data_url, *extras]
     body = {
         "model": model,
         "prompt": prompt,
         "size": size,
         "watermark": False,
         "response_format": "url",
-        "image": image_data_url,
+        "image": image,
     }
     leaked = FORBIDDEN_ARK_KEYS.intersection(body)
     if leaked:
@@ -227,3 +239,130 @@ def generate_seedream_sheet(
         node=NODE_DN3,
         attempts=attempts,
     )
+
+
+def generate_seedream_single_model(
+    *,
+    api_key: str,
+    prompt: str,
+    image_data_url: str,
+    extra_image_data_urls: list[str] | None = None,
+    model: str = SEEDREAM_SKU_PRIMARY,
+    size: str = SHEET_SIZE,
+    endpoint: str = ARK_IMAGES_URL,
+    timeout: float = 120.0,
+    max_refs: int = DEFAULT_MAX_REFS,
+    post: Callable[..., Any] | None = None,
+    get: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    """One POST to Ark /api/v3/images/generations for a single model.
+
+    No SKU fallback and no retry. Non-200 (or a 200 without image bytes) raises.
+    """
+    if not api_key:
+        raise AppError(
+            422,
+            "provider",
+            "ARK_API_KEY missing; live generate blocked (use dry_run or set key — never echo)",
+            node=NODE_DN3,
+        )
+    body = build_ark_body(
+        model=model,
+        prompt=prompt,
+        image_data_url=image_data_url,
+        extra_image_data_urls=extra_image_data_urls,
+        size=size,
+        max_refs=max_refs,
+    )
+    post_fn = post or httpx.post
+    get_fn = get or httpx.get
+    try:
+        resp = post_fn(
+            endpoint,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=body,
+            timeout=timeout,
+        )
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark single-model generate error: {exc}", api_key),
+            node=NODE_DN3,
+            model=model,
+            http=None,
+        ) from exc
+    status = _status_code(resp)
+    if status != 200:
+        detail = redact_secrets(getattr(resp, "text", "") or f"http {status}", api_key)
+        raise AppError(
+            502,
+            "provider",
+            f"Ark single-model generate failed: http {status} model={model}: {detail}",
+            node=NODE_DN3,
+            model=model,
+            http=status,
+        )
+    try:
+        payload = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark single-model generate bad json: {exc}", api_key),
+            node=NODE_DN3,
+            model=model,
+            http=status,
+        ) from exc
+    url = _parse_image_url(payload)
+    if not url:
+        raise AppError(
+            502,
+            "provider",
+            "Ark single-model generate failed: http 200 without image url",
+            node=NODE_DN3,
+            model=model,
+            http=status,
+        )
+    try:
+        img = get_fn(url, timeout=timeout)
+        img_status = _status_code(img)
+        if img_status != 200:
+            raise AppError(
+                502,
+                "provider",
+                f"Ark single-model image download failed: http {img_status}",
+                node=NODE_DN3,
+                model=model,
+                http=status,
+                download_http=img_status,
+            )
+        content = img.content
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark single-model image download error: {exc}", api_key),
+            node=NODE_DN3,
+            model=model,
+            http=status,
+        ) from exc
+    if not content:
+        raise AppError(
+            502,
+            "provider",
+            "Ark single-model generate failed: empty image bytes",
+            node=NODE_DN3,
+            model=model,
+            http=status,
+        )
+    return {
+        "model": model,
+        "http": status,
+        "bytes": content,
+        "size": size,
+    }
