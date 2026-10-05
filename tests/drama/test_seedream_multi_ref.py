@@ -21,6 +21,7 @@ PRIMARY = "data:image/jpeg;base64,QQ=="
 EXTRA_A = "data:image/png;base64,QUE="
 EXTRA_B = "data:image/png;base64,QUI="
 EXTRA_C = "data:image/png;base64,QUM="
+EXTRA_D = "data:image/png;base64,QUQ="
 TEST_KEY = "unit-test-placeholder"
 
 
@@ -91,16 +92,45 @@ def test_three_refs_image_is_array_in_order():
         extra_image_data_urls=[EXTRA_A, EXTRA_B],
     )
     assert body["image"] == [PRIMARY, EXTRA_A, EXTRA_B]
-    assert DEFAULT_MAX_REFS == 3
+    assert DEFAULT_MAX_REFS == 4
 
 
-def test_four_refs_rejected():
+def test_four_refs_image_is_array_in_order():
+    body = build_ark_body(
+        model=SEEDREAM_SKU_PRIMARY,
+        prompt="p",
+        image_data_url=PRIMARY,
+        extra_image_data_urls=[EXTRA_A, EXTRA_B, EXTRA_C],
+    )
+    assert body["image"] == [PRIMARY, EXTRA_A, EXTRA_B, EXTRA_C]
+
+
+def test_five_refs_rejected():
+    with pytest.raises(ValueError, match="at most 4"):
+        build_ark_body(
+            model=SEEDREAM_SKU_PRIMARY,
+            prompt="p",
+            image_data_url=PRIMARY,
+            extra_image_data_urls=[EXTRA_A, EXTRA_B, EXTRA_C, EXTRA_D],
+        )
+
+
+def test_max_refs_parameter_overrides_default():
+    body = build_ark_body(
+        model=SEEDREAM_SKU_PRIMARY,
+        prompt="p",
+        image_data_url=PRIMARY,
+        extra_image_data_urls=[EXTRA_A, EXTRA_B, EXTRA_C],
+        max_refs=4,
+    )
+    assert body["image"] == [PRIMARY, EXTRA_A, EXTRA_B, EXTRA_C]
     with pytest.raises(ValueError, match="at most 3"):
         build_ark_body(
             model=SEEDREAM_SKU_PRIMARY,
             prompt="p",
             image_data_url=PRIMARY,
             extra_image_data_urls=[EXTRA_A, EXTRA_B, EXTRA_C],
+            max_refs=3,
         )
 
 

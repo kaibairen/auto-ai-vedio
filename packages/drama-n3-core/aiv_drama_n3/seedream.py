@@ -28,7 +28,7 @@ SEEDREAM_SKU_CHAIN = (SEEDREAM_SKU_PRIMARY, *SEEDREAM_SKU_FALLBACK)
 SHEET_SIZE = "2048x1365"
 ARK_BODY_KEYS = ("model", "prompt", "size", "watermark", "response_format", "image")
 FORBIDDEN_ARK_KEYS = frozenset({"sequential_image_generation", "output_format"})
-DEFAULT_MAX_REFS = 3
+DEFAULT_MAX_REFS = 4  # up to 3 character refs + 1 room ref; override via max_refs
 
 _BEARER_RE = re.compile(r"Bearer\s+\S+", re.I)
 _DATA_URL_RE = re.compile(r"data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+")
