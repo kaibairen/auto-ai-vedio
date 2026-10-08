@@ -1,0 +1,7 @@
+{
+  "id": "seams-v0",
+  "metrics": {
+    "flash": 0.12,
+    "audio_gap_s": 0.08
+  }
+}

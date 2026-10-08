@@ -85,6 +85,7 @@ from aiv_drama_n3.projection import write_episode_cards
 from aiv_drama_n3.templates import assert_no_prompt_in_skill_paths, n3_observability
 from aiv_drama_n3.validate import usable_for_n4
 from aiv_drama_n4.ops import DramaN4Ops
+from aiv_drama_post.ops import DramaPostOps
 from aiv_schema.models import GATE_G1B, GATE_G2, GATE_G3, NODE_DN0, NODE_DN1, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN4Ops, DramaN2Ops):
+class DramaService(DramaPostOps, DramaN4Ops, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -140,6 +141,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         self._ensure_n2_fields(rec)
         self._ensure_n3_fields(rec)
         self._ensure_n4_fields(rec)
+        self._ensure_post_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -1143,6 +1145,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         cached = self._idem_get(idempotency_key, f"generate:{project_id}:{ep}")
         if cached:
             return cached
+        self.require_generation_open(project_id)
         rec = self._rec(project_id, validate_ep(ep))
         self._require_unlock(rec, unlock_edit=False)
         self._require_intent_for_generate(rec)

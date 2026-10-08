@@ -24,9 +24,12 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "packages/drama-n4-core", "apps/api", "apps/cli"]
+where = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "packages/drama-n4-core", "packages/drama-post-core", "apps/api", "apps/cli"]
+
+[tool.setuptools.package-data]
+aiv_drama_post = ["seams_ruleset.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "packages/drama-n4-core", "apps/api", "apps/cli"]
+pythonpath = ["packages/episode-schema", "packages/drama-n0n1-core", "packages/drama-n2-core", "packages/drama-n3-core", "packages/drama-n4-core", "packages/drama-post-core", "apps/api", "apps/cli"]
 addopts = "-q"

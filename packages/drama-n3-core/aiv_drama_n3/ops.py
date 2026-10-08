@@ -49,6 +49,8 @@ from aiv_drama_n3.validate import (
 )
 from aiv_schema.models import GATE_G2, GATE_G3, NODE_DN2, NODE_DN3, NODE_DN4, PIPELINE_DRAMA
 
+LOOK_SHEET_CAP = 2
+
 
 def empty_gate_g3() -> dict[str, Any]:
     return {
@@ -95,6 +97,7 @@ class DramaN3Ops:
         if not rec.get("gate_g3"):
             rec["gate_g3"] = empty_gate_g3()
         rec.setdefault("library_ops", [])
+        rec.setdefault("look_attempt_ledger", {})
 
     def _g2_locked(self, rec: dict[str, Any]) -> bool:
         sb = rec.get("storyboard") or {}
@@ -411,6 +414,48 @@ class DramaN3Ops:
             self.n3_envelope(rec, warnings=warns or None, extra=extra),
         )
 
+    def _look_attempts_used(self, rec: dict[str, Any], card_id: str) -> int:
+        ledger = rec.setdefault("look_attempt_ledger", {})
+        bucket = ledger.get(card_id) or {}
+        return int(bucket.get("attempts_used") or 0)
+
+    def _record_look_sheet(
+        self,
+        rec: dict[str, Any],
+        card_id: str,
+        *,
+        ok: bool,
+        look: dict[str, Any] | None = None,
+        error: AppError | None = None,
+    ) -> int:
+        """Count success and failure as one sheet. Bucket is card_id only — hashes do not reset."""
+        ledger = rec.setdefault("look_attempt_ledger", {})
+        bucket = ledger.setdefault(card_id, {"attempts_used": 0, "history": []})
+        bucket["attempts_used"] = int(bucket.get("attempts_used") or 0) + 1
+        item: dict[str, Any] = {"ok": ok, "at": now_iso()}
+        if look:
+            item["prompt_md5"] = look.get("prompt_md5")
+            item["face_ref_md5"] = look.get("face_ref_md5")
+            item["model"] = look.get("model")
+        if error is not None:
+            item["error"] = error.code
+        history = list(bucket.get("history") or [])
+        history.append(item)
+        bucket["history"] = history
+        return int(bucket["attempts_used"])
+
+    def _require_look_cap(self, rec: dict[str, Any], card_id: str) -> None:
+        used = self._look_attempts_used(rec, card_id)
+        if used >= LOOK_SHEET_CAP:
+            raise AppError(
+                409,
+                "attempt_cap",
+                "look generate cap reached (2 sheets, success and failure both count)",
+                attempts_used=used,
+                card_id=card_id,
+                node=NODE_DN3,
+            )
+
     def generate_n3_look(
         self,
         project_id: str,
@@ -476,17 +521,45 @@ class DramaN3Ops:
         ep_id = rec["episode"]["episode_id"]
         out_dir = Path(req.out_dir) if req.out_dir else self.store.episode_dir(project_id, ep_id) / "looks" / req.id
         endpoint = f"{getattr(self.settings, 'ark_base_url', None) or ARK_IMAGES_URL.rsplit('/images', 1)[0]}/images/generations"
-        look = generate_gold_a_sheet(
-            card=card,
-            face_ref=face,
-            expected_md5=req.expected_md5,
-            out_dir=out_dir,
-            api_key=getattr(self.settings, "ark_api_key", None),
-            dry_run=bool(req.dry_run),
-            endpoint=endpoint,
-            post=post,
-            get=get,
-        )
+        live = not bool(req.dry_run)
+        if live:
+            require_open = getattr(self, "require_generation_open", None)
+            if callable(require_open):
+                require_open(project_id)
+            require_consent = getattr(self, "require_redraw_consent", None)
+            if callable(require_consent):
+                require_consent(project_id, raw if isinstance(raw, dict) else req.model_dump())
+            self._require_look_cap(rec, req.id)
+        try:
+            look = generate_gold_a_sheet(
+                card=card,
+                face_ref=face,
+                expected_md5=req.expected_md5,
+                out_dir=out_dir,
+                api_key=getattr(self.settings, "ark_api_key", None),
+                dry_run=bool(req.dry_run),
+                endpoint=endpoint,
+                post=post,
+                get=get,
+            )
+        except AppError as exc:
+            if live and exc.code == "provider" and exc.status_code == 502:
+                used = self._record_look_sheet(rec, req.id, ok=False, error=exc)
+                mark = getattr(self, "mark_redraw_outcome", None)
+                if callable(mark):
+                    mark(project_id, ok=False)
+                self._touch_episode(rec)
+                self._commit(rec)
+                exc.details["attempts_used"] = used
+            raise
+        if live:
+            used = self._record_look_sheet(rec, req.id, ok=True, look=look)
+            look["attempts_used"] = used
+            mark = getattr(self, "mark_redraw_outcome", None)
+            if callable(mark):
+                mark(project_id, ok=True)
+        else:
+            look["attempts_used"] = self._look_attempts_used(rec, req.id)
         rec["n3"].setdefault("looks", {})
         rec["n3"]["looks"][req.id] = {k: v for k, v in look.items() if k != "ok"}
         slim = {
@@ -500,6 +573,7 @@ class DramaN3Ops:
             "usable_for_n4": False,
             "dry_run": look.get("dry_run"),
             "model": look.get("model"),
+            "attempts_used": look.get("attempts_used"),
         }
         existing = [x for x in (card.get("looks") or []) if isinstance(x, dict) and x.get("kind") != LOOK_KIND]
         card["looks"] = existing + [slim]
@@ -515,6 +589,7 @@ class DramaN3Ops:
             "look": look,
             "look_usable_for_n4": False,
             "auto_flipped_usable": False,
+            "attempts_used": look.get("attempts_used"),
         }
         return self._idem_put(
             idempotency_key,
