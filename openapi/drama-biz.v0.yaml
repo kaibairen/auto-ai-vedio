@@ -1,0 +1,351 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama business APIs (gaps 9–18)
+  version: 0.1.0
+  description: |
+    Prefix `/api/v0`. Failure envelope is `errors.AppError`.
+    Unknown fields → 422 validation. force/force_pass → 400 force_pass_forbidden.
+    API keys are never accepted. L1/L2/L3 are not G1b/G2/G3. ForcePass=never.
+    Gap 9 extends `POST .../drama/n3/cards/generate-look` (see drama-n3.v0.yaml).
+paths:
+  /projects/{project_id}/episodes/{ep}/segments/{segment_id}/video:
+    post:
+      operationId: generateSegmentVideo
+      summary: Seedance one attempt per segment; one failure stops the episode
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - { name: segment_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SegmentVideoRequest' }
+      responses:
+        '200': { description: succeeded or failed body (failed still consumes the attempt) }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { description: provider failure; attempt consumed; episode stopped }
+  /projects/{project_id}/episodes/{ep}/outputs:
+    post:
+      operationId: registerOutput
+      summary: Register an artifact by path+md5. Does not generate.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OutputRegisterRequest' }
+      responses:
+        '200': { description: registered or original duplicate }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/rough-cuts:
+    post:
+      operationId: createRoughCut
+      summary: New rough-cut version file. Never overwrite.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoughCutRequest' }
+      responses:
+        '200': { description: version + output_md5 + framemd5 }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/rough-cuts/{version}/seams:
+    post:
+      operationId: measureSeams
+      summary: Read-only seam measurement. Does not rewrite the cut.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - { name: version, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SeamMeasureRequest' }
+      responses:
+        '200': { description: pass + seams[] }
+        '404': { description: version not found }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/subtitles/{version}:
+    put:
+      operationId: putSubtitles
+      summary: Subtitle version. Same sha replays; different sha needs a new version.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - { name: version, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubtitleWriteRequest' }
+      responses:
+        '200': { description: version + body_sha256 + line_count }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/audio/bed:
+    post:
+      operationId: createAudioBed
+      summary: Place a registered CC0/local bed. Does not call music generate.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AudioBedRequest' }
+      responses:
+        '200': { description: version + bed_md5 + sample_rate + channels }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { description: source_unregistered }
+  /projects/{project_id}/episodes/{ep}/audio/voice:
+    post:
+      operationId: placeVoiceLine
+      summary: Place an already-made TTS take. Does not synthesize.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AudioVoiceRequest' }
+      responses:
+        '200': { description: version + line_no + placed_md5 }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/reviews:
+    post:
+      operationId: createReview
+      summary: L1/L2/L3 review. Not a G-gate confirm. No ForcePass.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewCreateRequest' }
+      responses:
+        '200': { description: review_id + state }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/open-items:
+    post:
+      operationId: createOpenItem
+      summary: Open item with one of four states (no blocking boolean)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenItemCreateRequest' }
+      responses:
+        '200': { description: item_no + state }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/open-items/{item_no}/close:
+    post:
+      operationId: closeOpenItem
+      summary: Close with named conclusion + file_md5. waiting_on_user needs user: conclusion.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - { name: item_no, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenItemCloseRequest' }
+      responses:
+        '200': { description: item_no + state=closed }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/cost:
+    get:
+      operationId: getProjectCost
+      summary: Spend snapshot. cap=60 per episode redraw budget.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: spent / cap / remaining / blocked }
+  /projects/{project_id}/cost/entries:
+    post:
+      operationId: addCostEntry
+      summary: Record one provider attempt. Same ref_id does not double-count.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CostEntryRequest' }
+      responses:
+        '200': { description: spent / cap / remaining / blocked }
+        '409': { description: over_cap }
+        '422': { description: validation }
+components:
+  parameters:
+    ProjectId: { name: project_id, in: path, required: true, schema: { type: string } }
+    EpisodeId: { name: ep, in: path, required: true, schema: { type: string } }
+  schemas:
+    SegmentVideoRequest:
+      type: object
+      additionalProperties: false
+      required: [prompt_sha256]
+      properties:
+        prompt_sha256: { type: string }
+        ref_md5s: { type: array, items: { type: string } }
+        tool_profile: { type: string, enum: [seedance_2] }
+        actor: { type: string }
+    OutputRegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, path, md5, bytes]
+      properties:
+        kind: { type: string, enum: [image, segment_video, rough_cut, subtitle, audio_mix, audio_stem, tts_line] }
+        path: { type: string }
+        md5: { type: string, minLength: 32, maxLength: 32 }
+        bytes: { type: integer, minimum: 0 }
+        parent_md5: { type: string }
+        actor: { type: string }
+    RoughCutRequest:
+      type: object
+      additionalProperties: false
+      required: [version, video_stream_md5, audio_md5]
+      properties:
+        version: { type: string }
+        video_stream_md5: { type: string }
+        audio_md5: { type: string }
+        subtitle_md5: { type: string }
+        parent_version: { type: string }
+        actor: { type: string }
+    SeamMeasureRequest:
+      type: object
+      additionalProperties: false
+      required: [ruleset_md5]
+      properties:
+        version: { type: string }
+        ruleset_md5: { type: string }
+        actor: { type: string }
+    SubtitleWriteRequest:
+      type: object
+      additionalProperties: false
+      required: [body_sha256]
+      properties:
+        version: { type: string }
+        body_sha256: { type: string }
+        in_points:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [line_no, in_s, out_s]
+            properties:
+              line_no: { type: integer }
+              in_s: { type: number }
+              out_s: { type: number }
+        actor: { type: string }
+    AudioBedRequest:
+      type: object
+      additionalProperties: false
+      required: [version, spec_md5, sources]
+      properties:
+        version: { type: string }
+        spec_md5: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [source_id, md5, license]
+            properties:
+              source_id: { type: string }
+              md5: { type: string }
+              license: { type: string }
+        actor: { type: string }
+    AudioVoiceRequest:
+      type: object
+      additionalProperties: false
+      required: [version, line_no, take_md5, in_s]
+      properties:
+        version: { type: string }
+        line_no: { type: integer }
+        take_md5: { type: string }
+        in_s: { type: number }
+        actor: { type: string }
+    ReviewCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [level, subject_md5, verdict, actor]
+      properties:
+        level: { type: string, enum: [L1, L2, L3] }
+        subject_md5: { type: string }
+        verdict: { type: string, enum: [pass, conditional, fail] }
+        actor: { type: string }
+    OpenItemCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [review_id, item_no, state, owner, text]
+      properties:
+        review_id: { type: string }
+        item_no: { type: integer }
+        state: { type: string, enum: [blocks_l2, waiting_on_user, non_blocking, closed] }
+        owner: { type: string }
+        text: { type: string }
+    OpenItemCloseRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, conclusion, file_md5]
+      properties:
+        actor: { type: string }
+        conclusion: { type: string }
+        file_md5: { type: string }
+    CostEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, operation, amount, ref_id]
+      properties:
+        provider: { type: string }
+        operation: { type: string, enum: [seedream, seedance, tts, llm] }
+        amount: { type: number }
+        currency: { type: string, default: CNY }
+        ref_id: { type: string }
+        actor: { type: string }
+        episode_id: { type: string }
+    ErrorCode:
+      type: string
+      enum:
+        - validation
+        - not_found
+        - force_pass_forbidden
+        - attempt_cap
+        - redraw_needs_user
+        - over_cap
+        - already_attempted
+        - episode_stopped
+        - prompt_mismatch
+        - md5_mismatch
+        - video_stream_mismatch
+        - version_exists
+        - ruleset_mismatch
+        - source_unregistered
+        - take_unregistered
+        - subject_mismatch
+        - waiting_on_user
+        - blocks_l2_open
+        - upstream_unlocked
+        - provider
+  responses:
+    BadRequest:
+      description: 400 force_pass_forbidden or semantic validation
+    Conflict:
+      description: 409 business conflict

@@ -159,7 +159,9 @@ paths:
         **禁** `sequential_image_generation`；**禁** 拆 CU/LS 多图冒充合板。
         产物：sheet + prompt 全文 + md5。`look.usable_for_n4=false`，**不**自翻集级 usable。
         `dry_run=true`：落盘 prompt + recorded 请求（无 Key / 无像素）。
-        ForcePass=never。SCENE 另轨。
+        累计次数帽 2（成功与失败都计）；一次调用只打一个 SKU，不走 SEEDREAM_SKU_CHAIN。
+        到帽后 409 `attempt_cap`（`details.attempts_used=2`）。失败后再抽须 `user_consent=true`，否则 409 `redraw_needs_user`。
+        响应带 `attempts_used`。禁止 `retry`。ForcePass=never。SCENE 另轨。
       requestBody:
         required: true
         content:
@@ -377,6 +379,9 @@ components:
         - material_bind
         - look_card_incomplete
         - scene_look_forbidden
+        - attempt_cap
+        - redraw_needs_user
+        - over_cap
     ErrorBody:
       type: object
       required: [code, message]
@@ -436,6 +441,7 @@ components:
         out_dir: { type: string }
         actor: { type: string }
         unlock_edit: { type: boolean, default: false }
+        user_consent: { type: boolean, default: false, description: 失败后再抽须用户明确同意 }
     N3AttachRequest:
       type: object
       required: [id, version]

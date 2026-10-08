@@ -46,7 +46,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     data = None
                 if isinstance(data, dict):
                     path = request.url.path
-                    if "/drama/n4" in path:
+                    biz_marks = (
+                        "/reviews",
+                        "/open-items",
+                        "/cost",
+                        "/outputs",
+                        "/rough-cuts",
+                        "/subtitles",
+                        "/audio/",
+                        "/segments/",
+                    )
+                    if any(mark in path for mark in biz_marks):
+                        node, gate = "biz", None
+                    elif "/drama/n4" in path:
                         node, gate = NODE_DN4, GATE_G3
                     elif "/gates/g3" in path or "/drama/n3" in path:
                         node, gate = NODE_DN3, GATE_G3
@@ -129,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     openapi_n2 = settings.repo_root / "openapi" / "drama-n2.v0.yaml"
     openapi_n3 = settings.repo_root / "openapi" / "drama-n3.v0.yaml"
     openapi_n4 = settings.repo_root / "openapi" / "drama-n4.v0.yaml"
+    openapi_biz = settings.repo_root / "openapi" / "drama-biz.v0.yaml"
 
     @app.get("/openapi/drama-n0n1.v0.yaml")
     def openapi_file() -> FileResponse:
@@ -145,6 +158,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/openapi/drama-n4.v0.yaml")
     def openapi_n4_file() -> FileResponse:
         return FileResponse(openapi_n4, media_type="application/yaml")
+
+    @app.get("/openapi/drama-biz.v0.yaml")
+    def openapi_biz_file() -> FileResponse:
+        return FileResponse(openapi_biz, media_type="application/yaml")
 
     app.include_router(router)
     return app
