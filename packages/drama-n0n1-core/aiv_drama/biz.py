@@ -126,15 +126,11 @@ class DramaBizOps:
         rec.setdefault("audio_voices", {})
         rec.setdefault("reviews", {"by_id": {}, "order": []})
         rec.setdefault("open_items", {"by_no": {}, "order": []})
-        rec.setdefault("cost", empty_cost())
         rec["look_ledger"].setdefault("attempts_used", 0)
         rec["look_ledger"].setdefault("attempts", [])
         rec["look_ledger"].setdefault("needs_redraw_consent", False)
         rec["look_ledger"].setdefault("user_redraw_consent", None)
-        rec["cost"].setdefault("cap", SPEND_CAP)
-        rec["cost"].setdefault("spent", 0.0)
-        rec["cost"].setdefault("entries", {})
-        rec["cost"].setdefault("order", [])
+        # ¥60 lives on the project. Episode rec.cost is not a second ledger.
 
     def _ensure_project_cost(self, proj: dict[str, Any]) -> None:
         proj.setdefault("cost", empty_cost())
@@ -237,8 +233,12 @@ class DramaBizOps:
     def cost_snapshot_project(self, project_id: str) -> dict[str, Any]:
         return self._cost_snapshot_from_bucket(self._project_cost_bucket(project_id))
 
+    def generation_blocked(self, project_id: str, ep: str | None = None) -> dict[str, Any]:
+        """Project-wide spend snapshot. `ep` is attribution only; there is no per-episode cap."""
+        return self.cost_snapshot_project(project_id)
+
     def _require_generation_budget(self, project_id: str, ep: str | None = None) -> None:
-        snap = self.cost_snapshot_project(project_id)
+        snap = self.generation_blocked(project_id, ep)
         if snap["blocked"]:
             raise AppError(
                 409,
@@ -639,7 +639,14 @@ class DramaBizOps:
 
     def _load_cut_media(self, rec: dict[str, Any], cut: dict[str, Any]) -> tuple[bytes, bytes, bytes]:
         cut_path = Path(str(cut.get("path") or ""))
-        cut_bytes = cut_path.read_bytes() if cut_path.is_file() else b""
+        if not cut_path.is_file():
+            raise AppError(
+                409,
+                "subject_mismatch",
+                "rough-cut file is missing; cannot measure seams",
+                version=cut.get("version"),
+            )
+        cut_bytes = cut_path.read_bytes()
         video_bytes = b""
         audio_bytes = b""
         video_row = self._output_by_md5(rec, str(cut.get("video_stream_md5") or ""))
@@ -652,13 +659,6 @@ class DramaBizOps:
             audio_path = Path(str(audio_row.get("path") or ""))
             if audio_path.is_file():
                 audio_bytes = audio_path.read_bytes()
-        if not cut_bytes and not video_bytes and not audio_bytes:
-            raise AppError(
-                409,
-                "subject_mismatch",
-                "rough-cut has no measurable media",
-                version=cut.get("version"),
-            )
         return cut_bytes, video_bytes, audio_bytes
 
     @staticmethod
@@ -1077,6 +1077,38 @@ class DramaBizOps:
         env = {"ok": True, "item_no": item_no, "state": item["state"], "recorded": True}
         return self._idem_put(idempotency_key, op, env)
 
+    def _raise_close_blocked(self, item: dict[str, Any]) -> None:
+        state = item.get("state")
+        item_no = item.get("item_no")
+        if state == "waiting_on_user":
+            raise AppError(
+                409,
+                "waiting_on_user",
+                "waiting_on_user items need a recorded user conclusion; workers cannot close",
+                item_no=item_no,
+            )
+        raise AppError(
+            409,
+            "close_conditions",
+            "recorded conclusion and file_md5 required; workers cannot close",
+            item_no=item_no,
+            state=state,
+        )
+
+    def _require_close_conditions(self, rec: dict[str, Any], item: dict[str, Any], req: OpenItemCloseRequest) -> None:
+        """Same close rule for waiting_on_user, blocks_l2, and non_blocking."""
+        recorded = item.get("recorded_conclusion")
+        state = item.get("state")
+        if not isinstance(recorded, dict) or recorded.get("conclusion") != req.conclusion:
+            self._raise_close_blocked(item)
+        if state == "waiting_on_user" and recorded.get("user") is not True:
+            self._raise_close_blocked(item)
+        if state in {"blocks_l2", "non_blocking"} and recorded.get("actor") != item.get("owner"):
+            self._raise_close_blocked(item)
+        if req.actor != recorded.get("actor"):
+            self._raise_close_blocked(item)
+        self._require_registered_md5(rec, req.file_md5, code="subject_mismatch")
+
     def close_open_item(
         self,
         project_id: str,
@@ -1103,41 +1135,7 @@ class DramaBizOps:
         if item.get("state") == "closed":
             env = {"ok": True, "item_no": item_no, "state": "closed"}
             return self._idem_put(idempotency_key, op, env)
-        recorded = item.get("recorded_conclusion")
-        state = item.get("state")
-        if state == "waiting_on_user":
-            if not (
-                isinstance(recorded, dict)
-                and recorded.get("user") is True
-                and recorded.get("conclusion") == req.conclusion
-            ):
-                raise AppError(
-                    409,
-                    "waiting_on_user",
-                    "waiting_on_user items need a recorded user conclusion; workers cannot close on behalf",
-                    item_no=item_no,
-                )
-            if req.actor != recorded.get("actor"):
-                raise AppError(
-                    409,
-                    "waiting_on_user",
-                    "waiting_on_user items cannot be closed by a worker",
-                    item_no=item_no,
-                )
-        elif state in {"blocks_l2", "non_blocking"}:
-            if not (
-                isinstance(recorded, dict)
-                and recorded.get("conclusion") == req.conclusion
-                and recorded.get("actor") == item.get("owner")
-            ):
-                raise AppError(
-                    409,
-                    "close_conditions",
-                    "blocks_l2 and non_blocking need a recorded owner conclusion before close",
-                    item_no=item_no,
-                    state=state,
-                )
-        self._require_registered_md5(rec, req.file_md5, code="subject_mismatch")
+        self._require_close_conditions(rec, item, req)
         item["state"] = "closed"
         item["conclusion"] = req.conclusion
         item["file_md5"] = req.file_md5

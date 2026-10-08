@@ -476,6 +476,27 @@ def test_rough_cut_seams_subtitles_bed_voice(client, tmp_path):
     assert "synthesized" not in voice.json() or voice.json().get("synthesized") is False
 
 
+def test_seams_refuse_when_rough_cut_file_missing(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    video_md5, _ = _register(client, pid, tmp_path, kind="segment_video", payload=b"vid", name="seg.mp4")
+    audio_md5 = hashlib.md5(b"mix").hexdigest()
+    cut = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/rough-cuts",
+        json={"version": "rc-miss", "video_stream_md5": video_md5, "audio_md5": audio_md5, "actor": "eng"},
+    )
+    assert cut.status_code == 200, cut.text
+    path = Path(svc._rec(pid, "EP01")["rough_cuts"]["rc-miss"]["path"])
+    assert path.is_file()
+    path.unlink()
+    missing = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/rough-cuts/rc-miss/seams",
+        json={"ruleset_md5": "3" * 32, "actor": "eng"},
+    )
+    assert missing.status_code == 409
+    assert missing.json()["error"]["code"] == "subject_mismatch"
+
+
 # ----- 17 L reviews + four open-item states ----------------------------------------
 
 
@@ -595,12 +616,35 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         json={"conclusion": "fixed", "actor": "rev"},
     )
     assert owner_l2.status_code == 200, owner_l2.text
+    worker_l2 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
+        json={"actor": "worker", "conclusion": "fixed", "file_md5": subject},
+    )
+    assert worker_l2.status_code == 409
+    assert worker_l2.json()["error"]["code"] == "close_conditions"
     close_l2 = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
         json={"actor": "rev", "conclusion": "fixed", "file_md5": subject},
     )
     assert close_l2.status_code == 200, close_l2.text
     assert close_l2.json()["state"] == "closed"
+    owner_nb = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/conclusion",
+        json={"conclusion": "note", "actor": "rev"},
+    )
+    assert owner_nb.status_code == 200, owner_nb.text
+    worker_nb = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/close",
+        json={"actor": "worker", "conclusion": "note", "file_md5": subject},
+    )
+    assert worker_nb.status_code == 409
+    assert worker_nb.json()["error"]["code"] == "close_conditions"
+    close_nb = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/close",
+        json={"actor": "rev", "conclusion": "note", "file_md5": subject},
+    )
+    assert close_nb.status_code == 200, close_nb.text
+    assert close_nb.json()["state"] == "closed"
     g3_after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/gates/g3").json()
     assert g3_after["gate"]["locked"] is True
     assert g3_after["gate"]["last_decision"] == g3_before["gate"]["last_decision"]
@@ -745,6 +789,10 @@ def test_spend_cap_is_one_project_bucket_not_per_episode(svc, tmp_path, monkeypa
     assert got["spent"] == 60
     assert got["cap"] == SPEND_CAP
     assert got["blocked"] is True
+    rec01 = svc._rec(pid, "EP01")
+    rec02 = svc._rec(pid, "EP02")
+    assert rec01.get("cost") in (None, {})
+    assert rec02.get("cost") in (None, {})
 
 
 def test_http_force_pass_and_openapi_biz(client):

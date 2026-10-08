@@ -360,9 +360,29 @@ class DramaN3Ops:
             targets = [by_id[ident] for ident in selected]
         else:
             targets = characters + scenes
-        require_budget = getattr(self, "_require_generation_budget", None)
-        if callable(require_budget):
-            require_budget(project_id, rec["episode"]["episode_id"])
+        snap_fn = getattr(self, "generation_blocked", None)
+        if callable(snap_fn):
+            snap = snap_fn(project_id, rec["episode"]["episode_id"])
+        else:
+            snap_fn = getattr(self, "cost_snapshot_project", None)
+            if not callable(snap_fn):
+                raise AppError(
+                    409,
+                    "over_cap",
+                    "spend snapshot unavailable; thicken refused",
+                    blocked=True,
+                )
+            snap = snap_fn(project_id)
+        if snap.get("blocked"):
+            raise AppError(
+                409,
+                "over_cap",
+                "spend ceiling reached; generation is blocked",
+                spent=snap.get("spent"),
+                cap=snap.get("cap"),
+                remaining=snap.get("remaining"),
+                blocked=True,
+            )
         result = thicken_cards(
             self.settings,
             episode_id=rec["episode"]["episode_id"],
