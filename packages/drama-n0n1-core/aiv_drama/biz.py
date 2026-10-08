@@ -31,7 +31,7 @@ from aiv_drama.store import atomic_write_text
 from aiv_drama.validate import FORCE_KEYS, now_iso, validate_ep
 from aiv_drama_n4.projection import read_prompts_jsonl
 from aiv_drama_n4.seedance import generate_seedance_segment
-from aiv_schema.models import GATE_G3, NODE_DN3, NODE_DN4
+from aiv_schema.models import GATE_G3, NODE_DN4
 
 LOOK_ATTEMPT_CAP = 2
 SPEND_CAP = 60
