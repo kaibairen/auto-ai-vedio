@@ -6,6 +6,7 @@ from typing import Any
 
 from aiv_drama.errors import AppError
 from aiv_drama.models import LibraryCharacterWrite
+from aiv_drama.secrets import reject_retry_flag, reject_secret_fields
 from aiv_drama.validate import now_iso
 from aiv_drama_n3.cards import all_cards, is_scene_id, materialize_cards
 from aiv_drama_n3.crop import crop_view
@@ -359,6 +360,29 @@ class DramaN3Ops:
             targets = [by_id[ident] for ident in selected]
         else:
             targets = characters + scenes
+        snap_fn = getattr(self, "generation_blocked", None)
+        if callable(snap_fn):
+            snap = snap_fn(project_id, rec["episode"]["episode_id"])
+        else:
+            snap_fn = getattr(self, "cost_snapshot_project", None)
+            if not callable(snap_fn):
+                raise AppError(
+                    409,
+                    "over_cap",
+                    "spend snapshot unavailable; thicken refused",
+                    blocked=True,
+                )
+            snap = snap_fn(project_id)
+        if snap.get("blocked"):
+            raise AppError(
+                409,
+                "over_cap",
+                "spend ceiling reached; generation is blocked",
+                spent=snap.get("spent"),
+                cap=snap.get("cap"),
+                remaining=snap.get("remaining"),
+                blocked=True,
+            )
         result = thicken_cards(
             self.settings,
             episode_id=rec["episode"]["episode_id"],
@@ -422,8 +446,14 @@ class DramaN3Ops:
         post: Any | None = None,
         get: Any | None = None,
     ) -> dict[str, Any]:
-        """Gold-A 3:2 single sheet. Shared generate_gold_a_sheet. Never flips usable_for_n4."""
+        """Gold-A 3:2 single sheet. Shared generate_gold_a_sheet. Never flips usable_for_n4.
+
+        Live attempts (success or failure) count toward a cumulative cap of 2.
+        One call hits one SKU. Empty Idempotency-Key is not a second free attempt.
+        """
         reject_force_keys_n3(raw)
+        reject_secret_fields(raw)
+        reject_retry_flag(raw)
         if isinstance(raw, dict) and "sequential_image_generation" in raw:
             raise AppError(
                 400,
@@ -433,12 +463,20 @@ class DramaN3Ops:
                 field="sequential_image_generation",
             )
         req = body or N3GenerateLookRequest.model_validate(raw or {})
-        cached = self._idem_get(idempotency_key, f"n3_look:{project_id}:{ep}:{req.id}:{int(req.dry_run)}")
+        idem_op = f"n3_look:{project_id}:{ep}:{req.id}:{int(req.dry_run)}"
+        cached = self._idem_get(idempotency_key, idem_op)
         if cached:
             return cached
         rec = self._rec(project_id, ep)
         self._require_g2_for_n3(rec)
         self._require_writable_episode(rec)
+        if not req.dry_run:
+            require_budget = getattr(self, "_require_generation_budget", None)
+            if callable(require_budget):
+                require_budget(project_id, rec["episode"]["episode_id"])
+            require_look = getattr(self, "require_look_attempt_available", None)
+            if callable(require_look):
+                require_look(rec)
         cards = (rec.get("n3") or {}).get("cards")
         if not cards or not cards.get("materialized"):
             raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)
@@ -476,17 +514,55 @@ class DramaN3Ops:
         ep_id = rec["episode"]["episode_id"]
         out_dir = Path(req.out_dir) if req.out_dir else self.store.episode_dir(project_id, ep_id) / "looks" / req.id
         endpoint = f"{getattr(self.settings, 'ark_base_url', None) or ARK_IMAGES_URL.rsplit('/images', 1)[0]}/images/generations"
-        look = generate_gold_a_sheet(
-            card=card,
-            face_ref=face,
-            expected_md5=req.expected_md5,
-            out_dir=out_dir,
-            api_key=getattr(self.settings, "ark_api_key", None),
-            dry_run=bool(req.dry_run),
-            endpoint=endpoint,
-            post=post,
-            get=get,
-        )
+        try:
+            look = generate_gold_a_sheet(
+                card=card,
+                face_ref=face,
+                expected_md5=req.expected_md5,
+                out_dir=out_dir,
+                api_key=getattr(self.settings, "ark_api_key", None),
+                dry_run=bool(req.dry_run),
+                endpoint=endpoint,
+                post=post,
+                get=get,
+            )
+        except AppError as exc:
+            if (not req.dry_run) and exc.code not in {
+                "material_bind",
+                "look_card_incomplete",
+                "scene_look_forbidden",
+                "cards_empty",
+                "card_id_not_in_cast",
+                "force_pass_forbidden",
+                "validation",
+                "attempt_cap",
+                "over_cap",
+                "redraw_needs_user",
+                "locked",
+                "upstream_unlocked",
+                "episode_abandoned",
+                "not_found",
+                "wrong_profile",
+            }:
+                record = getattr(self, "record_look_attempt", None)
+                if callable(record):
+                    used = record(rec, ok=False, card_id=req.id)
+                    self._touch_episode(rec)
+                    self._commit(rec)
+                    exc.details["attempts_used"] = used
+                put_err = getattr(self, "_idem_put_error", None)
+                if callable(put_err):
+                    put_err(idempotency_key, idem_op, exc)
+            raise
+        used = 0
+        if not req.dry_run:
+            record = getattr(self, "record_look_attempt", None)
+            if callable(record):
+                used = record(rec, ok=True, card_id=req.id)
+        else:
+            used_fn = getattr(self, "look_attempts_used", None)
+            used = int(used_fn(rec) if callable(used_fn) else 0)
+        look["attempts_used"] = used
         rec["n3"].setdefault("looks", {})
         rec["n3"]["looks"][req.id] = {k: v for k, v in look.items() if k != "ok"}
         slim = {
@@ -515,10 +591,11 @@ class DramaN3Ops:
             "look": look,
             "look_usable_for_n4": False,
             "auto_flipped_usable": False,
+            "attempts_used": used,
         }
         return self._idem_put(
             idempotency_key,
-            f"n3_look:{project_id}:{ep}:{req.id}:{int(req.dry_run)}",
+            idem_op,
             self.n3_envelope(rec, warnings=warns or None, extra=extra),
         )
 

@@ -123,6 +123,23 @@ HTTP_STATUS: dict[str, int] = {
     "validation_failed": 422,
     "duration_out_of_profile": 422,
     "prompt_too_long": 422,
+    "attempt_cap": 409,
+    "redraw_needs_user": 409,
+    "over_cap": 409,
+    "already_attempted": 409,
+    "episode_stopped": 409,
+    "prompt_mismatch": 409,
+    "md5_mismatch": 409,
+    "duplicate": 409,
+    "video_stream_mismatch": 409,
+    "version_exists": 409,
+    "ruleset_mismatch": 409,
+    "source_unregistered": 422,
+    "take_unregistered": 409,
+    "subject_mismatch": 409,
+    "waiting_on_user": 409,
+    "blocks_l2_open": 409,
+    "close_conditions": 409,
 }
 
 CHIP_UNSET = "出片：未选工具"
@@ -254,6 +271,74 @@ MESSAGES: dict[str, dict[str, str]] = {
     "scene_look_forbidden": {
         "zh": "金样 A 合板仅 CHAR；SCENE 另轨。",
         "en": "Gold-A sheet is CHAR-only; SCENE is a separate track.",
+    },
+    "attempt_cap": {
+        "zh": "定妆出图已达累计 2 次上限（含失败）。",
+        "en": "Look generate reached the cumulative cap of 2 attempts (including failures).",
+    },
+    "redraw_needs_user": {
+        "zh": "上次重抽已失败，须先得到用户明确同意才能再抽。",
+        "en": "A failed redraw requires explicit user consent before the next look.",
+    },
+    "over_cap": {
+        "zh": "本项目费用已达上限，禁止再打供应商。",
+        "en": "Project spend ceiling reached; provider calls are blocked.",
+    },
+    "already_attempted": {
+        "zh": "该段视频已用过唯一一次尝试。",
+        "en": "This segment already used its only video attempt.",
+    },
+    "episode_stopped": {
+        "zh": "本集已有一段失败，整集停下，禁止再请求后续段。",
+        "en": "A segment failed; the episode is stopped and later segments are refused.",
+    },
+    "prompt_mismatch": {
+        "zh": "prompt_sha256 与已落盘的分镜行不一致。",
+        "en": "prompt_sha256 does not match the assembled line.",
+    },
+    "md5_mismatch": {
+        "zh": "服务器重算的 md5 与请求不一致。",
+        "en": "Server-computed md5 does not match the request.",
+    },
+    "duplicate": {
+        "zh": "同一 md5 已登记，返回原记录。",
+        "en": "This md5 is already registered; the original record is returned.",
+    },
+    "video_stream_mismatch": {
+        "zh": "画面流 md5 与已锁定的视频流不一致。",
+        "en": "video_stream_md5 does not match the locked video stream.",
+    },
+    "version_exists": {
+        "zh": "该版本已存在，禁止覆盖。",
+        "en": "This version already exists and must not be overwritten.",
+    },
+    "ruleset_mismatch": {
+        "zh": "测量口径 ruleset_md5 与已绑定的不一致。",
+        "en": "ruleset_md5 does not match the bound measurement ruleset.",
+    },
+    "source_unregistered": {
+        "zh": "声床来源未在产物登记册中。",
+        "en": "An audio-bed source is not a registered output.",
+    },
+    "take_unregistered": {
+        "zh": "TTS 成片 take_md5 未登记。",
+        "en": "take_md5 is not a registered output.",
+    },
+    "subject_mismatch": {
+        "zh": "复核对象 md5 不是已登记产物。",
+        "en": "subject_md5 is not a registered output.",
+    },
+    "waiting_on_user": {
+        "zh": "待用户项必须先记下用户身份；这次请求里声明 user/actor 无效。",
+        "en": "waiting_on_user items need a prior recorded user identity; this request cannot declare it.",
+    },
+    "close_conditions": {
+        "zh": "关闭条件未满足：须事先记下的用户身份和结论，再加已登记 file_md5。",
+        "en": "Close needs a prior recorded user identity and conclusion, plus a registered file_md5.",
+    },
+    "blocks_l2_open": {
+        "zh": "仍有挡 L2 的未结项，不能把 L2 标成 pass。",
+        "en": "Blocking open items remain; L2 cannot pass.",
     },
 }
 
