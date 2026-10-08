@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 from aiv_api.routes import router
 from aiv_drama import __version__
 from aiv_drama.config import Settings
@@ -90,8 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content=exc.to_envelope())
 
-    @app.exception_handler(RequestValidationError)
-    async def _pyd(_: Request, exc: RequestValidationError) -> JSONResponse:
+    def _validation_envelope(errors: list) -> JSONResponse:
         pair = lookup_messages("validation") or {"zh": "请求校验失败。", "en": "validation"}
         return JSONResponse(
             status_code=422,
@@ -101,10 +101,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "code": "validation",
                     "message": pair["zh"],
                     "messages": pair,
-                    "details": exc.errors(),
+                    "details": errors,
                 },
             },
         )
+
+    @app.exception_handler(RequestValidationError)
+    async def _pyd(_: Request, exc: RequestValidationError) -> JSONResponse:
+        return _validation_envelope(exc.errors())
+
+    @app.exception_handler(ValidationError)
+    async def _pyd_model(_: Request, exc: ValidationError) -> JSONResponse:
+        return _validation_envelope(exc.errors())
 
     @app.get("/health")
     def health() -> dict:

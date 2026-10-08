@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
-from aiv_drama.biz import reject_force_keys_biz
+from aiv_drama.biz import reject_blocking_boolean, reject_force_keys_biz
 from aiv_drama.biz_models import (
     AudioBedRequest,
     AudioVoiceRequest,
@@ -771,6 +771,7 @@ async def create_open_item(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     raw = await _raw_biz(request)
+    reject_blocking_boolean(raw)
     body = OpenItemCreateRequest.model_validate(raw)
     return _svc(request).create_open_item(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
