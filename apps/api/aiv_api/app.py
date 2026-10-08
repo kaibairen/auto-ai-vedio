@@ -52,6 +52,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         node, gate = NODE_DN3, GATE_G3
                     elif "/gates/g2" in path or "/drama/storyboard" in path:
                         node, gate = NODE_DN2, GATE_G2
+                    elif any(
+                        part in path
+                        for part in (
+                            "/reviews",
+                            "/open-items",
+                            "/cost",
+                            "/outputs",
+                            "/rough-cuts",
+                            "/subtitles",
+                            "/audio/",
+                            "/segments/",
+                        )
+                    ):
+                        node, gate = "post", None
                     else:
                         node, gate = NODE_DN1, GATE_G1B
                     for key in FORCE_KEYS:
@@ -129,6 +143,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     openapi_n2 = settings.repo_root / "openapi" / "drama-n2.v0.yaml"
     openapi_n3 = settings.repo_root / "openapi" / "drama-n3.v0.yaml"
     openapi_n4 = settings.repo_root / "openapi" / "drama-n4.v0.yaml"
+    openapi_post = settings.repo_root / "openapi" / "drama-post.v0.yaml"
 
     @app.get("/openapi/drama-n0n1.v0.yaml")
     def openapi_file() -> FileResponse:
@@ -145,6 +160,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/openapi/drama-n4.v0.yaml")
     def openapi_n4_file() -> FileResponse:
         return FileResponse(openapi_n4, media_type="application/yaml")
+
+    @app.get("/openapi/drama-post.v0.yaml")
+    def openapi_post_file() -> FileResponse:
+        return FileResponse(openapi_post, media_type="application/yaml")
 
     app.include_router(router)
     return app

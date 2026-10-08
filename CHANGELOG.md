@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.13 — post-assemble APIs 9–18 (docs≠PASS)
+
+Signed open-API design (md5 `74507300c639579b59a60e6b4d7b4d3f`). Implements gaps 9–18. Does **not** merge to main. Does not remap L1/L2/L3 onto G1b/G2/G3. ForcePass=never (`force` / `force_pass` → 400 `force_pass_forbidden`). API keys stay out of the repo and `store.json`.
+
+- **9** `generate-look`: one SKU per call (no silent SKU walk). Success and failure both count as a sheet. After 2 sheets, POST → 409 `attempt_cap`. Changing prompt/face hashes does not reset the 2. Response adds `attempts_used`.
+- **10** `POST .../segments/{segment_id}/video`: one attempt per segment; a failure stops the episode (`episode_stopped`). Ledger is not optional Idempotency-Key.
+- **11–16** outputs / rough-cuts / seams / subtitles / audio bed / TTS place (no generate).
+- **17** L1/L2/L3 reviews + four-state open items. `waiting_on_user` cannot be closed by a worker file md5 alone.
+- **18** project cost ledger, cap ¥60, `over_cap` refuses write; generate-look / storyboard generate / outline generate / segment video read `blocked` first. After one redraw failure, next redraw without `user_consent` → 409 `redraw_needs_user`.
+
 ## 0.2.12 — split full-body / heads look generate (docs≠PASS)
 
 `generate-look` stays the Gold-A 3:2 combined 3+6 sheet. Two new standalone CLI commands assemble and generate **separate** images so full bodies are not cropped by the head grid.

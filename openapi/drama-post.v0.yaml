@@ -1,0 +1,76 @@
+openapi: 3.0.3
+info:
+  title: Drama post-assemble APIs (video / outputs / L reviews / cost)
+  version: 0.1.0
+  description: |
+    Gaps 9–18 against the signed open-API design. generate-look attempt cap
+    stays on the existing N3 path. L1/L2/L3 are not G1b/G2/G3. ForcePass=never.
+paths:
+  /api/v0/projects/{project_id}/episodes/{ep}/drama/n3/cards/generate-look:
+    post:
+      summary: Seedream look (cap 2 sheets incl. failure; one SKU per call)
+      responses:
+        "409":
+          description: attempt_cap after two sheets
+  /api/v0/projects/{project_id}/episodes/{ep}/segments/{segment_id}/video:
+    post:
+      summary: Seedance segment video — one attempt; episode stops on failure
+  /api/v0/projects/{project_id}/episodes/{ep}/outputs:
+    post:
+      summary: Register output md5
+  /api/v0/projects/{project_id}/episodes/{ep}/rough-cuts:
+    post:
+      summary: Rough-cut version (no overwrite)
+  /api/v0/projects/{project_id}/episodes/{ep}/rough-cuts/{version}/seams:
+    post:
+      summary: Seam measurement (does not recut)
+  /api/v0/projects/{project_id}/episodes/{ep}/subtitles/{version}:
+    put:
+      summary: Subtitle version
+  /api/v0/projects/{project_id}/episodes/{ep}/audio/bed:
+    post:
+      summary: Audio bed from registered sources (no music generate)
+  /api/v0/projects/{project_id}/episodes/{ep}/audio/voice:
+    post:
+      summary: Place an already-made TTS take (no synthesis)
+  /api/v0/projects/{project_id}/episodes/{ep}/reviews:
+    post:
+      summary: L1/L2/L3 review (not a G gate)
+  /api/v0/projects/{project_id}/episodes/{ep}/open-items:
+    post:
+      summary: Open item in one of four states
+  /api/v0/projects/{project_id}/episodes/{ep}/open-items/{item_no}/close:
+    post:
+      summary: Close an open item (waiting_on_user needs user: conclusion)
+  /api/v0/projects/{project_id}/cost:
+    get:
+      summary: Cost snapshot (spent / cap / remaining / blocked)
+  /api/v0/projects/{project_id}/cost/entries:
+    post:
+      summary: Cost entry (same ref_id is idempotent; over_cap refuses write)
+components:
+  schemas:
+    PostErrorCode:
+      type: string
+      enum:
+        - attempt_cap
+        - already_attempted
+        - episode_stopped
+        - prompt_mismatch
+        - md5_mismatch
+        - duplicate
+        - video_stream_mismatch
+        - version_exists
+        - ruleset_mismatch
+        - source_unregistered
+        - take_unregistered
+        - subject_mismatch
+        - waiting_on_user
+        - blocks_l2_open
+        - over_cap
+        - redraw_needs_user
+        - force_pass_forbidden
+        - validation
+        - provider
+        - upstream_unlocked
+        - not_found

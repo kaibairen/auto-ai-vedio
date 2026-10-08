@@ -153,77 +153,112 @@ def generate_seedream_sheet(
     post_fn = post or httpx.post
     get_fn = get or httpx.get
     attempts: list[dict[str, Any]] = []
-    last_detail = "no attempt"
-    for model in models:
-        body = build_ark_body(model=model, prompt=prompt, image_data_url=image_data_url, size=size)
-        try:
-            resp = post_fn(
-                endpoint,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=body,
-                timeout=timeout,
-            )
-        except AppError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            last_detail = redact_secrets(str(exc), api_key)
-            attempts.append({"model": model, "http": None, "status": "error", "image": False})
-            continue
-        status = _status_code(resp)
-        if status == 401:
-            attempts.append({"model": model, "http": status, "status": "unauthorized", "image": False})
+    # One call hits exactly one SKU. Do not walk SEEDREAM_SKU_CHAIN on non-401.
+    model = (tuple(models)[0] if models else SEEDREAM_SKU_PRIMARY)
+    body = build_ark_body(model=model, prompt=prompt, image_data_url=image_data_url, size=size)
+    try:
+        resp = post_fn(
+            endpoint,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=body,
+            timeout=timeout,
+        )
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        last_detail = redact_secrets(str(exc), api_key)
+        attempts.append({"model": model, "http": None, "status": "error", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
+            node=NODE_DN3,
+            attempts=attempts,
+        ) from exc
+    status = _status_code(resp)
+    if status == 401:
+        attempts.append({"model": model, "http": status, "status": "unauthorized", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            "Ark unauthorized (key rejected). Key is not logged.",
+            node=NODE_DN3,
+            attempts=attempts,
+        )
+    if status != 200:
+        last_detail = redact_secrets(getattr(resp, "text", "") or f"http {status}", api_key)
+        attempts.append({"model": model, "http": status, "status": "rejected", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
+            node=NODE_DN3,
+            attempts=attempts,
+        )
+    try:
+        payload = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        last_detail = redact_secrets(str(exc), api_key)
+        attempts.append({"model": model, "http": status, "status": "bad_json", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
+            node=NODE_DN3,
+            attempts=attempts,
+        ) from exc
+    url = _parse_image_url(payload)
+    if not url:
+        last_detail = "Ark 200 without image url"
+        attempts.append({"model": model, "http": status, "status": "no_url", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
+            node=NODE_DN3,
+            attempts=attempts,
+        )
+    try:
+        img = get_fn(url, timeout=timeout)
+        img_status = _status_code(img)
+        if img_status != 200:
+            last_detail = f"image download http {img_status}"
+            attempts.append({"model": model, "http": status, "status": "download_fail", "image": False})
             raise AppError(
                 502,
                 "provider",
-                "Ark unauthorized (key rejected). Key is not logged.",
+                redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
                 node=NODE_DN3,
                 attempts=attempts,
             )
-        if status != 200:
-            last_detail = redact_secrets(getattr(resp, "text", "") or f"http {status}", api_key)
-            attempts.append({"model": model, "http": status, "status": "rejected", "image": False})
-            continue
-        try:
-            payload = resp.json()
-        except Exception as exc:  # noqa: BLE001
-            last_detail = redact_secrets(str(exc), api_key)
-            attempts.append({"model": model, "http": status, "status": "bad_json", "image": False})
-            continue
-        url = _parse_image_url(payload)
-        if not url:
-            last_detail = "Ark 200 without image url"
-            attempts.append({"model": model, "http": status, "status": "no_url", "image": False})
-            continue
-        try:
-            img = get_fn(url, timeout=timeout)
-            img_status = _status_code(img)
-            if img_status != 200:
-                last_detail = f"image download http {img_status}"
-                attempts.append({"model": model, "http": status, "status": "download_fail", "image": False})
-                continue
-            content = img.content
-        except AppError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            last_detail = redact_secrets(str(exc), api_key)
-            attempts.append({"model": model, "http": status, "status": "download_error", "image": False})
-            continue
-        if not content:
-            last_detail = "empty image bytes"
-            attempts.append({"model": model, "http": status, "status": "empty", "image": False})
-            continue
-        attempts.append({"model": model, "http": status, "status": "ok", "image": True})
-        return {
-            "model": model,
-            "bytes": content,
-            "url_host_only": True,
-            "attempts": attempts,
-            "size": size,
-        }
-    raise AppError(
-        502,
-        "provider",
-        redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
-        node=NODE_DN3,
-        attempts=attempts,
-    )
+        content = img.content
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        last_detail = redact_secrets(str(exc), api_key)
+        attempts.append({"model": model, "http": status, "status": "download_error", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
+            node=NODE_DN3,
+            attempts=attempts,
+        ) from exc
+    if not content:
+        last_detail = "empty image bytes"
+        attempts.append({"model": model, "http": status, "status": "empty", "image": False})
+        raise AppError(
+            502,
+            "provider",
+            redact_secrets(f"Ark sheet generate failed: {last_detail}", api_key),
+            node=NODE_DN3,
+            attempts=attempts,
+        )
+    attempts.append({"model": model, "http": status, "status": "ok", "image": True})
+    return {
+        "model": model,
+        "bytes": content,
+        "url_host_only": True,
+        "attempts": attempts,
+        "size": size,
+    }

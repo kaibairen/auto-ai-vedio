@@ -346,6 +346,9 @@ class DramaN2Ops:
         cached = self._idem_get(idempotency_key, f"generate_storyboard:{project_id}:{ep}")
         if cached:
             return cached
+        require_open = getattr(self, "require_generation_open", None)
+        if callable(require_open):
+            require_open(project_id)
         rec = self._rec(project_id, ep)
         self._require_g1b_for_n2(rec)
         req = body or StoryboardGenerateRequest()

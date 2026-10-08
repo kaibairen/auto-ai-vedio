@@ -44,6 +44,19 @@ from aiv_drama_n3.models import (
 from aiv_drama_n3.validate import reject_force_keys_n3, reject_image_gen_n3
 from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 from aiv_drama_n4.validate import reject_force_keys_n4
+from aiv_drama_post.models import (
+    AudioBedRequest,
+    AudioVoiceRequest,
+    CostEntryRequest,
+    OpenItemCloseRequest,
+    OpenItemRequest,
+    OutputRegisterRequest,
+    ReviewRequest,
+    RoughCutRequest,
+    SeamMeasureRequest,
+    SegmentVideoRequest,
+    SubtitlePutRequest,
+)
 from aiv_schema.models import NODE_DN3
 
 router = APIRouter(prefix="/api/v0")
@@ -627,6 +640,96 @@ async def assemble_n4(
     raw = await _raw_n4(request)
     body = N4AssembleRequest.model_validate(raw) if raw else N4AssembleRequest()
     return _svc(request).assemble_n4(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/segments/{segment_id}/video")
+async def generate_segment_video(
+    project_id: str,
+    ep: str,
+    segment_id: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = SegmentVideoRequest.model_validate(raw)
+    return _svc(request).generate_segment_video(
+        project_id, ep, segment_id, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/outputs")
+async def register_output(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = OutputRegisterRequest.model_validate(raw)
+    return _svc(request).register_output(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/rough-cuts")
+async def create_rough_cut(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = RoughCutRequest.model_validate(raw)
+    return _svc(request).create_rough_cut(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/rough-cuts/{version}/seams")
+async def measure_seams(project_id: str, ep: str, version: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = SeamMeasureRequest.model_validate(raw)
+    return _svc(request).measure_seams(project_id, ep, version, body, raw=raw)
+
+
+@router.put("/projects/{project_id}/episodes/{ep}/subtitles/{version}")
+async def put_subtitles(project_id: str, ep: str, version: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = SubtitlePutRequest.model_validate(raw)
+    return _svc(request).put_subtitles(project_id, ep, version, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/audio/bed")
+async def create_audio_bed(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = AudioBedRequest.model_validate(raw)
+    return _svc(request).create_audio_bed(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/audio/voice")
+async def place_audio_voice(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = AudioVoiceRequest.model_validate(raw)
+    return _svc(request).place_audio_voice(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/reviews")
+async def create_review(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = ReviewRequest.model_validate(raw)
+    return _svc(request).create_review(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items")
+async def create_open_item(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = OpenItemRequest.model_validate(raw)
+    return _svc(request).create_open_item(project_id, ep, body, raw=raw)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/close")
+async def close_open_item(project_id: str, ep: str, item_no: int, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = OpenItemCloseRequest.model_validate(raw)
+    return _svc(request).close_open_item(project_id, ep, item_no, body, raw=raw)
+
+
+@router.get("/projects/{project_id}/cost")
+def get_cost(project_id: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_cost(project_id)
+
+
+@router.post("/projects/{project_id}/cost/entries")
+async def add_cost_entry(project_id: str, request: Request) -> dict[str, Any]:
+    raw = await _raw(request)
+    body = CostEntryRequest.model_validate(raw)
+    return _svc(request).add_cost_entry(project_id, body, raw=raw)
 
 
 def _koubo_isolated() -> JSONResponse:
