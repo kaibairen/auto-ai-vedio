@@ -1028,15 +1028,13 @@ class DramaBizOps:
         item = rec["open_items"]["by_no"].get(str(item_no))
         if not item:
             raise AppError(404, "not_found", "open item not found", item_no=item_no)
-        if req.user is not True or not (req.actor or "").strip():
-            self._raise_close_blocked(item)
-        if item.get("state") == "closed":
-            env = {"ok": True, "item_no": item_no, "state": "closed", "user": True, "recorded": True}
-            return self._idem_put(idempotency_key, op, env)
-        item["recorded_user"] = {"user": True, "actor": req.actor, "at": now_iso()}
-        self._touch_episode(rec)
-        self._commit(rec)
-        env = {"ok": True, "item_no": item_no, "state": item["state"], "user": True, "recorded": True}
+        # Worker-callable: request user/actor never become recorded_user.
+        env = {
+            "ok": True,
+            "item_no": item_no,
+            "state": item.get("state"),
+            "recorded": False,
+        }
         return self._idem_put(idempotency_key, op, env)
 
     def record_open_item_conclusion(
@@ -1074,6 +1072,7 @@ class DramaBizOps:
         incoming = {
             "conclusion": req.conclusion,
             "actor": req.actor,
+            "user": False,
             "at": now_iso(),
         }
         if isinstance(prior, dict):
@@ -1116,15 +1115,20 @@ class DramaBizOps:
         recorded = item.get("recorded_user")
         return isinstance(recorded, dict) and recorded.get("user") is True
 
+    @staticmethod
+    def _recorded_user_conclusion(item: dict[str, Any]) -> bool:
+        recorded = item.get("recorded_conclusion")
+        return isinstance(recorded, dict) and recorded.get("user") is True and bool(recorded.get("conclusion"))
+
     def _require_close_conditions(self, rec: dict[str, Any], item: dict[str, Any], req: OpenItemCloseRequest) -> None:
-        """Prior recorded user + conclusion + file_md5. Request user/owner/conclusion are not identity."""
+        """Prior user identity + prior user conclusion + registered file_md5. Request claims are not identity."""
         recorded_user = item.get("recorded_user")
         if not self._recorded_item_user(item):
             self._raise_close_blocked(item)
         if req.actor != recorded_user.get("actor"):
             self._raise_close_blocked(item)
         recorded = item.get("recorded_conclusion")
-        if not isinstance(recorded, dict) or recorded.get("conclusion") != req.conclusion:
+        if not self._recorded_user_conclusion(item) or recorded.get("conclusion") != req.conclusion:
             self._raise_close_blocked(item)
         self._require_registered_md5(rec, req.file_md5, code="subject_mismatch")
 

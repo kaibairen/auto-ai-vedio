@@ -156,7 +156,7 @@ paths:
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/consent:
     post:
       operationId: recordOpenItemConsent
-      summary: Record user identity for this item. Same class as redraw-consent. Does not close.
+      summary: Worker-callable. Does not write recorded_user. Request user/actor are not user identity.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -360,7 +360,7 @@ components:
     OpenItemConsentRequest:
       type: object
       additionalProperties: false
-      required: [user]
+      required: [user, actor]
       properties:
         user: { type: boolean }
         actor: { type: string }

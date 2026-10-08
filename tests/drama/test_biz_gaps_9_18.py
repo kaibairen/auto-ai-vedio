@@ -597,14 +597,14 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/consent",
         json={"user": False, "actor": "viewer"},
     )
-    assert denied_consent.status_code == 409
-    assert denied_consent.json()["error"]["code"] == "waiting_on_user"
+    assert denied_consent.status_code == 200, denied_consent.text
+    assert denied_consent.json().get("recorded") is not True
     consent = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/consent",
         json={"user": True, "actor": "viewer"},
     )
     assert consent.status_code == 200, consent.text
-    assert consent.json()["recorded"] is True
+    assert consent.json().get("recorded") is not True
     worker_after = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/close",
         json={"actor": "worker", "conclusion": "wardrobe_accepted", "file_md5": subject},
@@ -621,8 +621,8 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/close",
         json={"actor": "viewer", "conclusion": "wardrobe_accepted", "file_md5": subject},
     )
-    assert user_close.status_code == 200, user_close.text
-    assert user_close.json()["state"] == "closed"
+    assert user_close.status_code == 409
+    assert user_close.json()["error"]["code"] == "waiting_on_user"
     casual_l2 = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
         json={"actor": "rev", "conclusion": "fixed", "file_md5": subject},
@@ -651,6 +651,7 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         json={"user": True, "actor": "viewer"},
     )
     assert consent_l2.status_code == 200, consent_l2.text
+    assert consent_l2.json().get("recorded") is not True
     worker_l2 = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
         json={"actor": "worker", "conclusion": "fixed", "file_md5": subject},
@@ -661,8 +662,8 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
         json={"actor": "viewer", "conclusion": "fixed", "file_md5": subject},
     )
-    assert close_l2.status_code == 200, close_l2.text
-    assert close_l2.json()["state"] == "closed"
+    assert close_l2.status_code == 409
+    assert close_l2.json()["error"]["code"] == "close_conditions"
     owner_nb = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/conclusion",
         json={"conclusion": "note", "actor": "rev"},
@@ -679,6 +680,7 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         json={"user": True, "actor": "viewer"},
     )
     assert consent_nb.status_code == 200, consent_nb.text
+    assert consent_nb.json().get("recorded") is not True
     worker_nb = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/close",
         json={"actor": "rev", "user": True, "conclusion": "note", "file_md5": subject},
@@ -689,13 +691,63 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/close",
         json={"actor": "viewer", "conclusion": "note", "file_md5": subject},
     )
-    assert close_nb.status_code == 200, close_nb.text
-    assert close_nb.json()["state"] == "closed"
+    assert close_nb.status_code == 409
+    assert close_nb.json()["error"]["code"] == "close_conditions"
     g3_after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/gates/g3").json()
     assert g3_after["gate"]["locked"] is True
     assert g3_after["gate"]["last_decision"] == g3_before["gate"]["last_decision"]
     g1b = client.get(f"/api/v0/projects/{pid}/episodes/EP01/gates/g1b").json()
     assert g1b["gate"]["locked"] is True
+
+
+def test_worker_consent_conclusion_close_rejected_for_three_states(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"cut-seq", name="cut-seq.bin")
+    review = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/reviews",
+        json={"level": "L1", "subject_md5": subject, "verdict": "fail", "actor": "rev"},
+    )
+    assert review.status_code == 200, review.text
+    review_id = review.json()["review_id"]
+    for item_no, state, code in (
+        (1, "waiting_on_user", "waiting_on_user"),
+        (2, "blocks_l2", "close_conditions"),
+        (3, "non_blocking", "close_conditions"),
+    ):
+        created = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items",
+            json={
+                "review_id": review_id,
+                "item_no": item_no,
+                "state": state,
+                "owner": "rev",
+                "text": f"item-{state}",
+            },
+        )
+        assert created.status_code == 200, created.text
+        consent = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/consent",
+            json={"user": True, "actor": "worker"},
+        )
+        assert consent.status_code == 200, consent.text
+        assert consent.json().get("recorded") is not True
+        rec = svc._rec(pid, "EP01")
+        assert rec["open_items"]["by_no"][str(item_no)].get("recorded_user") in (None, {})
+        conclusion = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/conclusion",
+            json={"conclusion": "worker_wrote_this", "actor": "worker", "user": True},
+        )
+        assert conclusion.status_code == 200, conclusion.text
+        after = svc._rec(pid, "EP01")["open_items"]["by_no"][str(item_no)]
+        assert (after.get("recorded_conclusion") or {}).get("user") is not True
+        closed = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/close",
+            json={"actor": "worker", "conclusion": "worker_wrote_this", "file_md5": subject},
+        )
+        assert closed.status_code == 409, closed.text
+        assert closed.json()["error"]["code"] == code
 
 
 def test_close_request_user_true_or_actor_owner_is_rejected(client, tmp_path):
@@ -764,6 +816,7 @@ def test_open_item_consent_without_conclusion_cannot_close(client, tmp_path):
         json={"user": True, "actor": "viewer"},
     )
     assert consent.status_code == 200, consent.text
+    assert consent.json().get("recorded") is not True
     no_conclusion = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
         json={"actor": "rev", "conclusion": "wardrobe_accepted", "file_md5": subject},
