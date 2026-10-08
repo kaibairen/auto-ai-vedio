@@ -141,7 +141,7 @@ paths:
   /projects/{project_id}/episodes/{ep}/open-items:
     post:
       operationId: createOpenItem
-      summary: Open item with one of four states (no blocking boolean)
+      summary: Open item with one of four states. Cannot create as closed unless close conditions are already met.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -153,10 +153,41 @@ paths:
       responses:
         '200': { description: item_no + state }
         '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/open-items/{item_no}/conclusion:
+    post:
+      operationId: recordOpenItemConclusion
+      summary: Record a conclusion. Does not close. waiting_on_user requires user=true.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - { name: item_no, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenItemConclusionRequest' }
+      responses:
+        '200': { description: item_no + recorded }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/redraw-consent:
+    post:
+      operationId: recordRedrawConsent
+      summary: Record user redraw consent. generate-look user_consent is ignored.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RedrawConsentRequest' }
+      responses:
+        '200': { description: recorded user consent }
+        '409': { description: redraw_needs_user }
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/close:
     post:
       operationId: closeOpenItem
-      summary: Close with named conclusion + file_md5. waiting_on_user needs user: conclusion.
+      summary: Close with matching recorded conclusion + file_md5. Workers cannot close waiting_on_user.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -172,7 +203,7 @@ paths:
   /projects/{project_id}/cost:
     get:
       operationId: getProjectCost
-      summary: Spend snapshot. cap=60 per episode redraw budget.
+      summary: Spend snapshot. cap=60 once per project, not per episode.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:
@@ -309,6 +340,21 @@ components:
         actor: { type: string }
         conclusion: { type: string }
         file_md5: { type: string }
+    OpenItemConclusionRequest:
+      type: object
+      additionalProperties: false
+      required: [conclusion, actor]
+      properties:
+        conclusion: { type: string }
+        actor: { type: string }
+        user: { type: boolean, default: false }
+    RedrawConsentRequest:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user: { type: boolean }
+        actor: { type: string }
     CostEntryRequest:
       type: object
       additionalProperties: false
@@ -341,6 +387,7 @@ components:
         - take_unregistered
         - subject_mismatch
         - waiting_on_user
+        - close_conditions
         - blocks_l2_open
         - upstream_unlocked
         - provider

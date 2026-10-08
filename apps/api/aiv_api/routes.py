@@ -11,7 +11,9 @@ from aiv_drama.biz_models import (
     AudioVoiceRequest,
     CostEntryRequest,
     OpenItemCloseRequest,
+    OpenItemConclusionRequest,
     OpenItemCreateRequest,
+    RedrawConsentRequest,
     OutputRegisterRequest,
     ReviewCreateRequest,
     RoughCutRequest,
@@ -776,6 +778,21 @@ async def create_open_item(
     return _svc(request).create_open_item(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
 
 
+@router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/conclusion")
+async def record_open_item_conclusion(
+    project_id: str,
+    ep: str,
+    item_no: int,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = OpenItemConclusionRequest.model_validate(raw)
+    return _svc(request).record_open_item_conclusion(
+        project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
 @router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/close")
 async def close_open_item(
     project_id: str,
@@ -788,6 +805,20 @@ async def close_open_item(
     body = OpenItemCloseRequest.model_validate(raw)
     return _svc(request).close_open_item(
         project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/redraw-consent")
+async def record_redraw_consent(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = RedrawConsentRequest.model_validate(raw)
+    return _svc(request).record_redraw_consent(
+        project_id, ep, body, raw=raw, idempotency_key=idempotency_key
     )
 
 

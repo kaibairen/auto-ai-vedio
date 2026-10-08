@@ -131,6 +131,25 @@ class OpenItemCloseRequest(BaseModel):
     file_md5: str = Field(min_length=32, max_length=32)
 
 
+class OpenItemConclusionRequest(BaseModel):
+    """Record a conclusion. Does not close. waiting_on_user requires user=true."""
+
+    model_config = {"extra": "forbid"}
+
+    conclusion: str = Field(min_length=1)
+    actor: str = Field(min_length=1)
+    user: bool = False
+
+
+class RedrawConsentRequest(BaseModel):
+    """User redraw consent. Engineering cannot grant this on generate-look."""
+
+    model_config = {"extra": "forbid"}
+
+    user: bool
+    actor: str | None = None
+
+
 class CostEntryRequest(BaseModel):
     model_config = {"extra": "forbid"}
 

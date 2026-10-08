@@ -360,6 +360,9 @@ class DramaN3Ops:
             targets = [by_id[ident] for ident in selected]
         else:
             targets = characters + scenes
+        require_budget = getattr(self, "_require_generation_budget", None)
+        if callable(require_budget):
+            require_budget(project_id, rec["episode"]["episode_id"])
         result = thicken_cards(
             self.settings,
             episode_id=rec["episode"]["episode_id"],
@@ -453,7 +456,7 @@ class DramaN3Ops:
                 require_budget(project_id, rec["episode"]["episode_id"])
             require_look = getattr(self, "require_look_attempt_available", None)
             if callable(require_look):
-                require_look(rec, user_consent=bool(req.user_consent))
+                require_look(rec)
         cards = (rec.get("n3") or {}).get("cards")
         if not cards or not cards.get("materialized"):
             raise AppError(422, "cards_empty", CARDS_EMPTY_MESSAGE, node=NODE_DN3)

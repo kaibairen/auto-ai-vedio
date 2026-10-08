@@ -50,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     biz_marks = (
                         "/reviews",
                         "/open-items",
+                        "/redraw-consent",
                         "/cost",
                         "/outputs",
                         "/rough-cuts",

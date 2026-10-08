@@ -10,8 +10,9 @@ from pathlib import Path
 
 from aiv_drama.errors import AppError
 from aiv_drama.biz import LOOK_ATTEMPT_CAP, SPEND_CAP
+from aiv_drama.models import EpisodeCreate
 from aiv_drama_n3.gold_sheet import LOOK_KIND, LOOK_ROLE
-from aiv_drama_n3.models import N3GenerateLookRequest, N3MaterializeRequest
+from aiv_drama_n3.models import N3GenerateLookRequest, N3MaterializeRequest, N3ThickenRequest
 from aiv_drama_n3.seedream import SEEDREAM_SKU_PRIMARY
 from tests.drama.helpers import lock_g2, lock_g3_usable, seed_project_episode
 from tests.drama.test_n3_look_generate import _face, _sheet_card
@@ -106,12 +107,22 @@ def test_look_cap_counts_failures_and_hash_change_does_not_reset(svc, tmp_path, 
     assert first.details["attempts_used"] == 1
     other = tmp_path / "other.jpg"
     other.write_bytes(b"\xff\xd8other-face")
-    second = _err(
+    consent_ignored = _err(
         lambda: svc.generate_n3_look(
             pid,
             "EP01",
             N3GenerateLookRequest(id="CHAR-01", face_ref=str(other), user_consent=True, actor="eng"),
             raw={"id": "CHAR-01", "face_ref": str(other), "user_consent": True},
+        )
+    )
+    assert consent_ignored.code == "redraw_needs_user"
+    svc.record_redraw_consent(pid, "EP01", raw={"user": True, "actor": "viewer"})
+    second = _err(
+        lambda: svc.generate_n3_look(
+            pid,
+            "EP01",
+            N3GenerateLookRequest(id="CHAR-01", face_ref=str(other), actor="eng"),
+            raw={"id": "CHAR-01", "face_ref": str(other)},
         )
     )
     assert second.code == "provider"
@@ -120,8 +131,8 @@ def test_look_cap_counts_failures_and_hash_change_does_not_reset(svc, tmp_path, 
         lambda: svc.generate_n3_look(
             pid,
             "EP01",
-            N3GenerateLookRequest(id="CHAR-01", face_ref=str(face), user_consent=True, actor="eng"),
-            raw={"id": "CHAR-01", "face_ref": str(face), "user_consent": True},
+            N3GenerateLookRequest(id="CHAR-01", face_ref=str(face), actor="eng"),
+            raw={"id": "CHAR-01", "face_ref": str(face)},
         )
     )
     assert capped.code == "attempt_cap"
@@ -204,12 +215,26 @@ def test_http_redraw_needs_user_and_retry_forbidden(client, tmp_path, monkeypatc
     blocked = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == "redraw_needs_user"
+    spoof = client.post(
+        url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng", "user_consent": True}
+    )
+    assert spoof.status_code == 409
+    assert spoof.json()["error"]["code"] == "redraw_needs_user"
     retry = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "retry": True})
     assert retry.status_code == 400
     assert retry.json()["error"]["code"] == "validation"
     force = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "force_pass": True})
     assert force.status_code == 400
     assert force.json()["error"]["code"] == "force_pass_forbidden"
+    recorded = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/redraw-consent",
+        json={"user": True, "actor": "viewer"},
+    )
+    assert recorded.status_code == 200, recorded.text
+    assert recorded.json()["recorded"] is True
+    second = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
+    assert second.status_code == 502
+    assert second.json()["error"]["details"]["attempts_used"] == 2
 
 
 # ----- 10 Seedance one-shot + episode_stopped --------------------------------------
@@ -355,6 +380,32 @@ def test_rough_cut_seams_subtitles_bed_voice(client, tmp_path):
     assert seams.status_code == 200, seams.text
     assert "seams" in seams.json()
     assert isinstance(seams.json()["pass"], bool)
+    by_metric = {row["metric"]: row["value"] for row in seams.json()["seams"]}
+    folded_join = (int(ruleset[:8], 16) % 50) / 1000.0
+    folded_loud = (int(ruleset[:8], 16) % 20) / 10.0
+    assert by_metric["join_delta_s"] != folded_join
+    assert by_metric["loudness_jump_db"] != folded_loud
+    assert not (by_metric["join_delta_s"] == 0.0 and by_metric["loudness_jump_db"] == 0.0)
+    other_md5, _ = _register(
+        client, pid, tmp_path, kind="segment_video", payload=bytes(range(256)) * 8, name="seg2.mp4"
+    )
+    cut2 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/rough-cuts",
+        json={
+            "version": "rc2",
+            "video_stream_md5": other_md5,
+            "audio_md5": audio_md5,
+            "actor": "eng",
+        },
+    )
+    assert cut2.status_code == 200, cut2.text
+    seams2 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/rough-cuts/rc2/seams",
+        json={"ruleset_md5": ruleset, "actor": "eng"},
+    )
+    assert seams2.status_code == 200, seams2.text
+    by_metric2 = {row["metric"]: row["value"] for row in seams2.json()["seams"]}
+    assert by_metric2 != by_metric
     mismatch = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/rough-cuts/rc1/seams",
         json={"ruleset_md5": "2" * 32, "actor": "eng"},
@@ -447,7 +498,7 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
     )
     assert l1.status_code == 200, l1.text
     review_id = l1.json()["review_id"]
-    states = ("blocks_l2", "waiting_on_user", "non_blocking", "closed")
+    states = ("blocks_l2", "waiting_on_user", "non_blocking")
     for idx, state in enumerate(states, start=1):
         item = client.post(
             f"/api/v0/projects/{pid}/episodes/EP01/open-items",
@@ -461,6 +512,18 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
         )
         assert item.status_code == 200, item.text
         assert item.json()["state"] == state
+    create_closed = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items",
+        json={
+            "review_id": review_id,
+            "item_no": 4,
+            "state": "closed",
+            "owner": "rev",
+            "text": "item-closed",
+        },
+    )
+    assert create_closed.status_code == 409
+    assert create_closed.json()["error"]["code"] == "close_conditions"
     blocking_bool = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items",
         json={
@@ -485,12 +548,59 @@ def test_reviews_four_states_and_not_mapped_to_g_gates(client, tmp_path):
     )
     assert worker_close.status_code == 409
     assert worker_close.json()["error"]["code"] == "waiting_on_user"
-    user_close = client.post(
+    spoof_prefix = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/close",
         json={"actor": "worker", "conclusion": "user:wardrobe_accepted", "file_md5": subject},
     )
+    assert spoof_prefix.status_code == 409
+    assert spoof_prefix.json()["error"]["code"] == "waiting_on_user"
+    worker_file = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/conclusion",
+        json={"conclusion": "wardrobe_accepted", "actor": "worker", "user": False},
+    )
+    assert worker_file.status_code == 409
+    assert worker_file.json()["error"]["code"] == "waiting_on_user"
+    recorded = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/conclusion",
+        json={"conclusion": "wardrobe_accepted", "actor": "viewer", "user": True},
+    )
+    assert recorded.status_code == 200, recorded.text
+    assert recorded.json()["state"] == "waiting_on_user"
+    worker_proxy = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/close",
+        json={"actor": "worker", "conclusion": "wardrobe_accepted", "file_md5": subject},
+    )
+    assert worker_proxy.status_code == 409
+    assert worker_proxy.json()["error"]["code"] == "waiting_on_user"
+    user_close = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/2/close",
+        json={"actor": "viewer", "conclusion": "wardrobe_accepted", "file_md5": subject},
+    )
     assert user_close.status_code == 200, user_close.text
     assert user_close.json()["state"] == "closed"
+    casual_l2 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
+        json={"actor": "rev", "conclusion": "fixed", "file_md5": subject},
+    )
+    assert casual_l2.status_code == 409
+    assert casual_l2.json()["error"]["code"] == "close_conditions"
+    casual_nb = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/3/close",
+        json={"actor": "rev", "conclusion": "note", "file_md5": subject},
+    )
+    assert casual_nb.status_code == 409
+    assert casual_nb.json()["error"]["code"] == "close_conditions"
+    owner_l2 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/conclusion",
+        json={"conclusion": "fixed", "actor": "rev"},
+    )
+    assert owner_l2.status_code == 200, owner_l2.text
+    close_l2 = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
+        json={"actor": "rev", "conclusion": "fixed", "file_md5": subject},
+    )
+    assert close_l2.status_code == 200, close_l2.text
+    assert close_l2.json()["state"] == "closed"
     g3_after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/gates/g3").json()
     assert g3_after["gate"]["locked"] is True
     assert g3_after["gate"]["last_decision"] == g3_before["gate"]["last_decision"]
@@ -541,6 +651,102 @@ def test_spend_over_cap_and_blocked_look(svc, tmp_path, monkeypatch):
     assert got["cap"] == SPEND_CAP
 
 
+def test_thicken_refuses_when_spend_blocked_without_model(svc, monkeypatch):
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    svc.materialize_n3_cards(pid, "EP01", N3MaterializeRequest(actor="yangzhou"))
+    svc.add_cost_entry(
+        pid,
+        raw={
+            "provider": "ark",
+            "operation": "llm",
+            "amount": 60,
+            "currency": "CNY",
+            "ref_id": "full",
+            "actor": "gen",
+        },
+    )
+    called = {"n": 0}
+
+    def boom(*_a, **_k):
+        called["n"] += 1
+        raise AssertionError("thicken_cards must not run when spend is blocked")
+
+    monkeypatch.setattr("aiv_drama_n3.ops.thicken_cards", boom)
+    blocked = _err(
+        lambda: svc.thicken_n3_cards(
+            pid,
+            "EP01",
+            N3ThickenRequest(provider="llm", actor="eng"),
+            raw={"provider": "llm", "actor": "eng"},
+        )
+    )
+    assert blocked.code == "over_cap"
+    assert called["n"] == 0
+
+
+def test_spend_cap_is_one_project_bucket_not_per_episode(svc, tmp_path, monkeypatch):
+    pid = seed_project_episode(svc)
+    face = _look_ready(svc, pid, tmp_path)
+    svc.create_episode(pid, EpisodeCreate(episode_id="EP02", pipeline_profile="drama", title="第二集"))
+    first = svc.add_cost_entry(
+        pid,
+        raw={
+            "provider": "ark",
+            "operation": "seedream",
+            "amount": 40,
+            "currency": "CNY",
+            "ref_id": "e1",
+            "actor": "gen",
+            "episode_id": "EP01",
+        },
+    )
+    assert first["spent"] == 40
+    assert first["remaining"] == 20
+    second = svc.add_cost_entry(
+        pid,
+        raw={
+            "provider": "ark",
+            "operation": "seedance",
+            "amount": 20,
+            "currency": "CNY",
+            "ref_id": "e2",
+            "actor": "gen",
+            "episode_id": "EP02",
+        },
+    )
+    assert second["spent"] == 60
+    assert second["blocked"] is True
+    over = _err(
+        lambda: svc.add_cost_entry(
+            pid,
+            raw={
+                "provider": "ark",
+                "operation": "tts",
+                "amount": 1,
+                "ref_id": "e3",
+                "actor": "gen",
+                "episode_id": "EP02",
+            },
+        )
+    )
+    assert over.code == "over_cap"
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_ok)
+    blocked = _err(
+        lambda: svc.generate_n3_look(
+            pid,
+            "EP01",
+            N3GenerateLookRequest(id="CHAR-01", face_ref=str(face), actor="eng"),
+            raw={"id": "CHAR-01", "face_ref": str(face)},
+        )
+    )
+    assert blocked.code == "over_cap"
+    got = svc.get_project_cost(pid)
+    assert got["spent"] == 60
+    assert got["cap"] == SPEND_CAP
+    assert got["blocked"] is True
+
+
 def test_http_force_pass_and_openapi_biz(client):
     spec = client.get("/openapi/drama-biz.v0.yaml")
     assert spec.status_code == 200
@@ -548,6 +754,9 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "episode_stopped" in text
     assert "waiting_on_user" in text
     assert "redraw_needs_user" in text
+    assert "close_conditions" in text
+    assert "/redraw-consent" in text
+    assert "once per project" in text
     assert "/segments/{segment_id}/video" in text
     assert "force_pass_forbidden" in text
     catalog = client.get("/api/v0/drama/error-catalog").json()

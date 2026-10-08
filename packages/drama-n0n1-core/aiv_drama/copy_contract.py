@@ -139,6 +139,7 @@ HTTP_STATUS: dict[str, int] = {
     "subject_mismatch": 409,
     "waiting_on_user": 409,
     "blocks_l2_open": 409,
+    "close_conditions": 409,
 }
 
 CHIP_UNSET = "出片：未选工具"
@@ -280,8 +281,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A failed redraw requires explicit user consent before the next look.",
     },
     "over_cap": {
-        "zh": "本集重抽费用已达上限，禁止再打供应商。",
-        "en": "Spend ceiling reached; provider calls are blocked.",
+        "zh": "本项目费用已达上限，禁止再打供应商。",
+        "en": "Project spend ceiling reached; provider calls are blocked.",
     },
     "already_attempted": {
         "zh": "该段视频已用过唯一一次尝试。",
@@ -328,8 +329,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "subject_md5 is not a registered output.",
     },
     "waiting_on_user": {
-        "zh": "待用户项必须写入用户本人结论，工人结论无效。",
-        "en": "waiting_on_user items require a user conclusion; worker text is not enough.",
+        "zh": "待用户项必须先记下用户本人结论，工人不能代关。",
+        "en": "waiting_on_user items need a recorded user conclusion; workers cannot close on behalf.",
+    },
+    "close_conditions": {
+        "zh": "关闭条件未满足：须已记下的结论，再加已登记 file_md5。",
+        "en": "Close conditions are not met: a recorded conclusion plus a registered file_md5.",
     },
     "blocks_l2_open": {
         "zh": "仍有挡 L2 的未结项，不能把 L2 标成 pass。",

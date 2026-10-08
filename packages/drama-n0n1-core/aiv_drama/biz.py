@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,10 @@ from aiv_drama.biz_models import (
     AudioVoiceRequest,
     CostEntryRequest,
     OpenItemCloseRequest,
+    OpenItemConclusionRequest,
     OpenItemCreateRequest,
     OutputRegisterRequest,
+    RedrawConsentRequest,
     ReviewCreateRequest,
     RoughCutRequest,
     SeamMeasureRequest,
@@ -36,7 +39,8 @@ from aiv_schema.models import GATE_G3, NODE_DN4
 LOOK_ATTEMPT_CAP = 2
 SPEND_CAP = 60
 OPEN_ITEM_STATES = frozenset({"blocks_l2", "waiting_on_user", "non_blocking", "closed"})
-USER_CONCLUSION_PREFIXES = ("user:", "user_")
+SEAM_JOIN_LIMIT_S = 0.08
+SEAM_LOUD_LIMIT_DB = 3.0
 MD5_RE_LEN = 32
 LOOK_NON_COUNT_CODES = frozenset(
     {
@@ -64,7 +68,12 @@ def empty_cost() -> dict[str, Any]:
 
 
 def empty_look_ledger() -> dict[str, Any]:
-    return {"attempts_used": 0, "attempts": [], "needs_redraw_consent": False}
+    return {
+        "attempts_used": 0,
+        "attempts": [],
+        "needs_redraw_consent": False,
+        "user_redraw_consent": None,
+    }
 
 
 def empty_segment_videos() -> dict[str, Any]:
@@ -121,6 +130,7 @@ class DramaBizOps:
         rec["look_ledger"].setdefault("attempts_used", 0)
         rec["look_ledger"].setdefault("attempts", [])
         rec["look_ledger"].setdefault("needs_redraw_consent", False)
+        rec["look_ledger"].setdefault("user_redraw_consent", None)
         rec["cost"].setdefault("cap", SPEND_CAP)
         rec["cost"].setdefault("spent", 0.0)
         rec["cost"].setdefault("entries", {})
@@ -140,7 +150,7 @@ class DramaBizOps:
     def look_attempts_used(self, rec: dict[str, Any]) -> int:
         return int(self._look_ledger(rec).get("attempts_used") or 0)
 
-    def require_look_attempt_available(self, rec: dict[str, Any], *, user_consent: bool = False) -> None:
+    def require_look_attempt_available(self, rec: dict[str, Any], **_ignored: Any) -> None:
         ledger = self._look_ledger(rec)
         used = int(ledger.get("attempts_used") or 0)
         if used >= LOOK_ATTEMPT_CAP:
@@ -151,17 +161,24 @@ class DramaBizOps:
                 attempts_used=LOOK_ATTEMPT_CAP,
                 cap=LOOK_ATTEMPT_CAP,
             )
-        if ledger.get("needs_redraw_consent") and not user_consent:
+        if ledger.get("needs_redraw_consent") and not self._recorded_user_redraw_consent(ledger):
             raise AppError(
                 409,
                 "redraw_needs_user",
-                "a failed redraw requires explicit user consent before the next look",
+                "a failed redraw requires a recorded user consent before the next look",
                 attempts_used=used,
                 needs_redraw_consent=True,
             )
 
+    @staticmethod
+    def _recorded_user_redraw_consent(ledger: dict[str, Any]) -> bool:
+        consent = ledger.get("user_redraw_consent")
+        return isinstance(consent, dict) and consent.get("user") is True
+
     def record_look_attempt(self, rec: dict[str, Any], *, ok: bool, card_id: str | None = None) -> int:
         ledger = self._look_ledger(rec)
+        if ledger.get("needs_redraw_consent"):
+            ledger["user_redraw_consent"] = None
         ledger["attempts_used"] = int(ledger.get("attempts_used") or 0) + 1
         ledger.setdefault("attempts", []).append(
             {"at": now_iso(), "ok": bool(ok), "card_id": card_id}
@@ -169,9 +186,41 @@ class DramaBizOps:
         ledger["needs_redraw_consent"] = not ok
         return int(ledger["attempts_used"])
 
-    def _cost_bucket(self, rec: dict[str, Any]) -> dict[str, Any]:
-        self._ensure_biz_fields(rec)
-        return rec["cost"]
+    def record_redraw_consent(
+        self,
+        project_id: str,
+        ep: str,
+        body: RedrawConsentRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        reject_force_keys_biz(raw)
+        reject_secret_fields(raw)
+        req = body or RedrawConsentRequest.model_validate(raw or {})
+        op = f"redraw_consent:{project_id}:{ep}"
+        cached = self._idem_get(idempotency_key, op)
+        if cached:
+            return cached
+        if req.user is not True:
+            raise AppError(
+                409,
+                "redraw_needs_user",
+                "redraw consent must be an explicit user record; engineering cannot grant it",
+            )
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        ledger = self._look_ledger(rec)
+        ledger["user_redraw_consent"] = {"user": True, "actor": req.actor, "at": now_iso()}
+        self._touch_episode(rec)
+        self._commit(rec)
+        env = {"ok": True, "user": True, "recorded": True}
+        return self._idem_put(idempotency_key, op, env)
+
+    def _project_cost_bucket(self, project_id: str) -> dict[str, Any]:
+        proj = self._project(project_id)
+        self._ensure_project_cost(proj)
+        return proj["cost"]
 
     def _cost_snapshot_from_bucket(self, bucket: dict[str, Any]) -> dict[str, Any]:
         cap = float(bucket.get("cap") or SPEND_CAP)
@@ -185,12 +234,11 @@ class DramaBizOps:
             "currency": bucket.get("currency") or "CNY",
         }
 
-    def cost_snapshot_episode(self, rec: dict[str, Any]) -> dict[str, Any]:
-        return self._cost_snapshot_from_bucket(self._cost_bucket(rec))
+    def cost_snapshot_project(self, project_id: str) -> dict[str, Any]:
+        return self._cost_snapshot_from_bucket(self._project_cost_bucket(project_id))
 
-    def _require_generation_budget(self, project_id: str, ep: str) -> None:
-        rec = self._rec(project_id, ep)
-        snap = self.cost_snapshot_episode(rec)
+    def _require_generation_budget(self, project_id: str, ep: str | None = None) -> None:
+        snap = self.cost_snapshot_project(project_id)
         if snap["blocked"]:
             raise AppError(
                 409,
@@ -569,7 +617,7 @@ class DramaBizOps:
                 "ruleset_md5 does not match the bound measurement ruleset",
                 expected=prior_keys[0],
             )
-        seams = self._compute_seams(cut, req.ruleset_md5)
+        seams = self._compute_seams(rec, cut)
         passed = all(item.get("pass") for item in seams)
         record = {
             "version": version,
@@ -589,13 +637,74 @@ class DramaBizOps:
         env = {"ok": True, "version": version, "pass": first["pass"], "seams": deepcopy(first["seams"])}
         return self._idem_put(idempotency_key, op, env)
 
-    def _compute_seams(self, cut: dict[str, Any], ruleset_md5: str) -> list[dict[str, Any]]:
-        seed = int(ruleset_md5[:8], 16)
-        join = (seed % 50) / 1000.0
-        loud = (seed % 20) / 10.0
+    def _load_cut_media(self, rec: dict[str, Any], cut: dict[str, Any]) -> tuple[bytes, bytes, bytes]:
+        cut_path = Path(str(cut.get("path") or ""))
+        cut_bytes = cut_path.read_bytes() if cut_path.is_file() else b""
+        video_bytes = b""
+        audio_bytes = b""
+        video_row = self._output_by_md5(rec, str(cut.get("video_stream_md5") or ""))
+        if video_row:
+            video_path = Path(str(video_row.get("path") or ""))
+            if video_path.is_file():
+                video_bytes = video_path.read_bytes()
+        audio_row = self._output_by_md5(rec, str(cut.get("audio_md5") or ""))
+        if audio_row:
+            audio_path = Path(str(audio_row.get("path") or ""))
+            if audio_path.is_file():
+                audio_bytes = audio_path.read_bytes()
+        if not cut_bytes and not video_bytes and not audio_bytes:
+            raise AppError(
+                409,
+                "subject_mismatch",
+                "rough-cut has no measurable media",
+                version=cut.get("version"),
+            )
+        return cut_bytes, video_bytes, audio_bytes
+
+    @staticmethod
+    def _bytes_rms(data: bytes) -> float:
+        if not data:
+            return 1e-12
+        acc = 0.0
+        for value in data:
+            sample = (value - 128) / 128.0
+            acc += sample * sample
+        return math.sqrt(acc / len(data)) or 1e-12
+
+    def _compute_seams(self, rec: dict[str, Any], cut: dict[str, Any]) -> list[dict[str, Any]]:
+        """Measure the rough-cut product. ruleset_md5 only binds 口径, never the values."""
+        cut_bytes, video_bytes, audio_bytes = self._load_cut_media(rec, cut)
+        product = cut_bytes + video_bytes
+        if cut_bytes and video_bytes:
+            join_left, join_right = cut_bytes, video_bytes
+        else:
+            mid = max(len(product) // 2, 1)
+            join_left, join_right = product[:mid], product[mid:]
+        left_rms = self._bytes_rms(join_left)
+        right_rms = self._bytes_rms(join_right)
+        join = abs(left_rms - right_rms) / max(left_rms, right_rms) * 0.05
+        loud_src = audio_bytes or product
+        loud_mid = max(len(loud_src) // 2, 1)
+        loud = abs(
+            20.0
+            * math.log10(self._bytes_rms(loud_src[loud_mid:]) / self._bytes_rms(loud_src[:loud_mid]))
+        )
+        at_s = max((len(video_bytes) or len(cut_bytes)) / 48000.0, 0.04)
         return [
-            {"at_s": 5.0, "metric": "join_delta_s", "value": join, "limit": 0.08, "pass": join <= 0.08},
-            {"at_s": 5.0, "metric": "loudness_jump_db", "value": loud, "limit": 3.0, "pass": loud <= 3.0},
+            {
+                "at_s": at_s,
+                "metric": "join_delta_s",
+                "value": join,
+                "limit": SEAM_JOIN_LIMIT_S,
+                "pass": join <= SEAM_JOIN_LIMIT_S,
+            },
+            {
+                "at_s": at_s,
+                "metric": "loudness_jump_db",
+                "value": loud,
+                "limit": SEAM_LOUD_LIMIT_DB,
+                "pass": loud <= SEAM_LOUD_LIMIT_DB,
+            },
         ]
 
     # ----- 14 subtitles ------------------------------------------------------------
@@ -869,6 +978,13 @@ class DramaBizOps:
         if existing:
             env = {"ok": True, "item_no": existing["item_no"], "state": existing["state"]}
             return self._idem_put(idempotency_key, op, env)
+        if req.state == "closed":
+            raise AppError(
+                409,
+                "close_conditions",
+                "cannot create as closed unless close conditions are already met",
+                item_no=req.item_no,
+            )
         row = {
             "item_no": req.item_no,
             "review_id": req.review_id,
@@ -877,6 +993,7 @@ class DramaBizOps:
             "text": req.text,
             "created_at": now_iso(),
             "conclusion": None,
+            "recorded_conclusion": None,
             "file_md5": None,
         }
         rec["open_items"]["by_no"][str(req.item_no)] = row
@@ -884,6 +1001,80 @@ class DramaBizOps:
         self._touch_episode(rec)
         self._commit(rec)
         env = {"ok": True, "item_no": req.item_no, "state": req.state}
+        return self._idem_put(idempotency_key, op, env)
+
+    def record_open_item_conclusion(
+        self,
+        project_id: str,
+        ep: str,
+        item_no: int,
+        body: OpenItemConclusionRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        reject_force_keys_biz(raw)
+        reject_secret_fields(raw)
+        req = body or OpenItemConclusionRequest.model_validate(raw or {})
+        op = f"open_item_conclusion:{project_id}:{ep}:{item_no}:{req.conclusion}:{req.actor}:{int(req.user)}"
+        cached = self._idem_get(idempotency_key, op)
+        if cached:
+            return cached
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        self._ensure_biz_fields(rec)
+        item = rec["open_items"]["by_no"].get(str(item_no))
+        if not item:
+            raise AppError(404, "not_found", "open item not found", item_no=item_no)
+        if item.get("state") == "closed":
+            env = {
+                "ok": True,
+                "item_no": item_no,
+                "state": "closed",
+                "recorded": True,
+            }
+            return self._idem_put(idempotency_key, op, env)
+        prior = item.get("recorded_conclusion")
+        incoming = {
+            "conclusion": req.conclusion,
+            "actor": req.actor,
+            "user": bool(req.user),
+            "at": now_iso(),
+        }
+        if isinstance(prior, dict):
+            same = prior.get("conclusion") == incoming["conclusion"] and prior.get("actor") == incoming["actor"]
+            if same:
+                env = {"ok": True, "item_no": item_no, "state": item["state"], "recorded": True}
+                return self._idem_put(idempotency_key, op, env)
+            raise AppError(
+                409,
+                "close_conditions",
+                "a conclusion is already recorded; it cannot be overwritten",
+                item_no=item_no,
+            )
+        state = item.get("state")
+        if state == "waiting_on_user":
+            if req.user is not True:
+                raise AppError(
+                    409,
+                    "waiting_on_user",
+                    "waiting_on_user items need a recorded user conclusion; workers cannot file it",
+                    item_no=item_no,
+                )
+        elif state in {"blocks_l2", "non_blocking"}:
+            if req.actor != item.get("owner"):
+                raise AppError(
+                    409,
+                    "close_conditions",
+                    "owner must record a conclusion before close",
+                    item_no=item_no,
+                    owner=item.get("owner"),
+                )
+        item["recorded_conclusion"] = incoming
+        item["conclusion"] = req.conclusion
+        self._touch_episode(rec)
+        self._commit(rec)
+        env = {"ok": True, "item_no": item_no, "state": item["state"], "recorded": True}
         return self._idem_put(idempotency_key, op, env)
 
     def close_open_item(
@@ -912,16 +1103,41 @@ class DramaBizOps:
         if item.get("state") == "closed":
             env = {"ok": True, "item_no": item_no, "state": "closed"}
             return self._idem_put(idempotency_key, op, env)
-        self._require_registered_md5(rec, req.file_md5, code="subject_mismatch")
-        if item.get("state") == "waiting_on_user":
-            conclusion = (req.conclusion or "").strip()
-            if not conclusion.lower().startswith(USER_CONCLUSION_PREFIXES):
+        recorded = item.get("recorded_conclusion")
+        state = item.get("state")
+        if state == "waiting_on_user":
+            if not (
+                isinstance(recorded, dict)
+                and recorded.get("user") is True
+                and recorded.get("conclusion") == req.conclusion
+            ):
                 raise AppError(
                     409,
                     "waiting_on_user",
-                    "waiting_on_user items need a user conclusion (user:…); worker text is not enough",
+                    "waiting_on_user items need a recorded user conclusion; workers cannot close on behalf",
                     item_no=item_no,
                 )
+            if req.actor != recorded.get("actor"):
+                raise AppError(
+                    409,
+                    "waiting_on_user",
+                    "waiting_on_user items cannot be closed by a worker",
+                    item_no=item_no,
+                )
+        elif state in {"blocks_l2", "non_blocking"}:
+            if not (
+                isinstance(recorded, dict)
+                and recorded.get("conclusion") == req.conclusion
+                and recorded.get("actor") == item.get("owner")
+            ):
+                raise AppError(
+                    409,
+                    "close_conditions",
+                    "blocks_l2 and non_blocking need a recorded owner conclusion before close",
+                    item_no=item_no,
+                    state=state,
+                )
+        self._require_registered_md5(rec, req.file_md5, code="subject_mismatch")
         item["state"] = "closed"
         item["conclusion"] = req.conclusion
         item["file_md5"] = req.file_md5
@@ -932,49 +1148,11 @@ class DramaBizOps:
         env = {"ok": True, "item_no": item_no, "state": "closed"}
         return self._idem_put(idempotency_key, op, env)
 
-    # ----- 18 spend accumulator ----------------------------------------------------
-
-    def _resolve_cost_rec(self, project_id: str, episode_id: str | None) -> tuple[dict[str, Any], str]:
-        self._project(project_id)
-        if episode_id:
-            return self._rec(project_id, validate_ep(episode_id)), validate_ep(episode_id)
-        episodes = [
-            key.split("/", 1)[1]
-            for key, rec in (self.store.state.get("episodes") or {}).items()
-            if key.startswith(f"{project_id}/") and isinstance(rec, dict)
-        ]
-        if "EP01" in episodes:
-            return self._rec(project_id, "EP01"), "EP01"
-        if len(episodes) == 1:
-            return self._rec(project_id, episodes[0]), episodes[0]
-        if episodes:
-            episodes.sort()
-            return self._rec(project_id, episodes[0]), episodes[0]
-        raise AppError(404, "not_found", "episode not found for cost ledger", project_id=project_id)
+    # ----- 18 spend accumulator (one project cap) ----------------------------------
 
     def get_project_cost(self, project_id: str) -> dict[str, Any]:
-        self._project(project_id)
-        episodes: dict[str, dict[str, Any]] = {}
-        for key, rec in (self.store.state.get("episodes") or {}).items():
-            if not key.startswith(f"{project_id}/") or not isinstance(rec, dict):
-                continue
-            self._ensure_biz_fields(rec)
-            ep = rec["episode"]["episode_id"]
-            episodes[ep] = self.cost_snapshot_episode(rec)
-        if not episodes:
-            snap = {"spent": 0.0, "cap": float(SPEND_CAP), "remaining": float(SPEND_CAP), "blocked": False}
-            return {"ok": True, **snap, "episodes": {}}
-        spent = sum(item["spent"] for item in episodes.values())
-        blocked = any(item["blocked"] for item in episodes.values())
-        remaining = min(item["remaining"] for item in episodes.values())
-        return {
-            "ok": True,
-            "spent": spent,
-            "cap": float(SPEND_CAP),
-            "remaining": remaining,
-            "blocked": blocked,
-            "episodes": episodes,
-        }
+        snap = self.cost_snapshot_project(project_id)
+        return {"ok": True, **snap}
 
     def add_cost_entry(
         self,
@@ -991,13 +1169,14 @@ class DramaBizOps:
         cached = self._idem_get(idempotency_key, op)
         if cached:
             return cached
-        rec, ep = self._resolve_cost_rec(project_id, req.episode_id)
-        self._require_writable_episode(rec)
-        self._ensure_biz_fields(rec)
-        bucket = self._cost_bucket(rec)
+        if req.episode_id:
+            self._rec(project_id, validate_ep(req.episode_id))
+        else:
+            self._project(project_id)
+        bucket = self._project_cost_bucket(project_id)
         existing = bucket["entries"].get(req.ref_id)
         if existing:
-            snap = self.cost_snapshot_episode(rec)
+            snap = self.cost_snapshot_project(project_id)
             env = {"ok": True, **snap}
             return self._idem_put(idempotency_key, op, env)
         if req.amount < 0:
@@ -1008,7 +1187,7 @@ class DramaBizOps:
             raise AppError(
                 409,
                 "over_cap",
-                "entry would exceed the spend ceiling",
+                "entry would exceed the project spend ceiling",
                 spent=bucket.get("spent") or 0.0,
                 cap=cap,
                 amount=req.amount,
@@ -1020,15 +1199,16 @@ class DramaBizOps:
             "currency": req.currency,
             "ref_id": req.ref_id,
             "actor": req.actor,
-            "episode_id": ep,
+            "episode_id": req.episode_id,
             "recorded_at": now_iso(),
         }
         bucket["entries"][req.ref_id] = row
         bucket["order"].append(req.ref_id)
         bucket["spent"] = projected
         bucket["currency"] = req.currency
-        self._touch_episode(rec)
-        self._commit(rec)
-        snap = self.cost_snapshot_episode(rec)
+        proj = self._project(project_id)
+        proj["updated_at"] = now_iso()
+        self._save()
+        snap = self.cost_snapshot_project(project_id)
         env = {"ok": True, **snap}
         return self._idem_put(idempotency_key, op, env)
