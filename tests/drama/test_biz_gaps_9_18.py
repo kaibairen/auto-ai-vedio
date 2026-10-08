@@ -750,6 +750,55 @@ def test_worker_consent_conclusion_close_rejected_for_three_states(client, tmp_p
         assert closed.json()["error"]["code"] == code
 
 
+def test_consent_user_true_does_not_record_user_and_same_actor_close_is_rejected(client, tmp_path):
+    """POST consent user=true must not store recorded_user; that actor cannot then close."""
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"cut-same", name="cut-same.bin")
+    review = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/reviews",
+        json={"level": "L1", "subject_md5": subject, "verdict": "fail", "actor": "rev"},
+    )
+    assert review.status_code == 200, review.text
+    review_id = review.json()["review_id"]
+    for item_no, state, code in (
+        (1, "waiting_on_user", "waiting_on_user"),
+        (2, "blocks_l2", "close_conditions"),
+        (3, "non_blocking", "close_conditions"),
+    ):
+        created = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items",
+            json={
+                "review_id": review_id,
+                "item_no": item_no,
+                "state": state,
+                "owner": "rev",
+                "text": f"item-{state}",
+            },
+        )
+        assert created.status_code == 200, created.text
+        same_actor = "worker"
+        consent = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/consent",
+            json={"user": True, "actor": same_actor},
+        )
+        assert consent.status_code == 200, consent.text
+        assert consent.json().get("recorded") is not True
+        rec = svc._rec(pid, "EP01")
+        stored = rec["open_items"]["by_no"][str(item_no)]
+        assert stored.get("recorded_user") in (None, {})
+        assert (stored.get("recorded_user") or {}).get("user") is not True
+        closed = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/close",
+            json={"actor": same_actor, "conclusion": "spoofed_as_user", "file_md5": subject},
+        )
+        assert closed.status_code == 409, closed.text
+        assert closed.json()["error"]["code"] == code
+        still = svc._rec(pid, "EP01")["open_items"]["by_no"][str(item_no)]
+        assert still["state"] == state
+
+
 def test_close_request_user_true_or_actor_owner_is_rejected(client, tmp_path):
     svc = client.app.state.service
     pid = seed_project_episode(svc)
