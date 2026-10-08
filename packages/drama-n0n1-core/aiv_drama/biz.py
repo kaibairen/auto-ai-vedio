@@ -1028,7 +1028,7 @@ class DramaBizOps:
         item = rec["open_items"]["by_no"].get(str(item_no))
         if not item:
             raise AppError(404, "not_found", "open item not found", item_no=item_no)
-        if req.user is not True:
+        if req.user is not True or not (req.actor or "").strip():
             self._raise_close_blocked(item)
         if item.get("state") == "closed":
             env = {"ok": True, "item_no": item_no, "state": "closed", "user": True, "recorded": True}
@@ -1117,8 +1117,11 @@ class DramaBizOps:
         return isinstance(recorded, dict) and recorded.get("user") is True
 
     def _require_close_conditions(self, rec: dict[str, Any], item: dict[str, Any], req: OpenItemCloseRequest) -> None:
-        """Close uses prior records only. Request actor / user / owner claims are ignored."""
+        """Prior recorded user + conclusion + file_md5. Request user/owner/conclusion are not identity."""
+        recorded_user = item.get("recorded_user")
         if not self._recorded_item_user(item):
+            self._raise_close_blocked(item)
+        if req.actor != recorded_user.get("actor"):
             self._raise_close_blocked(item)
         recorded = item.get("recorded_conclusion")
         if not isinstance(recorded, dict) or recorded.get("conclusion") != req.conclusion:

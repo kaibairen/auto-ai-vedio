@@ -356,6 +356,7 @@ components:
         actor: { type: string }
         conclusion: { type: string }
         file_md5: { type: string }
+        user: { type: boolean, default: false, description: ignored; not prior identity }
     OpenItemConsentRequest:
       type: object
       additionalProperties: false

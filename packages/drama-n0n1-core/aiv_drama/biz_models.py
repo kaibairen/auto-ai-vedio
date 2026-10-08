@@ -129,6 +129,7 @@ class OpenItemCloseRequest(BaseModel):
     actor: str = Field(min_length=1)
     conclusion: str = Field(min_length=1)
     file_md5: str = Field(min_length=32, max_length=32)
+    user: bool = False  # ignored; not prior identity
 
 
 class OpenItemConclusionRequest(BaseModel):
@@ -147,7 +148,7 @@ class OpenItemConsentRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     user: bool
-    actor: str | None = None
+    actor: str = Field(min_length=1)
 
 
 class RedrawConsentRequest(BaseModel):
