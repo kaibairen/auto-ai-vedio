@@ -329,12 +329,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "subject_md5 is not a registered output.",
     },
     "waiting_on_user": {
-        "zh": "待用户项必须先记下用户本人结论，工人不能代关。",
-        "en": "waiting_on_user items need a recorded user conclusion; workers cannot close on behalf.",
+        "zh": "待用户项必须先记下用户身份；这次请求里声明 user/actor 无效。",
+        "en": "waiting_on_user items need a prior recorded user identity; this request cannot declare it.",
     },
     "close_conditions": {
-        "zh": "关闭条件未满足：须已记下的结论，再加已登记 file_md5。",
-        "en": "Close conditions are not met: a recorded conclusion plus a registered file_md5.",
+        "zh": "关闭条件未满足：须事先记下的用户身份和结论，再加已登记 file_md5。",
+        "en": "Close needs a prior recorded user identity and conclusion, plus a registered file_md5.",
     },
     "blocks_l2_open": {
         "zh": "仍有挡 L2 的未结项，不能把 L2 标成 pass。",

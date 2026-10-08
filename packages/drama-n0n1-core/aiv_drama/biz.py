@@ -19,6 +19,7 @@ from aiv_drama.biz_models import (
     CostEntryRequest,
     OpenItemCloseRequest,
     OpenItemConclusionRequest,
+    OpenItemConsentRequest,
     OpenItemCreateRequest,
     OutputRegisterRequest,
     RedrawConsentRequest,
@@ -994,6 +995,7 @@ class DramaBizOps:
             "created_at": now_iso(),
             "conclusion": None,
             "recorded_conclusion": None,
+            "recorded_user": None,
             "file_md5": None,
         }
         rec["open_items"]["by_no"][str(req.item_no)] = row
@@ -1001,6 +1003,40 @@ class DramaBizOps:
         self._touch_episode(rec)
         self._commit(rec)
         env = {"ok": True, "item_no": req.item_no, "state": req.state}
+        return self._idem_put(idempotency_key, op, env)
+
+    def record_open_item_consent(
+        self,
+        project_id: str,
+        ep: str,
+        item_no: int,
+        body: OpenItemConsentRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        reject_force_keys_biz(raw)
+        reject_secret_fields(raw)
+        req = body or OpenItemConsentRequest.model_validate(raw or {})
+        op = f"open_item_consent:{project_id}:{ep}:{item_no}"
+        cached = self._idem_get(idempotency_key, op)
+        if cached:
+            return cached
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        self._ensure_biz_fields(rec)
+        item = rec["open_items"]["by_no"].get(str(item_no))
+        if not item:
+            raise AppError(404, "not_found", "open item not found", item_no=item_no)
+        if req.user is not True:
+            self._raise_close_blocked(item)
+        if item.get("state") == "closed":
+            env = {"ok": True, "item_no": item_no, "state": "closed", "user": True, "recorded": True}
+            return self._idem_put(idempotency_key, op, env)
+        item["recorded_user"] = {"user": True, "actor": req.actor, "at": now_iso()}
+        self._touch_episode(rec)
+        self._commit(rec)
+        env = {"ok": True, "item_no": item_no, "state": item["state"], "user": True, "recorded": True}
         return self._idem_put(idempotency_key, op, env)
 
     def record_open_item_conclusion(
@@ -1016,7 +1052,7 @@ class DramaBizOps:
         reject_force_keys_biz(raw)
         reject_secret_fields(raw)
         req = body or OpenItemConclusionRequest.model_validate(raw or {})
-        op = f"open_item_conclusion:{project_id}:{ep}:{item_no}:{req.conclusion}:{req.actor}:{int(req.user)}"
+        op = f"open_item_conclusion:{project_id}:{ep}:{item_no}:{req.conclusion}"
         cached = self._idem_get(idempotency_key, op)
         if cached:
             return cached
@@ -1038,12 +1074,10 @@ class DramaBizOps:
         incoming = {
             "conclusion": req.conclusion,
             "actor": req.actor,
-            "user": bool(req.user),
             "at": now_iso(),
         }
         if isinstance(prior, dict):
-            same = prior.get("conclusion") == incoming["conclusion"] and prior.get("actor") == incoming["actor"]
-            if same:
+            if prior.get("conclusion") == incoming["conclusion"]:
                 env = {"ok": True, "item_no": item_no, "state": item["state"], "recorded": True}
                 return self._idem_put(idempotency_key, op, env)
             raise AppError(
@@ -1052,24 +1086,6 @@ class DramaBizOps:
                 "a conclusion is already recorded; it cannot be overwritten",
                 item_no=item_no,
             )
-        state = item.get("state")
-        if state == "waiting_on_user":
-            if req.user is not True:
-                raise AppError(
-                    409,
-                    "waiting_on_user",
-                    "waiting_on_user items need a recorded user conclusion; workers cannot file it",
-                    item_no=item_no,
-                )
-        elif state in {"blocks_l2", "non_blocking"}:
-            if req.actor != item.get("owner"):
-                raise AppError(
-                    409,
-                    "close_conditions",
-                    "owner must record a conclusion before close",
-                    item_no=item_no,
-                    owner=item.get("owner"),
-                )
         item["recorded_conclusion"] = incoming
         item["conclusion"] = req.conclusion
         self._touch_episode(rec)
@@ -1084,28 +1100,28 @@ class DramaBizOps:
             raise AppError(
                 409,
                 "waiting_on_user",
-                "waiting_on_user items need a recorded user conclusion; workers cannot close",
+                "waiting_on_user items need a prior recorded user identity; this request cannot declare it",
                 item_no=item_no,
             )
         raise AppError(
             409,
             "close_conditions",
-            "recorded conclusion and file_md5 required; workers cannot close",
+            "close needs a prior recorded user identity plus a recorded conclusion and file_md5",
             item_no=item_no,
             state=state,
         )
 
+    @staticmethod
+    def _recorded_item_user(item: dict[str, Any]) -> bool:
+        recorded = item.get("recorded_user")
+        return isinstance(recorded, dict) and recorded.get("user") is True
+
     def _require_close_conditions(self, rec: dict[str, Any], item: dict[str, Any], req: OpenItemCloseRequest) -> None:
-        """Same close rule for waiting_on_user, blocks_l2, and non_blocking."""
+        """Close uses prior records only. Request actor / user / owner claims are ignored."""
+        if not self._recorded_item_user(item):
+            self._raise_close_blocked(item)
         recorded = item.get("recorded_conclusion")
-        state = item.get("state")
         if not isinstance(recorded, dict) or recorded.get("conclusion") != req.conclusion:
-            self._raise_close_blocked(item)
-        if state == "waiting_on_user" and recorded.get("user") is not True:
-            self._raise_close_blocked(item)
-        if state in {"blocks_l2", "non_blocking"} and recorded.get("actor") != item.get("owner"):
-            self._raise_close_blocked(item)
-        if req.actor != recorded.get("actor"):
             self._raise_close_blocked(item)
         self._require_registered_md5(rec, req.file_md5, code="subject_mismatch")
 

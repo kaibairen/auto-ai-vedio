@@ -12,6 +12,7 @@ from aiv_drama.biz_models import (
     CostEntryRequest,
     OpenItemCloseRequest,
     OpenItemConclusionRequest,
+    OpenItemConsentRequest,
     OpenItemCreateRequest,
     RedrawConsentRequest,
     OutputRegisterRequest,
@@ -776,6 +777,21 @@ async def create_open_item(
     reject_blocking_boolean(raw)
     body = OpenItemCreateRequest.model_validate(raw)
     return _svc(request).create_open_item(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/consent")
+async def record_open_item_consent(
+    project_id: str,
+    ep: str,
+    item_no: int,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = OpenItemConsentRequest.model_validate(raw)
+    return _svc(request).record_open_item_consent(
+        project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
 
 
 @router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/conclusion")

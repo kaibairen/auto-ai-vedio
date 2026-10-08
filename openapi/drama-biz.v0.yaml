@@ -153,10 +153,26 @@ paths:
       responses:
         '200': { description: item_no + state }
         '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/open-items/{item_no}/consent:
+    post:
+      operationId: recordOpenItemConsent
+      summary: Record user identity for this item. Same class as redraw-consent. Does not close.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - { name: item_no, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenItemConsentRequest' }
+      responses:
+        '200': { description: recorded user identity }
+        '409': { $ref: '#/components/responses/Conflict' }
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/conclusion:
     post:
       operationId: recordOpenItemConclusion
-      summary: Record a conclusion. Does not close. waiting_on_user requires user=true.
+      summary: Record a conclusion text. Does not close and does not grant user identity.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -187,7 +203,7 @@ paths:
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/close:
     post:
       operationId: closeOpenItem
-      summary: Close with matching recorded conclusion + file_md5. Workers cannot close waiting_on_user.
+      summary: Close only if user identity and conclusion are already recorded, plus registered file_md5. Request actor/user is not identity.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -340,6 +356,13 @@ components:
         actor: { type: string }
         conclusion: { type: string }
         file_md5: { type: string }
+    OpenItemConsentRequest:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user: { type: boolean }
+        actor: { type: string }
     OpenItemConclusionRequest:
       type: object
       additionalProperties: false
@@ -347,7 +370,7 @@ components:
       properties:
         conclusion: { type: string }
         actor: { type: string }
-        user: { type: boolean, default: false }
+        user: { type: boolean, default: false, description: ignored; identity must already be recorded }
     RedrawConsentRequest:
       type: object
       additionalProperties: false

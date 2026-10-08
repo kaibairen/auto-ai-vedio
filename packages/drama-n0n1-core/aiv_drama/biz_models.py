@@ -132,13 +132,22 @@ class OpenItemCloseRequest(BaseModel):
 
 
 class OpenItemConclusionRequest(BaseModel):
-    """Record a conclusion. Does not close. waiting_on_user requires user=true."""
+    """Record a conclusion text. Does not close and does not grant user identity."""
 
     model_config = {"extra": "forbid"}
 
     conclusion: str = Field(min_length=1)
     actor: str = Field(min_length=1)
-    user: bool = False
+    user: bool = False  # ignored; identity must already be recorded
+
+
+class OpenItemConsentRequest(BaseModel):
+    """Prior user identity for an open item. Same class as redraw-consent."""
+
+    model_config = {"extra": "forbid"}
+
+    user: bool
+    actor: str | None = None
 
 
 class RedrawConsentRequest(BaseModel):
