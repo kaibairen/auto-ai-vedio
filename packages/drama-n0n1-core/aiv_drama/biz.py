@@ -1256,6 +1256,41 @@ class DramaBizOps:
 
     # ----- 18 spend accumulator (one project cap) ----------------------------------
 
+    def get_look_ledger(self, project_id: str, ep: str) -> dict[str, Any]:
+        rec = self._rec(project_id, validate_ep(ep))
+        ledger = self._look_ledger(rec)
+        return {
+            "ok": True,
+            "attempts_used": int(ledger.get("attempts_used") or 0),
+            "needs_redraw_consent": bool(ledger.get("needs_redraw_consent")),
+            "has_user_redraw_consent": self._recorded_user_redraw_consent(ledger),
+        }
+
+    def get_segment_videos(self, project_id: str, ep: str) -> dict[str, Any]:
+        rec = self._rec(project_id, validate_ep(ep))
+        self._ensure_biz_fields(rec)
+        videos = rec.get("segment_videos") or empty_segment_videos()
+        segs = videos.get("segments") or {}
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for sid, row in segs.items():
+            segment_id = str((row.get("segment_id") if isinstance(row, dict) else None) or sid)
+            if not segment_id or segment_id in seen:
+                continue
+            seen.add(segment_id)
+            out.append({"segment_id": segment_id, "already_attempted": True})
+        for line in self._n4_assembled_lines(rec):
+            segment_id = str(line.get("shot_id") or "")
+            if not segment_id or segment_id in seen:
+                continue
+            seen.add(segment_id)
+            out.append({"segment_id": segment_id, "already_attempted": False})
+        return {
+            "ok": True,
+            "episode_stopped": bool(videos.get("episode_stopped")),
+            "segments": out,
+        }
+
     def get_project_cost(self, project_id: str) -> dict[str, Any]:
         snap = self.cost_snapshot_project(project_id)
         return {"ok": True, **snap}

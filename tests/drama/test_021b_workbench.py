@@ -39,6 +39,13 @@ def test_workbench_021b_screen_h_card_list_and_badges():
     assert "details?.gate" in js or "details.gate" in js
     assert "btn-n3-mat" in html
     assert "btn-n3-look" in html
+    assert 'id="h-cost-bar"' in html
+    assert 'id="h-look-gate-hint"' in html
+    assert "/look-ledger" in js
+    assert "/cost" in js
+    assert "LOOK_ATTEMPT_CAP" in js
+    assert "needs_redraw_consent" in js
+    assert "has_user_redraw_consent" in js
     assert "h-look-char" in html
     assert "h-face-ref" in html
     assert "h-look-dry" in html
@@ -63,6 +70,8 @@ def test_workbench_021b_does_not_disable_g3_on_weak_binding():
     write_fn = js.split("function applyHWriteGate", 1)[1].split("function ", 1)[0]
     assert "btn-n3-mat" in write_fn
     assert "btn-n3-look" in write_fn
+    assert "lookBlockedByCost" in write_fn
+    assert "lookBlockedByLedger" in write_fn
     assert "btn-g3-pass" not in write_fn
     assert "btn-g3-reject" not in write_fn
 
@@ -83,3 +92,5 @@ def test_workbench_021b_served(client):
     assert "not available in the workbench" in js.text
     assert "isG2Ready" in js.text
     assert "force_pass" not in js.text
+    assert "look-ledger" in js.text
+    assert "user_consent" not in js.text

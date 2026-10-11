@@ -1398,6 +1398,10 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "example:" not in grant_block
     assert "Does not grant user identity" in text
     assert "/redraw-consent" in text
+    assert "/look-ledger" in text
+    assert "/segment-videos" in text
+    assert "has_user_redraw_consent" in text
+    assert "already_attempted" in text
     assert "once per project" in text
     assert "/segments/{segment_id}/video" in text
     assert "force_pass_forbidden" in text
@@ -1405,3 +1409,123 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "attempt_cap" in catalog["messages"]
     assert "redraw_needs_user" in catalog["messages"]
     assert "unauthorized" in catalog["messages"]
+
+
+def test_n3_preroll_look_ledger_and_segment_videos(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    ledger = client.get(f"/api/v0/projects/{pid}/episodes/EP01/look-ledger")
+    assert ledger.status_code == 200, ledger.text
+    body = ledger.json()
+    assert body["ok"] is True
+    assert body["attempts_used"] == 0
+    assert body["needs_redraw_consent"] is False
+    assert body["has_user_redraw_consent"] is False
+    assert "user_redraw_consent" not in body
+    segs = client.get(f"/api/v0/projects/{pid}/episodes/EP01/segment-videos")
+    assert segs.status_code == 200, segs.text
+    assert segs.json()["episode_stopped"] is False
+    assert segs.json()["segments"] == []
+    client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize", json={"actor": "x"})
+    _prep_look_card(svc, pid)
+    face = _face(tmp_path)
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_fail)
+    first = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/generate-look",
+        json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"},
+    )
+    assert first.status_code == 502
+    after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/look-ledger").json()
+    assert after["attempts_used"] == 1
+    assert after["needs_redraw_consent"] is True
+    assert after["has_user_redraw_consent"] is False
+    n3 = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n3")
+    assert n3.status_code == 200, n3.text
+    n3_body = n3.json()
+    assert "has_user_redraw_consent" not in n3_body
+    assert "needs_redraw_consent" not in n3_body
+    assert "look-ledger" not in n3.text
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET", GRANT_SECRET)
+    granted = _user_grant(client, pid, kind="redraw_consent", actor="viewer")
+    assert granted.status_code == 200, granted.text
+    consented = client.get(f"/api/v0/projects/{pid}/episodes/EP01/look-ledger").json()
+    assert consented["has_user_redraw_consent"] is True
+    assert consented["needs_redraw_consent"] is True
+    _assert_secret_not_in_store(svc, GRANT_SECRET)
+
+
+def test_n3_generate_look_still_409_when_capped_or_blocked(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize", json={"actor": "x"})
+    _prep_look_card(svc, pid)
+    face = _face(tmp_path)
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_fail)
+    url = f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/generate-look"
+    first = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
+    assert first.status_code == 502
+    blocked = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "redraw_needs_user"
+    ledger = client.get(f"/api/v0/projects/{pid}/episodes/EP01/look-ledger").json()
+    assert ledger["needs_redraw_consent"] is True
+    assert ledger["has_user_redraw_consent"] is False
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET", GRANT_SECRET)
+    assert _user_grant(client, pid, kind="redraw_consent", actor="viewer").status_code == 200
+    second = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
+    assert second.status_code == 502
+    capped = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
+    assert capped.status_code == 409
+    assert capped.json()["error"]["code"] == "attempt_cap"
+    assert client.get(f"/api/v0/projects/{pid}/episodes/EP01/look-ledger").json()["attempts_used"] == 2
+    pid2 = seed_project_episode(svc)
+    lock_g2(svc, pid2)
+    client.post(f"/api/v0/projects/{pid2}/episodes/EP01/drama/n3/cards/materialize", json={"actor": "x"})
+    _prep_look_card(svc, pid2)
+    face2 = _face(tmp_path)
+    svc.add_cost_entry(
+        pid2,
+        raw={"provider": "ark", "operation": "seedream", "amount": 60, "currency": "CNY", "ref_id": "cap1", "actor": "gen"},
+    )
+    cost = client.get(f"/api/v0/projects/{pid2}/cost").json()
+    assert cost["blocked"] is True
+    assert cost["remaining"] == 0
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_ok)
+    over = client.post(
+        f"/api/v0/projects/{pid2}/episodes/EP01/drama/n3/cards/generate-look",
+        json={"id": "CHAR-01", "face_ref": str(face2), "actor": "eng"},
+    )
+    assert over.status_code == 409
+    assert over.json()["error"]["code"] == "over_cap"
+
+
+def test_n3_segment_videos_marks_attempted(client, monkeypatch):
+    pid = _setup_g3_usable(client)
+    asm = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n4/assemble",
+        json={"tool_profile": "seedance_2", "actor": "yangzhou"},
+    )
+    assert asm.status_code == 200, asm.text
+    lines = asm.json()["lines"]
+    assert lines
+    a = lines[0]
+    sha_a = hashlib.sha256((a.get("prompt") or "").encode("utf-8")).hexdigest()
+    before = client.get(f"/api/v0/projects/{pid}/episodes/EP01/segment-videos").json()
+    assert before["episode_stopped"] is False
+    assert any(row["segment_id"] == a["shot_id"] and row["already_attempted"] is False for row in before["segments"])
+
+    def fail_provider(**_k):
+        raise AppError(502, "provider", "seedance failed", node="D-N4")
+
+    monkeypatch.setattr("aiv_drama.biz.generate_seedance_segment", fail_provider)
+    first = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/segments/{a['shot_id']}/video",
+        json={"prompt_sha256": sha_a, "tool_profile": "seedance_2", "actor": "gen"},
+    )
+    assert first.status_code == 502
+    after = client.get(f"/api/v0/projects/{pid}/episodes/EP01/segment-videos").json()
+    assert after["episode_stopped"] is True
+    attempted = next(row for row in after["segments"] if row["segment_id"] == a["shot_id"])
+    assert attempted["already_attempted"] is True

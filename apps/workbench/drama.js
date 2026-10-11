@@ -12,6 +12,8 @@ const state = {
   g1bLocked: false,
   g2: null,
   n3: null,
+  cost: null,
+  lookLedger: null,
   selectedShot: null,
 };
 
@@ -1044,15 +1046,51 @@ function isG2Ready() {
   const confirmed = Boolean(sb?.confirmed_by || g2?.actor);
   return Boolean(gateOk && confirmed && sb && sb.locked === true);
 }
+const LOOK_ATTEMPT_CAP = 2;
+function lookBlockedByCost(cost) {
+  if (!cost) return false;
+  return cost.blocked === true || Number(cost.remaining) <= 0;
+}
+function lookBlockedByLedger(ledger) {
+  if (!ledger) return false;
+  if (Number(ledger.attempts_used || 0) >= LOOK_ATTEMPT_CAP) return true;
+  return Boolean(ledger.needs_redraw_consent) && !ledger.has_user_redraw_consent;
+}
+function paintHLookGateHint() {
+  const el = $("h-look-gate-hint");
+  if (!el) return;
+  if (!isG2Ready()) {
+    el.hidden = true;
+    return;
+  }
+  if (lookBlockedByCost(state.cost)) {
+    el.hidden = false;
+    el.textContent = "费用已满，禁止再打供应商。";
+    return;
+  }
+  const ledger = state.lookLedger || {};
+  if (Number(ledger.attempts_used || 0) >= LOOK_ATTEMPT_CAP) {
+    el.hidden = false;
+    el.textContent = "定妆已达累计 2 次上限（含失败）。";
+    return;
+  }
+  if (ledger.needs_redraw_consent && !ledger.has_user_redraw_consent) {
+    el.hidden = false;
+    el.textContent = "上次重抽已失败，须事先记下的用户同意。工作台不代写同意。";
+    return;
+  }
+  el.hidden = true;
+}
 function applyHWriteGate() {
   const ready = isG2Ready();
   const g3Locked = isG3Locked(state.n3);
   const mat = $("btn-n3-mat");
   if (mat) mat.disabled = !ready || g3Locked;
   const lookBtn = $("btn-n3-look");
-  if (lookBtn) lookBtn.disabled = !ready;
+  if (lookBtn) lookBtn.disabled = !ready || lookBlockedByCost(state.cost) || lookBlockedByLedger(state.lookLedger);
   const hint = $("h-g2-hint");
   if (hint) hint.hidden = ready;
+  paintHLookGateHint();
 }
 function refChip(card) {
   const lib = card?.library_ref;
@@ -1177,9 +1215,46 @@ async function refreshG2State() {
     return null;
   }
 }
+async function refreshCostBar() {
+  const el = $("h-cost-bar");
+  if (!state.projectId) {
+    state.cost = null;
+    if (el) el.textContent = "费用：未建集";
+    return null;
+  }
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/cost`);
+    state.cost = data;
+    if (el) {
+      const blocked = data.blocked ? " · blocked" : "";
+      el.textContent = `费用 spent=${data.spent} / cap=${data.cap} · remaining=${data.remaining}${blocked}`;
+    }
+    return data;
+  } catch {
+    state.cost = null;
+    if (el) el.textContent = "费用：读取失败";
+    return null;
+  }
+}
+async function refreshLookLedger() {
+  if (!state.projectId) {
+    state.lookLedger = null;
+    return null;
+  }
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/look-ledger`);
+    state.lookLedger = data;
+    return data;
+  } catch {
+    state.lookLedger = null;
+    return null;
+  }
+}
 async function refreshScreenH() {
   await refreshEpisodeChrome();
   await refreshG2State();
+  await refreshCostBar();
+  await refreshLookLedger();
   applyHWriteGate();
   if (!state.projectId) {
     paintHFromEnvelope({ gate: { locked: false }, usable_for_n4: false, cards: { characters: [], scenes: [] } });
@@ -1214,8 +1289,14 @@ if ($("btn-n3-get")) {
 }
 if ($("btn-n3-look")) {
   $("btn-n3-look").onclick = async () => {
-    if (!isG2Ready() || !state.projectId) {
+    if (!state.projectId) {
       applyHWriteGate();
+      return;
+    }
+    await refreshCostBar();
+    await refreshLookLedger();
+    applyHWriteGate();
+    if (!isG2Ready() || lookBlockedByCost(state.cost) || lookBlockedByLedger(state.lookLedger)) {
       return;
     }
     const ident = $("h-look-char")?.value;
@@ -1235,6 +1316,9 @@ if ($("btn-n3-look")) {
       payload,
     );
     paintHFromEnvelope(data);
+    await refreshLookLedger();
+    await refreshCostBar();
+    applyHWriteGate();
   };
 }
 async function confirmG3(decision) {

@@ -241,6 +241,28 @@ paths:
       responses:
         '200': { description: item_no + state=closed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/look-ledger:
+    get:
+      operationId: getLookLedger
+      summary: Read-only look attempt ledger. Does not write consent. Not the drama/n3 envelope.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      responses:
+        '200':
+          description: attempts_used / needs_redraw_consent / has_user_redraw_consent
+        '404': { description: episode not found }
+  /projects/{project_id}/episodes/{ep}/segment-videos:
+    get:
+      operationId: getSegmentVideos
+      summary: Read-only segment video ledger. Does not generate. Not the drama/n3 envelope.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+      responses:
+        '200':
+          description: episode_stopped + segments[].segment_id + segments[].already_attempted
+        '404': { description: episode not found }
   /projects/{project_id}/cost:
     get:
       operationId: getProjectCost
