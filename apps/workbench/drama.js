@@ -285,6 +285,7 @@ function applyIntent(data) {
     confirmBtn.disabled = !laneOk || !titleOk || !heroOk || Boolean(data.conflict);
   }
 }
+/** Keyless workbench: Content-Type only. No caller headers. No grant or secret. */
 function workbenchHeaders() {
   return { "Content-Type": "application/json" };
 }

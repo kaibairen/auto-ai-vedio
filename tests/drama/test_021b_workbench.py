@@ -38,6 +38,7 @@ def test_workbench_021b_screen_h_card_list_and_badges():
     assert "上游门 G1b 未锁，不能进 D-N2" in js
     assert "details?.gate" in js or "details.gate" in js
     assert "btn-n3-mat" in html
+    assert "工作台无钥" in html
     assert "btn-n3-look" in html
     assert 'id="h-cost-bar"' in html
     assert 'id="h-look-gate-hint"' in html
@@ -80,6 +81,7 @@ def test_workbench_021b_served(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "h-char-tbody" in res.text
+    assert "工作台无钥" in res.text
     assert "视觉弱绑定 · 下游一致性自负" in res.text
     assert "h-g3-badge" in res.text
     assert "usable-for-n4" in res.text
