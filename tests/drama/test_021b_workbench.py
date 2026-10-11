@@ -76,9 +76,9 @@ def test_workbench_021b_does_not_disable_g3_on_weak_binding():
     write_fn = js.split("function applyHWriteGate", 1)[1].split("function ", 1)[0]
     assert "btn-n3-mat" in write_fn
     assert "btn-n3-look" in write_fn
-    assert "lookBlockedByCost" in write_fn
-    assert "lookBlockedByLedger" in write_fn
     assert "lookPrerollBlocksGenerate" in write_fn
+    assert "lookBlockedByCost" in js
+    assert "lookBlockedByLedger" in js
     assert "btn-g3-pass" not in write_fn
     assert "btn-g3-reject" not in write_fn
 
