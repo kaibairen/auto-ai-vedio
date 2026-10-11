@@ -1389,9 +1389,10 @@ def test_workbench_does_not_hold_or_send_user_grant(client):
     assert "user_consent" not in look
     assert "user-grants" not in look
     assert "cards/generate-look" in look
+    assert look.find("lookPrerollBlocksGenerate") < look.find("refreshCostBar")
     assert look.find("refreshCostBar") < look.find("refreshLookLedger") < look.find("cards/generate-look")
-    assert "lookBlockedByCost" in look
-    assert "lookBlockedByLedger" in look
+    assert "lookBlockedByCost" in js
+    assert "lookBlockedByLedger" in js
     assert "data.attempts_used" not in look
     assert "/drama/n3/look-ledger" not in js
     assert "/look_ledger" not in js

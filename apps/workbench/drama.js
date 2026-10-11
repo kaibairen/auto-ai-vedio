@@ -1048,14 +1048,34 @@ function isG2Ready() {
   return Boolean(gateOk && confirmed && sb && sb.locked === true);
 }
 const LOOK_ATTEMPT_CAP = 2;
+function usableCostSnapshot(cost) {
+  return Boolean(
+    cost &&
+    typeof cost === "object" &&
+    typeof cost.blocked === "boolean" &&
+    Number.isFinite(Number(cost.remaining)),
+  );
+}
+function usableLookLedger(ledger) {
+  return Boolean(
+    ledger &&
+    typeof ledger === "object" &&
+    Number.isFinite(Number(ledger.attempts_used)) &&
+    typeof ledger.needs_redraw_consent === "boolean" &&
+    typeof ledger.has_user_redraw_consent === "boolean",
+  );
+}
 function lookBlockedByCost(cost) {
-  if (!cost) return false;
+  if (!usableCostSnapshot(cost)) return true;
   return cost.blocked === true || Number(cost.remaining) <= 0;
 }
 function lookBlockedByLedger(ledger) {
-  if (!ledger) return false;
-  if (Number(ledger.attempts_used || 0) >= LOOK_ATTEMPT_CAP) return true;
-  return Boolean(ledger.needs_redraw_consent) && !ledger.has_user_redraw_consent;
+  if (!usableLookLedger(ledger)) return true;
+  if (Number(ledger.attempts_used) >= LOOK_ATTEMPT_CAP) return true;
+  return ledger.needs_redraw_consent && !ledger.has_user_redraw_consent;
+}
+function lookPrerollBlocksGenerate() {
+  return lookBlockedByCost(state.cost) || lookBlockedByLedger(state.lookLedger);
 }
 function paintHLookGateHint() {
   const el = $("h-look-gate-hint");
@@ -1064,13 +1084,18 @@ function paintHLookGateHint() {
     el.hidden = true;
     return;
   }
+  if (!usableCostSnapshot(state.cost) || !usableLookLedger(state.lookLedger)) {
+    el.hidden = false;
+    el.textContent = "费用或定妆账未读成功，禁止合板。";
+    return;
+  }
   if (lookBlockedByCost(state.cost)) {
     el.hidden = false;
     el.textContent = "费用已满，禁止再打供应商。";
     return;
   }
-  const ledger = state.lookLedger || {};
-  if (Number(ledger.attempts_used || 0) >= LOOK_ATTEMPT_CAP) {
+  const ledger = state.lookLedger;
+  if (Number(ledger.attempts_used) >= LOOK_ATTEMPT_CAP) {
     el.hidden = false;
     el.textContent = "定妆已达累计 2 次上限（含失败）。";
     return;
@@ -1088,7 +1113,7 @@ function applyHWriteGate() {
   const mat = $("btn-n3-mat");
   if (mat) mat.disabled = !ready || g3Locked;
   const lookBtn = $("btn-n3-look");
-  if (lookBtn) lookBtn.disabled = !ready || lookBlockedByCost(state.cost) || lookBlockedByLedger(state.lookLedger);
+  if (lookBtn) lookBtn.disabled = !ready || lookPrerollBlocksGenerate();
   const hint = $("h-g2-hint");
   if (hint) hint.hidden = ready;
   paintHLookGateHint();
@@ -1225,6 +1250,11 @@ async function refreshCostBar() {
   }
   try {
     const data = await api("GET", `/projects/${state.projectId}/cost`);
+    if (!usableCostSnapshot(data)) {
+      state.cost = null;
+      if (el) el.textContent = "费用：读取失败";
+      return null;
+    }
     state.cost = data;
     if (el) {
       const blocked = data.blocked ? " · blocked" : "";
@@ -1245,6 +1275,10 @@ async function refreshLookLedger() {
   try {
     // Unique preroll GET .../look-ledger. Not the drama/n3 envelope.
     const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/look-ledger`);
+    if (!usableLookLedger(data)) {
+      state.lookLedger = null;
+      return null;
+    }
     state.lookLedger = data;
     return data;
   } catch {
@@ -1295,10 +1329,14 @@ if ($("btn-n3-look")) {
       applyHWriteGate();
       return;
     }
+    if (!isG2Ready() || lookPrerollBlocksGenerate()) {
+      applyHWriteGate();
+      return;
+    }
     await refreshCostBar();
     await refreshLookLedger();
     applyHWriteGate();
-    if (!isG2Ready() || lookBlockedByCost(state.cost) || lookBlockedByLedger(state.lookLedger)) {
+    if (!isG2Ready() || lookPrerollBlocksGenerate()) {
       return;
     }
     const ident = $("h-look-char")?.value;
