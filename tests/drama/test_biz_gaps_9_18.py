@@ -13,7 +13,7 @@ from aiv_drama.biz import LOOK_ATTEMPT_CAP, SPEND_CAP
 from aiv_drama.models import EpisodeCreate
 from aiv_drama_n3.gold_sheet import LOOK_KIND, LOOK_ROLE
 from aiv_drama_n3.models import N3GenerateLookRequest, N3MaterializeRequest, N3ThickenRequest
-from aiv_drama_n3.seedream import SEEDREAM_SKU_PRIMARY
+from aiv_drama_n3.seedream import SEEDREAM_SKU_CHAIN, SEEDREAM_SKU_PRIMARY, generate_seedream_sheet
 from tests.drama.helpers import lock_g2, lock_g3_usable, seed_project_episode
 from tests.drama.test_n3_look_generate import _face, _sheet_card
 from tests.drama.test_n4_api import _setup_g3_usable
@@ -88,6 +88,36 @@ def _register(client, pid, tmp_path, *, kind: str, payload: bytes, name: str = "
     return md5, path
 
 
+GRANT_SECRET = "test-user-grant-secret"
+GRANT_HEADERS = {"X-AIV-User-Grant": GRANT_SECRET}
+
+
+def _enable_grant(monkeypatch) -> None:
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET", GRANT_SECRET)
+
+
+def _user_grant(client, pid, *, kind, actor, item_no=None, conclusion=None, headers=None, extra=None):
+    body = {"kind": kind, "actor": actor}
+    if item_no is not None:
+        body["item_no"] = item_no
+    if conclusion is not None:
+        body["conclusion"] = conclusion
+    if extra:
+        body.update(extra)
+    return client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/user-grants",
+        json=body,
+        headers=headers if headers is not None else GRANT_HEADERS,
+    )
+
+
+def _assert_secret_not_in_store(svc, *secrets: str) -> None:
+    path = svc.settings.data_dir / "store.json"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    for secret in secrets:
+        assert secret not in text
+
+
 # ----- 9 look cap + single SKU + empty key -----------------------------------------
 
 
@@ -116,7 +146,13 @@ def test_look_cap_counts_failures_and_hash_change_does_not_reset(svc, tmp_path, 
         )
     )
     assert consent_ignored.code == "redraw_needs_user"
-    svc.record_redraw_consent(pid, "EP01", raw={"user": True, "actor": "viewer"})
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET", GRANT_SECRET)
+    svc.record_user_grant(
+        pid,
+        "EP01",
+        raw={"kind": "redraw_consent", "actor": "viewer"},
+        grant=GRANT_SECRET,
+    )
     second = _err(
         lambda: svc.generate_n3_look(
             pid,
@@ -226,10 +262,15 @@ def test_http_redraw_needs_user_and_retry_forbidden(client, tmp_path, monkeypatc
     force = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "force_pass": True})
     assert force.status_code == 400
     assert force.json()["error"]["code"] == "force_pass_forbidden"
-    recorded = client.post(
+    worker_consent = client.post(
         f"/api/v0/projects/{pid}/episodes/EP01/redraw-consent",
         json={"user": True, "actor": "viewer"},
     )
+    assert worker_consent.status_code == 409
+    assert worker_consent.json()["error"]["code"] == "redraw_needs_user"
+    assert svc._rec(pid, "EP01")["look_ledger"].get("user_redraw_consent") in (None, {})
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET", GRANT_SECRET)
+    recorded = _user_grant(client, pid, kind="redraw_consent", actor="viewer")
     assert recorded.status_code == 200, recorded.text
     assert recorded.json()["recorded"] is True
     second = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
@@ -874,6 +915,304 @@ def test_open_item_consent_without_conclusion_cannot_close(client, tmp_path):
     assert no_conclusion.json()["error"]["code"] == "waiting_on_user"
 
 
+def _review_and_items(client, pid, subject, states):
+    review = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/reviews",
+        json={"level": "L1", "subject_md5": subject, "verdict": "fail", "actor": "rev"},
+    )
+    assert review.status_code == 200, review.text
+    review_id = review.json()["review_id"]
+    for item_no, state in states:
+        created = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items",
+            json={
+                "review_id": review_id,
+                "item_no": item_no,
+                "state": state,
+                "owner": "rev",
+                "text": f"item-{state}",
+            },
+        )
+        assert created.status_code == 200, created.text
+    return review_id
+
+
+def test_t1_worker_consent_user_true_does_not_record_user(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"t1", name="t1.bin")
+    _review_and_items(client, pid, subject, ((1, "waiting_on_user"),))
+    consent = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/consent",
+        json={"user": True, "actor": "worker"},
+    )
+    assert consent.status_code == 200, consent.text
+    assert consent.json().get("recorded") is not True
+    stored = svc._rec(pid, "EP01")["open_items"]["by_no"]["1"]
+    assert stored.get("recorded_user") in (None, {})
+
+
+def test_t2_worker_conclusion_is_not_user_and_close_is_409(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"t2", name="t2.bin")
+    _review_and_items(client, pid, subject, ((1, "waiting_on_user"),))
+    conclusion = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/conclusion",
+        json={"conclusion": "worker_text", "actor": "worker", "user": True},
+    )
+    assert conclusion.status_code == 200, conclusion.text
+    recorded = svc._rec(pid, "EP01")["open_items"]["by_no"]["1"].get("recorded_conclusion") or {}
+    assert recorded.get("user") is not True
+    closed = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
+        json={"actor": "worker", "conclusion": "worker_text", "file_md5": subject},
+    )
+    assert closed.status_code == 409
+    assert closed.json()["error"]["code"] == "waiting_on_user"
+
+
+def test_t3_user_grants_missing_or_wrong_secret_is_401(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"t3", name="t3.bin")
+    _review_and_items(client, pid, subject, ((1, "blocks_l2"),))
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET", GRANT_SECRET)
+    before = svc._rec(pid, "EP01")["open_items"]["by_no"]["1"].get("recorded_user")
+    unknown = _user_grant(
+        client, pid, kind="open_item_identity", actor="viewer", item_no=1, extra={"unexpected": True}
+    )
+    assert unknown.status_code == 422
+    missing = _user_grant(client, pid, kind="open_item_identity", actor="viewer", item_no=1, headers={})
+    assert missing.status_code == 401
+    assert missing.json()["error"]["code"] == "unauthorized"
+    wrong = _user_grant(
+        client,
+        pid,
+        kind="open_item_identity",
+        actor="viewer",
+        item_no=1,
+        headers={"X-AIV-User-Grant": "not-the-secret"},
+    )
+    assert wrong.status_code == 401
+    assert wrong.json()["error"]["code"] == "unauthorized"
+    monkeypatch.delenv("AIV_USER_GRANT_SECRET", raising=False)
+    monkeypatch.delenv("AIV_USER_GRANT_SECRET_FILE", raising=False)
+    monkeypatch.setattr("aiv_drama.secrets.read_user_grant_secret", lambda: None)
+    unconfigured = _user_grant(client, pid, kind="open_item_identity", actor="viewer", item_no=1)
+    assert unconfigured.status_code == 401
+    after = svc._rec(pid, "EP01")["open_items"]["by_no"]["1"]
+    assert after.get("recorded_user") == before
+    assert after["state"] == "blocks_l2"
+    _assert_secret_not_in_store(svc, GRANT_SECRET, "not-the-secret")
+
+
+def test_user_grant_secret_from_file(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    monkeypatch.delenv("AIV_USER_GRANT_SECRET", raising=False)
+    secret_file = tmp_path / "AIV_USER_GRANT_SECRET"
+    secret_file.write_text("file-grant-secret\n", encoding="utf-8")
+    monkeypatch.setenv("AIV_USER_GRANT_SECRET_FILE", str(secret_file))
+    res = _user_grant(
+        client,
+        pid,
+        kind="redraw_consent",
+        actor="viewer",
+        headers={"X-AIV-User-Grant": "file-grant-secret"},
+    )
+    assert res.status_code == 200, res.text
+    assert svc._rec(pid, "EP01")["look_ledger"]["user_redraw_consent"]["user"] is True
+    _assert_secret_not_in_store(svc, "file-grant-secret")
+
+
+def test_t4_grant_identity_and_conclusion_then_close(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"t4", name="t4.bin")
+    states = ((1, "waiting_on_user"), (2, "blocks_l2"), (3, "non_blocking"))
+    _review_and_items(client, pid, subject, states)
+    _enable_grant(monkeypatch)
+    for item_no, state in states:
+        ident = _user_grant(client, pid, kind="open_item_identity", actor="viewer", item_no=item_no)
+        assert ident.status_code == 200, ident.text
+        stored = svc._rec(pid, "EP01")["open_items"]["by_no"][str(item_no)]
+        assert stored["recorded_user"]["user"] is True
+        assert stored["recorded_user"]["actor"] == "viewer"
+        early = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/close",
+            json={"actor": "viewer", "conclusion": "accepted", "file_md5": subject},
+        )
+        assert early.status_code == 409
+        conc = _user_grant(
+            client,
+            pid,
+            kind="open_item_conclusion",
+            actor="viewer",
+            item_no=item_no,
+            conclusion="accepted",
+        )
+        assert conc.status_code == 200, conc.text
+        stored = svc._rec(pid, "EP01")["open_items"]["by_no"][str(item_no)]
+        assert stored["recorded_conclusion"]["user"] is True
+        assert stored["recorded_conclusion"]["conclusion"] == "accepted"
+        closed = client.post(
+            f"/api/v0/projects/{pid}/episodes/EP01/open-items/{item_no}/close",
+            json={"actor": "viewer", "conclusion": "accepted", "file_md5": subject},
+        )
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["state"] == "closed"
+        assert svc._rec(pid, "EP01")["open_items"]["by_no"][str(item_no)]["state"] == "closed"
+        assert state != "closed"
+    _assert_secret_not_in_store(svc, GRANT_SECRET)
+
+
+def test_t5_worker_conclusion_without_identity_cannot_close(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    subject, _ = _register(client, pid, tmp_path, kind="rough_cut", payload=b"t5", name="t5.bin")
+    _review_and_items(client, pid, subject, ((1, "blocks_l2"),))
+    conclusion = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/conclusion",
+        json={"conclusion": "only_worker", "actor": "worker"},
+    )
+    assert conclusion.status_code == 200
+    assert (svc._rec(pid, "EP01")["open_items"]["by_no"]["1"].get("recorded_user")) in (None, {})
+    closed = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/open-items/1/close",
+        json={"actor": "worker", "conclusion": "only_worker", "file_md5": subject},
+    )
+    assert closed.status_code == 409
+    assert closed.json()["error"]["code"] == "close_conditions"
+
+
+def test_t6_worker_redraw_consent_does_not_write(client, tmp_path):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    res = client.post(
+        f"/api/v0/projects/{pid}/episodes/EP01/redraw-consent",
+        json={"user": True, "actor": "viewer"},
+    )
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "redraw_needs_user"
+    assert (svc._rec(pid, "EP01").get("look_ledger") or {}).get("user_redraw_consent") in (None, {})
+
+
+def test_t7_grant_redraw_consent_allows_look_user_consent_ignored(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g2(svc, pid)
+    client.post(f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/materialize", json={"actor": "x"})
+    _prep_look_card(svc, pid)
+    face = _face(tmp_path)
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_fail)
+    url = f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/cards/generate-look"
+    first = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng"})
+    assert first.status_code == 502
+    spoof = client.post(url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng", "user_consent": True})
+    assert spoof.status_code == 409
+    assert spoof.json()["error"]["code"] == "redraw_needs_user"
+    _enable_grant(monkeypatch)
+    granted = _user_grant(client, pid, kind="redraw_consent", actor="viewer")
+    assert granted.status_code == 200, granted.text
+    assert svc._rec(pid, "EP01")["look_ledger"]["user_redraw_consent"]["user"] is True
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_ok)
+    still_ignored = client.post(
+        url, json={"id": "CHAR-01", "face_ref": str(face), "actor": "eng", "user_consent": True}
+    )
+    assert still_ignored.status_code == 200, still_ignored.text
+    assert still_ignored.json()["attempts_used"] == 2
+    _assert_secret_not_in_store(svc, GRANT_SECRET)
+
+
+def test_t8_user_grants_body_rejects_secrets(client, tmp_path, monkeypatch):
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    lock_g3_usable(svc, pid, svc.settings.data_dir)
+    _enable_grant(monkeypatch)
+    leaked = "sk-must-not-echo"
+    for extra in ({"api_key": leaked}, {"secret": leaked}, {"X-AIV-User-Grant": leaked}):
+        res = _user_grant(client, pid, kind="redraw_consent", actor="viewer", extra=extra)
+        assert res.status_code == 400, res.text
+        assert res.json()["error"]["code"] == "validation"
+        assert leaked not in res.text
+        assert GRANT_SECRET not in res.text
+    assert (svc._rec(pid, "EP01").get("look_ledger") or {}).get("user_redraw_consent") in (None, {})
+    _assert_secret_not_in_store(svc, GRANT_SECRET, leaked)
+
+
+def test_t9_empty_idempotency_key_and_one_sku(svc, tmp_path, monkeypatch):
+    pid = seed_project_episode(svc)
+    face = _look_ready(svc, pid, tmp_path)
+    monkeypatch.setattr("aiv_drama_n3.ops.generate_gold_a_sheet", _fake_look_ok)
+    first = svc.generate_n3_look(
+        pid,
+        "EP01",
+        N3GenerateLookRequest(id="CHAR-01", face_ref=str(face), actor="eng"),
+        raw={"id": "CHAR-01", "face_ref": str(face)},
+        idempotency_key="",
+    )
+    assert first["attempts_used"] == 1
+    second = svc.generate_n3_look(
+        pid,
+        "EP01",
+        N3GenerateLookRequest(id="CHAR-01", face_ref=str(face), actor="eng"),
+        raw={"id": "CHAR-01", "face_ref": str(face)},
+        idempotency_key="   ",
+    )
+    assert second["attempts_used"] == 2
+    third = _err(
+        lambda: svc.generate_n3_look(
+            pid,
+            "EP01",
+            N3GenerateLookRequest(id="CHAR-01", face_ref=str(face), actor="eng"),
+            raw={"id": "CHAR-01", "face_ref": str(face)},
+            idempotency_key="",
+        )
+    )
+    assert third.code == "attempt_cap"
+    posts = []
+
+    class _Reject:
+        status_code = 400
+        text = "model not found"
+
+        def json(self):
+            raise ValueError("no json")
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
+        posts.append(json["model"])
+        return _Reject()
+
+    def fake_get(url, timeout=None):
+        raise AssertionError("must not download after a rejected SKU")
+
+    try:
+        generate_seedream_sheet(
+            api_key="sk-live",
+            prompt="p",
+            image_data_url="data:image/jpeg;base64,QQ==",
+            models=SEEDREAM_SKU_CHAIN,
+            post=fake_post,
+            get=fake_get,
+        )
+    except AppError as exc:
+        assert exc.code == "provider"
+        assert exc.details["attempts"] == [
+            {"model": SEEDREAM_SKU_PRIMARY, "http": 400, "status": "rejected", "image": False}
+        ]
+    else:
+        raise AssertionError("expected AppError")
+    assert posts == [SEEDREAM_SKU_PRIMARY]
+
+
 # ----- 18 spend ceiling + redraw_needs_user already covered ------------------------
 
 
@@ -1026,6 +1365,9 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "redraw_needs_user" in text
     assert "close_conditions" in text
     assert "/open-items/{item_no}/consent" in text
+    assert "/user-grants" in text
+    assert "X-AIV-User-Grant" in text
+    assert "Does not grant user identity" in text
     assert "/redraw-consent" in text
     assert "once per project" in text
     assert "/segments/{segment_id}/video" in text
@@ -1033,3 +1375,4 @@ def test_http_force_pass_and_openapi_biz(client):
     catalog = client.get("/api/v0/drama/error-catalog").json()
     assert "attempt_cap" in catalog["messages"]
     assert "redraw_needs_user" in catalog["messages"]
+    assert "unauthorized" in catalog["messages"]

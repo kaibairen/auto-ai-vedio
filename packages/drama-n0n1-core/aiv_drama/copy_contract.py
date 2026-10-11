@@ -109,6 +109,7 @@ GAP_COPY_CODES: frozenset[str] = frozenset(
 HTTP_STATUS: dict[str, int] = {
     "force_pass_forbidden": 400,
     "validation": 400,
+    "unauthorized": 401,
     "not_found": 404,
     "conflict": 409,
     "locked": 409,
@@ -259,6 +260,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "validation": {
         "zh": "请求校验失败。",
         "en": "validation",
+    },
+    "unauthorized": {
+        "zh": "用户授权未通过。",
+        "en": "user grant required",
     },
     "material_bind": {
         "zh": "材料绑定门未过（脸 ref path+md5）；禁 generate。",

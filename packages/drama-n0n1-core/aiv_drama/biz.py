@@ -28,9 +28,10 @@ from aiv_drama.biz_models import (
     SeamMeasureRequest,
     SegmentVideoRequest,
     SubtitleWriteRequest,
+    UserGrantRequest,
 )
 from aiv_drama.errors import AppError
-from aiv_drama.secrets import reject_secret_fields
+from aiv_drama.secrets import reject_secret_fields, require_user_grant
 from aiv_drama.store import atomic_write_text
 from aiv_drama.validate import FORCE_KEYS, now_iso, validate_ep
 from aiv_drama_n4.projection import read_prompts_jsonl
@@ -194,25 +195,13 @@ class DramaBizOps:
     ) -> dict[str, Any]:
         reject_force_keys_biz(raw)
         reject_secret_fields(raw)
-        req = body or RedrawConsentRequest.model_validate(raw or {})
-        op = f"redraw_consent:{project_id}:{ep}"
-        cached = self._idem_get(idempotency_key, op)
-        if cached:
-            return cached
-        if req.user is not True:
-            raise AppError(
-                409,
-                "redraw_needs_user",
-                "redraw consent must be an explicit user record; engineering cannot grant it",
-            )
-        rec = self._rec(project_id, validate_ep(ep))
-        self._require_writable_episode(rec)
-        ledger = self._look_ledger(rec)
-        ledger["user_redraw_consent"] = {"user": True, "actor": req.actor, "at": now_iso()}
-        self._touch_episode(rec)
-        self._commit(rec)
-        env = {"ok": True, "user": True, "recorded": True}
-        return self._idem_put(idempotency_key, op, env)
+        RedrawConsentRequest.model_validate(raw or (body.model_dump() if body else {}))
+        self._rec(project_id, validate_ep(ep))
+        raise AppError(
+            409,
+            "redraw_needs_user",
+            "worker redraw-consent cannot grant user identity; use POST .../user-grants",
+        )
 
     def _project_cost_bucket(self, project_id: str) -> dict[str, Any]:
         proj = self._project(project_id)
@@ -1167,6 +1156,102 @@ class DramaBizOps:
         self._touch_episode(rec)
         self._commit(rec)
         env = {"ok": True, "item_no": item_no, "state": "closed"}
+        return self._idem_put(idempotency_key, op, env)
+
+    def record_user_grant(
+        self,
+        project_id: str,
+        ep: str,
+        body: UserGrantRequest | None = None,
+        *,
+        raw: dict[str, Any] | None = None,
+        grant: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        reject_force_keys_biz(raw)
+        reject_secret_fields(raw)
+        require_user_grant(grant)
+        req = body or UserGrantRequest.model_validate(raw or {})
+        if req.kind in {"open_item_identity", "open_item_conclusion"} and req.item_no is None:
+            raise AppError(422, "validation", "item_no is required", field="item_no", kind=req.kind)
+        if req.kind == "open_item_conclusion" and not req.conclusion:
+            raise AppError(422, "validation", "conclusion is required", field="conclusion", kind=req.kind)
+        op = (
+            f"user_grant:{project_id}:{ep}:{req.kind}:{req.item_no or '-'}:{req.actor}:"
+            f"{req.conclusion or '-'}"
+        )
+        cached = self._idem_get(idempotency_key, op)
+        if cached:
+            return cached
+        rec = self._rec(project_id, validate_ep(ep))
+        self._require_writable_episode(rec)
+        self._ensure_biz_fields(rec)
+        if req.kind == "redraw_consent":
+            ledger = self._look_ledger(rec)
+            ledger["user_redraw_consent"] = {"user": True, "actor": req.actor, "at": now_iso()}
+            self._touch_episode(rec)
+            self._commit(rec)
+            env = {"ok": True, "kind": req.kind, "recorded": True}
+            return self._idem_put(idempotency_key, op, env)
+        item = rec["open_items"]["by_no"].get(str(req.item_no))
+        if not item:
+            raise AppError(404, "not_found", "open item not found", item_no=req.item_no)
+        if item.get("state") == "closed":
+            raise AppError(
+                409,
+                "close_conditions",
+                "closed items cannot receive a new user grant",
+                item_no=req.item_no,
+            )
+        if req.kind == "open_item_identity":
+            prior = item.get("recorded_user")
+            incoming = {"user": True, "actor": req.actor, "at": now_iso()}
+            if isinstance(prior, dict) and prior.get("user") is True:
+                if prior.get("actor") != req.actor:
+                    raise AppError(
+                        409,
+                        "close_conditions",
+                        "a user identity is already recorded; it cannot be overwritten",
+                        item_no=req.item_no,
+                    )
+                env = {"ok": True, "kind": req.kind, "item_no": req.item_no, "recorded": True}
+                return self._idem_put(idempotency_key, op, env)
+            item["recorded_user"] = incoming
+        else:
+            recorded_user = item.get("recorded_user")
+            if not self._recorded_item_user(item):
+                raise AppError(
+                    409,
+                    "close_conditions",
+                    "open_item_conclusion grant needs a prior recorded user identity",
+                    item_no=req.item_no,
+                )
+            if req.actor != recorded_user.get("actor"):
+                raise AppError(
+                    409,
+                    "close_conditions",
+                    "grant actor must match the recorded user identity",
+                    item_no=req.item_no,
+                )
+            incoming = {
+                "conclusion": req.conclusion,
+                "actor": req.actor,
+                "user": True,
+                "at": now_iso(),
+            }
+            prior = item.get("recorded_conclusion")
+            if isinstance(prior, dict) and prior.get("conclusion") and prior.get("conclusion") != req.conclusion:
+                raise AppError(
+                    409,
+                    "close_conditions",
+                    "a conclusion is already recorded; it cannot be overwritten",
+                    item_no=req.item_no,
+                )
+            item["recorded_conclusion"] = incoming
+            item["conclusion"] = req.conclusion
+        self._touch_episode(rec)
+        self._commit(rec)
+        env = {"ok": True, "kind": req.kind, "item_no": req.item_no, "recorded": True}
         return self._idem_put(idempotency_key, op, env)
 
     # ----- 18 spend accumulator (one project cap) ----------------------------------

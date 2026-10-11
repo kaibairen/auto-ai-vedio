@@ -143,7 +143,7 @@ class OpenItemConclusionRequest(BaseModel):
 
 
 class OpenItemConsentRequest(BaseModel):
-    """Prior user identity for an open item. Same class as redraw-consent."""
+    """Worker-callable. Does not write recorded_user. Request user/actor are not identity."""
 
     model_config = {"extra": "forbid"}
 
@@ -152,12 +152,26 @@ class OpenItemConsentRequest(BaseModel):
 
 
 class RedrawConsentRequest(BaseModel):
-    """User redraw consent. Engineering cannot grant this on generate-look."""
+    """Worker-callable. Does not write user_redraw_consent or grant user identity."""
 
     model_config = {"extra": "forbid"}
 
     user: bool
     actor: str | None = None
+
+
+UserGrantKind = Literal["open_item_identity", "open_item_conclusion", "redraw_consent"]
+
+
+class UserGrantRequest(BaseModel):
+    """Control-plane grant. Authenticated by X-AIV-User-Grant, not by body booleans."""
+
+    model_config = {"extra": "forbid"}
+
+    kind: UserGrantKind
+    actor: str = Field(min_length=1)
+    item_no: int | None = Field(default=None, ge=1)
+    conclusion: str | None = Field(default=None, min_length=1)
 
 
 class CostEntryRequest(BaseModel):

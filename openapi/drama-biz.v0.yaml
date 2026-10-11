@@ -156,7 +156,7 @@ paths:
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/consent:
     post:
       operationId: recordOpenItemConsent
-      summary: Worker-callable. Does not write recorded_user. Request user/actor are not user identity.
+      summary: Worker-callable. Does not grant user identity. Does not write recorded_user.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -167,7 +167,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/OpenItemConsentRequest' }
       responses:
-        '200': { description: recorded user identity }
+        '200': { description: recorded is false; request user/actor are not identity }
         '409': { $ref: '#/components/responses/Conflict' }
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/conclusion:
     post:
@@ -185,10 +185,33 @@ paths:
       responses:
         '200': { description: item_no + recorded }
         '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{project_id}/episodes/{ep}/user-grants:
+    post:
+      operationId: recordUserGrant
+      summary: Control-plane only. Header X-AIV-User-Grant required. Sole writer of recorded_user, user conclusions, and user_redraw_consent.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EpisodeId'
+        - name: X-AIV-User-Grant
+          in: header
+          required: true
+          schema: { type: string }
+          description: Grant secret. Compared in constant time. Missing or wrong → 401. Never send in the body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserGrantRequest' }
+      responses:
+        '200': { description: recorded true for the granted kind }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { description: unauthorized — missing, wrong, or unconfigured grant }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { description: validation — unknown fields or kind }
   /projects/{project_id}/episodes/{ep}/redraw-consent:
     post:
       operationId: recordRedrawConsent
-      summary: Record user redraw consent. generate-look user_consent is ignored.
+      summary: Worker-callable. Does not grant user identity. Does not write user_redraw_consent. generate-look user_consent is ignored.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -198,7 +221,6 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/RedrawConsentRequest' }
       responses:
-        '200': { description: recorded user consent }
         '409': { description: redraw_needs_user }
   /projects/{project_id}/episodes/{ep}/open-items/{item_no}/close:
     post:
@@ -379,6 +401,15 @@ components:
       properties:
         user: { type: boolean }
         actor: { type: string }
+    UserGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, actor]
+      properties:
+        kind: { type: string, enum: [open_item_identity, open_item_conclusion, redraw_consent] }
+        actor: { type: string, description: control-plane user label; not a worker self-fill }
+        item_no: { type: integer, minimum: 1 }
+        conclusion: { type: string }
     CostEntryRequest:
       type: object
       additionalProperties: false
@@ -395,6 +426,7 @@ components:
       type: string
       enum:
         - validation
+        - unauthorized
         - not_found
         - force_pass_forbidden
         - attempt_cap

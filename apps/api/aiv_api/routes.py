@@ -21,9 +21,10 @@ from aiv_drama.biz_models import (
     SeamMeasureRequest,
     SegmentVideoRequest,
     SubtitleWriteRequest,
+    UserGrantRequest,
 )
 from aiv_drama.errors import AppError
-from aiv_drama.secrets import reject_retry_flag, reject_secret_fields
+from aiv_drama.secrets import reject_retry_flag, reject_secret_fields, require_user_grant
 from aiv_drama.models import (
     AttachRequest,
     CastWrite,
@@ -821,6 +822,27 @@ async def close_open_item(
     body = OpenItemCloseRequest.model_validate(raw)
     return _svc(request).close_open_item(
         project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/user-grants")
+async def record_user_grant(
+    project_id: str,
+    ep: str,
+    request: Request,
+    x_aiv_user_grant: str | None = Header(default=None, alias="X-AIV-User-Grant"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    require_user_grant(x_aiv_user_grant)
+    body = UserGrantRequest.model_validate(raw)
+    return _svc(request).record_user_grant(
+        project_id,
+        ep,
+        body,
+        raw=raw,
+        grant=x_aiv_user_grant,
+        idempotency_key=idempotency_key,
     )
 
 
