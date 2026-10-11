@@ -283,11 +283,38 @@ function applyIntent(data) {
     confirmBtn.disabled = !laneOk || !titleOk || !heroOk || Boolean(data.conflict);
   }
 }
-async function api(method, path, body, headers) {
+function workbenchHeaders() {
+  return { "Content-Type": "application/json" };
+}
+
+function workbenchBody(body) {
+  if (body === undefined || body === null || typeof body !== "object") return body;
+  const clean = {};
+  for (const [key, value] of Object.entries(body)) {
+    const name = String(key).toLowerCase();
+    if (
+      name.includes("grant") ||
+      name.includes("api_key") ||
+      name === "secret" ||
+      name === "authorization" ||
+      name === "bearer"
+    ) {
+      continue;
+    }
+    clean[key] = value;
+  }
+  return clean;
+}
+
+async function api(method, path, body) {
+  if (/user-grants/i.test(String(path))) {
+    showBanner("privileged grant route is not available in the workbench", false, "error");
+    return { ok: false, error: { code: "unauthorized", message: "not available in the workbench" } };
+  }
   const res = await fetch(`/api/v0${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...(headers || {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: workbenchHeaders(),
+    body: body === undefined ? undefined : JSON.stringify(workbenchBody(body)),
   });
   const data = await res.json();
   if (!res.ok) {

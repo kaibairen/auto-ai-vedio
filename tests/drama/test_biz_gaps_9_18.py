@@ -1356,6 +1356,31 @@ def test_spend_cap_is_one_project_bucket_not_per_episode(svc, tmp_path, monkeypa
     assert rec02.get("cost") in (None, {})
 
 
+def test_workbench_does_not_hold_or_send_user_grant():
+    """Browser/workbench stay keyless. Control plane writes grants; no frontend secret."""
+    root = Path("apps/workbench")
+    texts = {
+        name: (root / name).read_text(encoding="utf-8")
+        for name in ("drama.js", "index.html", "drama.css")
+    }
+    js = texts["drama.js"]
+    for name, text in texts.items():
+        assert "X-AIV-User-Grant" not in text, name
+        assert "x-aiv-user-grant" not in text, name
+        assert "AIV_USER_GRANT_SECRET" not in text, name
+        assert "AIV_USER_GRANT_SECRET_FILE" not in text, name
+    assert "user_consent" not in js
+    api_fn = js.split("async function api", 1)[1].split("\nasync function ", 1)[0]
+    assert "headers || {}" not in api_fn
+    assert "workbenchHeaders()" in api_fn
+    assert "user-grants" in api_fn
+    assert "not available in the workbench" in api_fn
+    look = js.split('if ($("btn-n3-look"))', 1)[1]
+    assert "user_consent" not in look
+    assert "user-grants" not in look
+    assert "cards/generate-look" in look
+
+
 def test_http_force_pass_and_openapi_biz(client):
     spec = client.get("/openapi/drama-biz.v0.yaml")
     assert spec.status_code == 200
@@ -1367,6 +1392,10 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "/open-items/{item_no}/consent" in text
     assert "/user-grants" in text
     assert "X-AIV-User-Grant" in text
+    assert "Not for browser or workbench" in text
+    assert "No example value" in text
+    grant_block = text.split("/user-grants:", 1)[1].split("/redraw-consent:", 1)[0]
+    assert "example:" not in grant_block
     assert "Does not grant user identity" in text
     assert "/redraw-consent" in text
     assert "once per project" in text

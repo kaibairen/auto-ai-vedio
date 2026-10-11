@@ -78,5 +78,8 @@ def test_workbench_021b_served(client):
     js = client.get("/workbench/static/drama.js")
     assert js.status_code == 200
     assert "上游门 G2 未锁，不能进 D-N3" in js.text
+    assert "X-AIV-User-Grant" not in js.text
+    assert "AIV_USER_GRANT_SECRET" not in js.text
+    assert "not available in the workbench" in js.text
     assert "isG2Ready" in js.text
     assert "force_pass" not in js.text

@@ -188,7 +188,7 @@ paths:
   /projects/{project_id}/episodes/{ep}/user-grants:
     post:
       operationId: recordUserGrant
-      summary: Control-plane only. Header X-AIV-User-Grant required. Sole writer of recorded_user, user conclusions, and user_redraw_consent.
+      summary: Control-plane only. Not for browser or workbench. Header X-AIV-User-Grant required. Sole writer of recorded_user, user conclusions, and user_redraw_consent.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
@@ -196,7 +196,10 @@ paths:
           in: header
           required: true
           schema: { type: string }
-          description: Grant secret. Compared in constant time. Missing or wrong → 401. Never send in the body.
+          description: >
+            Server-held grant secret (env or file). Constant-time compare.
+            Missing or wrong → 401. Never send from browser/workbench.
+            Never put the secret in the request body. No example value.
       requestBody:
         required: true
         content:
