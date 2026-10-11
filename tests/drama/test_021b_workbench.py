@@ -43,7 +43,10 @@ def test_workbench_021b_screen_h_card_list_and_badges():
     assert 'id="h-cost-bar"' in html
     assert 'id="h-look-gate-hint"' in html
     assert "/look-ledger" in js
+    assert "/drama/n3/look-ledger" not in js
+    assert "/look_ledger" not in js
     assert "/cost" in js
+    assert "/cost-ledger" not in js
     assert "LOOK_ATTEMPT_CAP" in js
     assert "needs_redraw_consent" in js
     assert "has_user_redraw_consent" in js
@@ -95,4 +98,5 @@ def test_workbench_021b_served(client):
     assert "isG2Ready" in js.text
     assert "force_pass" not in js.text
     assert "look-ledger" in js.text
+    assert "/drama/n3/look-ledger" not in js.text
     assert "user_consent" not in js.text

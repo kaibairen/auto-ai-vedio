@@ -1389,6 +1389,12 @@ def test_workbench_does_not_hold_or_send_user_grant(client):
     assert "user_consent" not in look
     assert "user-grants" not in look
     assert "cards/generate-look" in look
+    assert look.find("refreshCostBar") < look.find("refreshLookLedger") < look.find("cards/generate-look")
+    assert "lookBlockedByCost" in look
+    assert "lookBlockedByLedger" in look
+    assert "data.attempts_used" not in look
+    assert "/drama/n3/look-ledger" not in js
+    assert "/look_ledger" not in js
 
 
 def test_http_force_pass_and_openapi_biz(client):
@@ -1408,10 +1414,17 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "example:" not in grant_block
     assert "Does not grant user identity" in text
     assert "/redraw-consent" in text
-    assert "/look-ledger" in text
-    assert "/segment-videos" in text
+    assert "/projects/{project_id}/episodes/{ep}/look-ledger:" in text
+    assert "/projects/{project_id}/episodes/{ep}/segment-videos:" in text
+    assert "LookLedgerResponse" in text
+    assert "SegmentVideosResponse" in text
     assert "has_user_redraw_consent" in text
     assert "already_attempted" in text
+    n3_spec = client.get("/openapi/drama-n3.v0.yaml")
+    assert n3_spec.status_code == 200
+    assert "look-ledger" in n3_spec.text
+    assert "/look-ledger:" not in n3_spec.text
+    assert "/segment-videos:" not in n3_spec.text
     assert "once per project" in text
     assert "/segments/{segment_id}/video" in text
     assert "force_pass_forbidden" in text
@@ -1419,6 +1432,53 @@ def test_http_force_pass_and_openapi_biz(client):
     assert "attempt_cap" in catalog["messages"]
     assert "redraw_needs_user" in catalog["messages"]
     assert "unauthorized" in catalog["messages"]
+
+
+def test_n3_preroll_paths_locked_638d078e(client):
+    """后端口径 md5 638d078eb0be955bbc6d88a89d03bbf3. Do not rename. Do not stuff into GET drama/n3."""
+    svc = client.app.state.service
+    pid = seed_project_episode(svc)
+    ledger = client.get(f"/api/v0/projects/{pid}/episodes/EP01/look-ledger")
+    assert ledger.status_code == 200, ledger.text
+    body = ledger.json()
+    assert {"attempts_used", "needs_redraw_consent", "has_user_redraw_consent"} <= set(body)
+    assert set(body) <= {"ok", "attempts_used", "needs_redraw_consent", "has_user_redraw_consent"}
+    assert "user_redraw_consent" not in body
+    segs = client.get(f"/api/v0/projects/{pid}/episodes/EP01/segment-videos")
+    assert segs.status_code == 200, segs.text
+    sbody = segs.json()
+    assert {"episode_stopped", "segments"} <= set(sbody)
+    assert set(sbody) <= {"ok", "episode_stopped", "segments"}
+    for row in sbody["segments"]:
+        assert set(row) == {"segment_id", "already_attempted"}
+    cost = client.get(f"/api/v0/projects/{pid}/cost")
+    assert cost.status_code == 200, cost.text
+    for key in ("spent", "cap", "remaining", "blocked"):
+        assert key in cost.json()
+    aliases = (
+        f"/api/v0/projects/{pid}/episodes/EP01/look_ledger",
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/look-ledger",
+        f"/api/v0/projects/{pid}/episodes/EP01/look-ledgers",
+        f"/api/v0/projects/{pid}/episodes/EP01/segment_videos",
+        f"/api/v0/projects/{pid}/episodes/EP01/drama/n3/segment-videos",
+        f"/api/v0/projects/{pid}/cost-ledger",
+        f"/api/v0/projects/{pid}/episodes/EP01/cost",
+    )
+    for path in aliases:
+        assert client.get(path).status_code == 404, path
+    lock_g2(svc, pid)
+    n3 = client.get(f"/api/v0/projects/{pid}/episodes/EP01/drama/n3")
+    assert n3.status_code == 200, n3.text
+    n3_body = n3.json()
+    for forbidden in (
+        "look_ledger",
+        "needs_redraw_consent",
+        "has_user_redraw_consent",
+        "look-ledger",
+        "segment-videos",
+        "episode_stopped",
+    ):
+        assert forbidden not in n3_body
 
 
 def test_n3_preroll_look_ledger_and_segment_videos(client, tmp_path, monkeypatch):

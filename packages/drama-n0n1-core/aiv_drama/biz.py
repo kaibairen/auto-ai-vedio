@@ -1257,6 +1257,7 @@ class DramaBizOps:
     # ----- 18 spend accumulator (one project cap) ----------------------------------
 
     def get_look_ledger(self, project_id: str, ep: str) -> dict[str, Any]:
+        """GET .../look-ledger only. Read-only summary. Not the n3 envelope."""
         rec = self._rec(project_id, validate_ep(ep))
         ledger = self._look_ledger(rec)
         return {
@@ -1267,6 +1268,7 @@ class DramaBizOps:
         }
 
     def get_segment_videos(self, project_id: str, ep: str) -> dict[str, Any]:
+        """GET .../segment-videos only. Read-only. Not the n3 envelope."""
         rec = self._rec(project_id, validate_ep(ep))
         self._ensure_biz_fields(rec)
         videos = rec.get("segment_videos") or empty_segment_videos()

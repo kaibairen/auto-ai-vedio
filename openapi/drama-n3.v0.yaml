@@ -48,7 +48,7 @@ paths:
       tags: [N3Cards]
       operationId: getDramaN3
       summary: 读 D-N3 卡投影 + 故事板裁剪 + G3（工作台 JSON dump）
-      description: G2 未锁 → 409 `upstream_unlocked`。不自动物化卡。
+      description: G2 未锁 → 409 `upstream_unlocked`。不自动物化卡。不含 look-ledger / segment-videos 预读。
       responses:
         '200':
           description: OK
@@ -496,6 +496,7 @@ components:
         usable_for_n4: { type: boolean }
         materialized: { type: boolean }
     N3Envelope:
+      description: Card projection + G3. Does not include look-ledger or segment-videos preroll fields.
       type: object
       required: [ok, node]
       properties:

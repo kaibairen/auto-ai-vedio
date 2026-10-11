@@ -244,24 +244,30 @@ paths:
   /projects/{project_id}/episodes/{ep}/look-ledger:
     get:
       operationId: getLookLedger
-      summary: Read-only look attempt ledger. Does not write consent. Not the drama/n3 envelope.
+      summary: Unique read-only look ledger preroll. Does not write consent. Not the drama/n3 envelope.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
       responses:
         '200':
           description: attempts_used / needs_redraw_consent / has_user_redraw_consent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LookLedgerResponse' }
         '404': { description: episode not found }
   /projects/{project_id}/episodes/{ep}/segment-videos:
     get:
       operationId: getSegmentVideos
-      summary: Read-only segment video ledger. Does not generate. Not the drama/n3 envelope.
+      summary: Unique read-only segment video ledger preroll. Does not generate. Not the drama/n3 envelope.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/EpisodeId'
       responses:
         '200':
           description: episode_stopped + segments[].segment_id + segments[].already_attempted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SegmentVideosResponse' }
         '404': { description: episode not found }
   /projects/{project_id}/cost:
     get:
@@ -435,6 +441,34 @@ components:
         actor: { type: string, description: control-plane user label; not a worker self-fill }
         item_no: { type: integer, minimum: 1 }
         conclusion: { type: string }
+    LookLedgerResponse:
+      type: object
+      additionalProperties: false
+      required: [attempts_used, needs_redraw_consent, has_user_redraw_consent]
+      properties:
+        ok: { type: boolean }
+        attempts_used: { type: integer, minimum: 0, maximum: 2 }
+        needs_redraw_consent: { type: boolean }
+        has_user_redraw_consent:
+          type: boolean
+          description: Read-only summary. Not the consent record. Not for browser grant material.
+    SegmentVideoRow:
+      type: object
+      additionalProperties: false
+      required: [segment_id, already_attempted]
+      properties:
+        segment_id: { type: string }
+        already_attempted: { type: boolean }
+    SegmentVideosResponse:
+      type: object
+      additionalProperties: false
+      required: [episode_stopped, segments]
+      properties:
+        ok: { type: boolean }
+        episode_stopped: { type: boolean }
+        segments:
+          type: array
+          items: { $ref: '#/components/schemas/SegmentVideoRow' }
     CostEntryRequest:
       type: object
       additionalProperties: false

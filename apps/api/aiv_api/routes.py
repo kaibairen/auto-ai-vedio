@@ -862,11 +862,13 @@ async def record_redraw_consent(
 
 @router.get("/projects/{project_id}/episodes/{ep}/look-ledger")
 def get_look_ledger(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    """Unique look-ledger preroll. Read-only summary. Not stuffed into GET drama/n3."""
     return _svc(request).get_look_ledger(project_id, ep)
 
 
 @router.get("/projects/{project_id}/episodes/{ep}/segment-videos")
 def get_segment_videos(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    """Unique segment-videos preroll. Read-only. Not stuffed into GET drama/n3."""
     return _svc(request).get_segment_videos(project_id, ep)
 
 

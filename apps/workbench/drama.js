@@ -1243,6 +1243,7 @@ async function refreshLookLedger() {
     return null;
   }
   try {
+    // Unique preroll GET .../look-ledger. Not the drama/n3 envelope.
     const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/look-ledger`);
     state.lookLedger = data;
     return data;
