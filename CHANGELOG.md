@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.15 — AIV-036 N5b Seedance 2.0 skeleton (docs≠PASS)
+
+BRIEF-AIV-036-P2 N5B-SKELETON. Anchor NOTE-AIV-036-N5B-API-SCOUT-v0 md5 `a11e4b39460139ef8d4dac78ef86768a`. ForcePass=never. **Does not merge to main.** Does **not** POST a paid Job. Does not invent clip bytes / colorbars. N6 out of scope. Stacked on tip after #23 N5a merge.
+
+- New `packages/drama-n5b-core`: Ark Seedance 2.0 tasks client (`POST/GET /contents/generations/tasks`), jsonl→`content[]` map (`2.35:1`→`21:9`, duration {5,8,10}), clips persist writers, gates/g5.
+- Default SKU `doubao-seedance-2-0-260128`. Base `…/api/v3`.
+- CLI: `aiv drama n5b submit|status` · `aiv drama n5b gate g5 --verdict pass|rework`. API: `POST …/drama/n5b/jobs` · `GET …/n5b/status` · `POST …/gates/g5/confirm`.
+- Submit BLOCK: `g4_required` (reads N5a `gate_g4.locked ∧ last_decision=pass`) · `live_job_forbidden` (no `AIV_N5B_ALLOW_LIVE_JOB`) · `n5b_impl_hold` if flag set (still no POST). Mode B look review does not hard-block.
+- G5 ForcePass=never. pass requires real `clips/<shot_id>.mp4` + `.meta.json` (SKU/job_id/md5).
+- Aligns tip `scene_look_forbidden` (no EP01 SCENE EXEMPT leftovers). MRO: `DramaService(DramaBizOps, DramaN5bOps, DramaN2Ops)` with `DramaN5bOps(DramaN5aOps)`.
+- Tests: `tests/drama/test_n5b_*.py` (map + refusals + mock HTTP). Zero paid Job calls.
+- docs: [`docs/drama-n5b.md`](docs/drama-n5b.md) · [`docs/EVIDENCE-AIV-036-N5B-SKELETON.md`](docs/EVIDENCE-AIV-036-N5B-SKELETON.md). **docs≠PASS**.
+
 ## 0.2.14 — AIV-036 N5a min loop (grid + gate G4 · docs≠PASS)
 
 BRIEF-AIV-036-P2 N5a. ForcePass=never. Draft PR only — **does not merge to main**. Does not implement N5b Job / G5 / N6. Does not flip `usable_for_n4`. Does not write colorbars/placeholder grids as success.

@@ -66,6 +66,8 @@ from aiv_drama_n4.models import N4AssembleRequest, N4ValidateRequest
 from aiv_drama_n4.validate import reject_force_keys_n4
 from aiv_drama_n5a.models import N5aGenerateRequest
 from aiv_drama_n5a.validate import reject_force_keys_n5a
+from aiv_drama_n5b.models import N5bSubmitRequest
+from aiv_drama_n5b.validate import reject_force_keys_n5b
 from aiv_schema.models import NODE_DN3
 
 router = APIRouter(prefix="/api/v0")
@@ -163,6 +165,17 @@ async def _raw_n5a(request: Request) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys_n5a(data)
+    return data
+
+
+async def _raw_n5b(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_n5b(data)
     return data
 
 
@@ -737,14 +750,39 @@ async def submit_n5b(
     request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    """N5b is out of this PR. G4 unlocked → 409; otherwise 404 n5b_not_implemented."""
-    raw = await _raw_n5a(request)
-    return _svc(request).submit_n5b(project_id, ep, raw=raw, idempotency_key=idempotency_key)
+    """N5b skeleton submit. Default BLOCK: g4_required / live_job_forbidden. Never POST Job."""
+    raw = await _raw_n5b(request)
+    body = N5bSubmitRequest.model_validate(raw) if raw else N5bSubmitRequest()
+    return _svc(request).submit_n5b(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/drama/n5b/jobs/{job_id}")
+def get_n5b_job(project_id: str, ep: str, job_id: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_n5b_job(project_id, ep, job_id)
 
 
 @router.get("/projects/{project_id}/episodes/{ep}/drama/n5b/status")
 def get_n5b_status(project_id: str, ep: str, request: Request) -> dict[str, Any]:
     return _svc(request).get_n5b_status(project_id, ep)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/gates/g5")
+def get_gate_g5(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_gate_g5(project_id, ep)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/gates/g5/confirm")
+async def confirm_gate_g5(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_actor: str | None = Header(default=None, alias="X-Actor"),
+) -> dict[str, Any]:
+    raw = await _raw_n5b(request)
+    if x_actor and not raw.get("actor"):
+        raw = {**raw, "actor": x_actor}
+    return _svc(request).confirm_gate_g5(project_id, ep, raw, idempotency_key=idempotency_key)
 
 
 @router.post("/projects/{project_id}/episodes/{ep}/segments/{segment_id}/video")
@@ -1074,13 +1112,21 @@ def _bare_n5_isolated() -> JSONResponse:
             "ok": False,
             "error": {
                 "code": "not_found",
-                "message": "bare N5 is not served; use D-N5a /drama/n5a and gates/g4. N5b Job is out of this PR.",
+                "message": "bare N5 is not served; use D-N5a /drama/n5a + gates/g4, or D-N5b /drama/n5b + gates/g5.",
                 "details": {
                     "pipeline_profile": "drama",
-                    "nodes": ["D-N5a"],
+                    "nodes": ["D-N5a", "D-N5b"],
                     "gate": "g4",
-                    "use": ["/drama/n5a/generate", "/drama/n5a/status", "/gates/g4"],
+                    "use": [
+                        "/drama/n5a/generate",
+                        "/drama/n5a/status",
+                        "/gates/g4",
+                        "/drama/n5b/jobs",
+                        "/drama/n5b/status",
+                        "/gates/g5",
+                    ],
                     "n5b_submit": False,
+                    "posted": False,
                 },
             },
         },

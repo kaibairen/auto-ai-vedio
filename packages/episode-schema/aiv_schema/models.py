@@ -79,6 +79,7 @@ class EpisodeLocks(BaseModel):
     g2: bool = False
     g3: bool = False
     g4: bool = False
+    g5: bool = False
 
 
 class EpisodeVersions(BaseModel):
@@ -89,6 +90,7 @@ class EpisodeVersions(BaseModel):
     cards: int = 0
     prompts: int = 0
     grids: int = 0
+    clips: int = 0
     episode: int = 1
 
 

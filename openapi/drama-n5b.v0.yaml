@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: AI Video · Drama D-N5b Seedance 2.0 skeleton API
+  version: 0.1.0
+  description: |
+    单元剧 `pipeline_profile=drama` 的 **D-N5b（出片 Job 骨架）**。
+    锚 NOTE-AIV-036-N5B-API-SCOUT-v0（md5 `a11e4b39460139ef8d4dac78ef86768a`）。
+
+    ## 冻结
+    - ForcePass=never（`force_pass` / `force` / `skip_gate` → 400 `force_pass_forbidden`）
+    - **默认不 POST** ` /contents/generations/tasks`。缺 `AIV_N5B_ALLOW_LIVE_JOB` → 409 `live_job_forbidden`
+    - 门 G4 未锁（且无书面子集）→ 409 `g4_required`
+    - 即便 live 标志 + G4：本骨架仍 409 `n5b_impl_hold`（N5b IMPL HOLD）
+    - 禁假像素/彩条；G5 pass 须真实 clips+meta(SKU/job_id/md5)
+    - Mode B look 审不挡本骨架代码
+    - N6 不做；≠ LOOP-PASS；docs≠PASS
+
+    ## Ark 合同（SCOUT）
+    - Base `https://ark.cn-beijing.volces.com/api/v3`
+    - `POST /contents/generations/tasks` · `GET /contents/generations/tasks/{id}`
+    - 默认 SKU `doubao-seedance-2-0-260128`
+    - `2.35:1` → `ratio=21:9`；duration ∈ {5,8,10}；jsonl → `content[]`
+  x-assign: AIV-036-ENG-N5B-SKELETON
+  x-date: '2026-10-03'
+servers:
+  - url: /api/v0
+tags:
+  - name: N5bJobs
+  - name: GateG5
+paths:
+  /projects/{project_id}/episodes/{ep}/drama/n5b/status:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [N5bJobs]
+      operationId: getDramaN5bStatus
+      summary: N5b 骨架状态（G4/G5/clips/mapped · posted=false）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/N5bStatus'
+              example:
+                ok: true
+                node: D-N5b
+                skeleton: true
+                posted: false
+                live_job_allowed: false
+                g4_locked: false
+                docs_pass: false
+                auto_open_dn6: false
+                mode_b_look_blocks: false
+
+  /projects/{project_id}/episodes/{ep}/drama/n5b/jobs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [N5bJobs]
+      operationId: submitDramaN5b
+      summary: 提交出片 Job（骨架：默认 BLOCK，不 POST）
+      description: |
+        映射 `EP##-prompts.jsonl` → Ark body（dry）。
+        G4 未过 → **409 `g4_required`**。
+        未设 `AIV_N5B_ALLOW_LIVE_JOB` → **409 `live_job_forbidden`**（details 含 mapped）。
+        标志已设 → 仍 **409 `n5b_impl_hold`**，**不** POST create。
+        ForcePass → 400。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/N5bSubmitRequest'
+            example:
+              actor: yangzhou
+              shot: S01
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{project_id}/episodes/{ep}/drama/n5b/jobs/{job_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+      - name: job_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [N5bJobs]
+      operationId: getDramaN5bJob
+      summary: 读 Job（骨架无真实 Job → 404）
+      responses:
+        '404':
+          description: 骨架未创建付费任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /projects/{project_id}/episodes/{ep}/gates/g5:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      tags: [GateG5]
+      operationId: getDramaGateG5
+      summary: 读门 G5
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/G5Envelope'
+
+  /projects/{project_id}/episodes/{ep}/gates/g5/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      tags: [GateG5]
+      operationId: confirmDramaGateG5
+      summary: 人点门 G5（pass|rework）
+      description: |
+        ForcePass → 400。pass 须 G4 locked 且 clips 完整（SKU/job_id/md5 对得上字节）。
+        假像素 → 409 `fake_pixels_forbidden`。缺片 → 409 `clips_required`。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/G5ConfirmRequest'
+            example:
+              decision: rework
+              actor: yangzhou
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/G5Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string }
+    EpisodeId:
+      name: ep
+      in: path
+      required: true
+      schema: { type: string, pattern: '^EP\\d{2,}$' }
+  responses:
+    BadRequest:
+      description: 400
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            ok: false
+            error: { code: force_pass_forbidden, message: ForcePass=never，禁止跳过门 G5 }
+    Conflict:
+      description: 409
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            g4_required:
+              value:
+                ok: false
+                error:
+                  code: g4_required
+                  message: 门 G4 未锁定（或书面子集未过审），禁止 N5b submit
+                  details: { posted: false, block: g4_required }
+            live_job_forbidden:
+              value:
+                ok: false
+                error:
+                  code: live_job_forbidden
+                  message: N5b skeleton：默认禁真 Job POST（未设 AIV_N5B_ALLOW_LIVE_JOB）
+                  details: { posted: false, dry_run: true, block: live_job_forbidden }
+            n5b_impl_hold:
+              value:
+                ok: false
+                error:
+                  code: n5b_impl_hold
+                  message: N5b IMPL HOLD：即便允许 live 标志，本骨架仍不 POST create task
+                  details: { posted: false, skeleton: true }
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - validation
+        - not_found
+        - force_pass_forbidden
+        - g4_required
+        - live_job_forbidden
+        - n5b_impl_hold
+        - clips_required
+        - fake_pixels_forbidden
+        - prompts_required
+        - wrong_profile
+        - provider
+        - duration_out_of_profile
+        - unsupported_tool_profile
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        messages:
+          type: object
+          properties:
+            zh: { type: string }
+            en: { type: string }
+        details: { type: object, additionalProperties: true }
+    ErrorEnvelope:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { $ref: '#/components/schemas/ErrorBody' }
+    N5bSubmitRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actor: { type: string }
+        shot: { type: string, example: S01 }
+        model: { type: string, example: doubao-seedance-2-0-260128 }
+    G5ConfirmRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [pass, rework] }
+        verdict: { type: string, enum: [pass, rework] }
+        actor: { type: string }
+        note: { type: string }
+    N5bStatus:
+      type: object
+      required: [ok, node, posted, skeleton]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        node: { type: string, enum: [D-N5b] }
+        skeleton: { type: boolean, enum: [true] }
+        posted: { type: boolean, enum: [false] }
+        live_job_allowed: { type: boolean }
+        g4_locked: { type: boolean }
+        clips: { type: array, items: { type: object } }
+        mapped: { type: array, items: { type: object } }
+        docs_pass: { type: boolean, enum: [false] }
+        auto_open_dn6: { type: boolean, enum: [false] }
+        mode_b_look_blocks: { type: boolean, enum: [false] }
+    G5Envelope:
+      type: object
+      required: [ok, node, gate]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        node: { type: string, enum: [D-N5b] }
+        gate: { type: object }
+        g4_locked: { type: boolean }
+        clips: { type: array, items: { type: object } }
+        docs_pass: { type: boolean, enum: [false] }
+        auto_open_dn6: { type: boolean, enum: [false] }
