@@ -16,7 +16,7 @@
 
 | 条件 | HTTP | code |
 |------|------|------|
-| G4 未锁且无书面子集 | 409 | `g4_required` |
+| G4 未锁（非 N5a `locked ∧ last_decision=pass`） | 409 | `g4_required` |
 | 未设 `AIV_N5B_ALLOW_LIVE_JOB` | 409 | `live_job_forbidden` |
 | 标志已设（骨架仍不 POST） | 409 | `n5b_impl_hold` |
 | ForcePass 键 | 400 | `force_pass_forbidden` |
@@ -25,7 +25,7 @@
 
 ## Tests (this tip)
 
-`pytest tests` → **280 passed**. N5b-specific: `test_n5b_map.py` (5) · `test_n5b_gates.py` (10) · `test_n5b_api.py` (6). No live Ark Job POST.
+`pytest tests` → **355 passed**, 1 failed (`test_n3_split_look.py::test_combined_gold_sheet_fixture_still_matches` — tip #32 gold-sheet MD5 drift; not this PR). N5b-specific: `test_n5b_map.py` (5) · `test_n5b_gates.py` (10) · `test_n5b_api.py` (6). N5a+N5b+health: 51 passed. No live Ark Job POST.
 
 ## 包
 
