@@ -14,6 +14,12 @@ def _dump_yaml(data: Any) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
 
 
+def _write_if_changed(path: Path, body: str) -> None:
+    if path.is_file() and path.read_text(encoding="utf-8") == body:
+        return
+    atomic_write_text(path, body)
+
+
 def write_episode_cards(episode_dir: Path, n3: dict[str, Any] | None) -> Path | None:
     cards = (n3 or {}).get("cards")
     if not cards:
@@ -28,12 +34,12 @@ def write_episode_cards(episode_dir: Path, n3: dict[str, Any] | None) -> Path | 
         "scenes": [s.get("id") for s in (cards.get("scenes") or [])],
         "note": "本集工作副本；库 libraries/ 为权威源",
     }
-    atomic_write_text(cards_dir / "index.yaml", _dump_yaml(index))
+    _write_if_changed(cards_dir / "index.yaml", _dump_yaml(index))
     for card in list(cards.get("characters") or []) + list(cards.get("scenes") or []):
         ident = card.get("id")
         if not ident:
             continue
-        atomic_write_text(cards_dir / f"{ident}.yaml", _dump_yaml(card))
+        _write_if_changed(cards_dir / f"{ident}.yaml", _dump_yaml(card))
     return cards_dir
 
 

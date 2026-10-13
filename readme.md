@@ -46,6 +46,7 @@ After G2 is locked, materialize CHAR/SCENE working cards from cast, optionally *
 
 ```bash
 aiv drama n3 materialize --project proj_01 --ep EP01 --actor yangzhou
+aiv drama n3 put-scene --project proj_01 --ep EP01 --id SCENE-01 --name 茶水间空间 --one-line 办公茶水 --actor yangzhou
 # export AIV_OPENAI_API_KEY=...  # DeepSeek / OpenAI-compatible; thicken is llm-only
 aiv drama n3 thicken --project proj_01 --ep EP01 --provider llm --actor eng-dogfood-029
 aiv drama n3 generate-look --card fixtures/drama/gold-a/CHAR-01-card.yaml --face-ref /path/to/face.jpg --dry-run

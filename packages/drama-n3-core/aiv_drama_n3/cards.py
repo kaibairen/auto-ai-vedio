@@ -1,4 +1,8 @@
-"""Materialize per-episode CHAR/SCENE working cards from cast only."""
+"""Materialize per-episode CHAR/SCENE working cards from cast only.
+
+Full materialize rebuilds CHAR+SCENE from cast. Opt-in upsert_one_scene_card
+creates or updates a single SCENE without touching CHAR cards.
+"""
 
 from __future__ import annotations
 
@@ -194,6 +198,96 @@ def materialize_cards(
         scenes.append(card_from_cast_row(row, kind="scene", used=used_scenes, previous=prev_scenes.get(ident)))
 
     return characters, scenes, skipped
+
+
+def resolve_scene_row(
+    ident: str,
+    cast: dict[str, Any] | None,
+    *,
+    name: str | None = None,
+    one_line: str | None = None,
+    previous: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Merge one SCENE row from request / cast / existing card. Does not invent CHAR rows."""
+    existing = next((s for s in (cast or {}).get("scenes") or [] if s.get("id") == ident), None)
+    prev = previous or {}
+    resolved_name = (name or "").strip() or (existing or {}).get("name") or prev.get("name") or ""
+    resolved_one_line = (
+        (one_line or "").strip() or (existing or {}).get("one_line") or prev.get("one_line") or ""
+    )
+    lib = None
+    if existing and existing.get("library_ref"):
+        lib = deepcopy(existing.get("library_ref"))
+    elif prev.get("library_ref"):
+        lib = deepcopy(prev.get("library_ref"))
+    return {
+        "id": ident,
+        "name": resolved_name,
+        "one_line": resolved_one_line,
+        "library_ref": lib,
+    }
+
+
+def _apply_used_scene_tags(card: dict[str, Any], used: set[str]) -> None:
+    ident = card.get("id") or ""
+    tags = list(card.get("status_tags") or [])
+    if ident not in used and "预挂未上场" not in tags:
+        tags.append("预挂未上场")
+    if ident in used:
+        tags = [t for t in tags if t != "预挂未上场"]
+    card["status_tags"] = tags
+
+
+def upsert_one_scene_card(
+    ident: str,
+    cast: dict[str, Any] | None,
+    storyboard: dict[str, Any] | None,
+    previous: dict[str, Any] | None = None,
+    *,
+    name: str | None = None,
+    one_line: str | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any], list[dict[str, Any]]]:
+    """Create or update one SCENE working card. Never rebuilds CHAR cards.
+
+    Storyboard scene_id is a used-set only; a missing cast.scenes row is allowed
+    when name + one_line can be resolved (request, existing card, or cast).
+    Returns (card_or_none, cast_row, skipped_warnings).
+    """
+    _used_chars, used_scenes = _used_ids_from_storyboard(storyboard)
+    prev_scenes = {s["id"]: s for s in ((previous or {}).get("scenes") or []) if s.get("id")}
+    prev = prev_scenes.get(ident)
+    row = resolve_scene_row(ident, cast, name=name, one_line=one_line, previous=prev)
+    skipped: list[dict[str, Any]] = []
+    if not (row.get("name") or "").strip() or not (row.get("one_line") or "").strip():
+        return None, row, skipped
+    if skip_cast_row(row, kind="scene") or not is_scene_id(ident):
+        skipped.append(
+            {
+                "severity": "warn",
+                "code": "b_class_skipped",
+                "message": "不合规 SCENE 不开场景卡",
+                "id": ident,
+                "name": row.get("name"),
+            }
+        )
+        return None, row, skipped
+    if prev:
+        card = deepcopy(prev)
+        card["id"] = ident
+        card["kind"] = "scene"
+        if row.get("name"):
+            card["name"] = row["name"]
+        if row.get("one_line"):
+            card["one_line"] = row["one_line"]
+        if row.get("library_ref") is not None:
+            card["library_ref"] = deepcopy(row.get("library_ref"))
+            card["binding"] = binding_label(row.get("library_ref"))
+            card["origin"] = "attached"
+        _apply_used_scene_tags(card, used_scenes)
+        card["template_status"] = card.get("template_status") or "deferred"
+        card["template_path"] = None
+        return card, row, skipped
+    return card_from_cast_row(row, kind="scene", used=used_scenes, previous=None), row, skipped
 
 
 def all_cards(n3: dict[str, Any] | None) -> list[dict[str, Any]]:

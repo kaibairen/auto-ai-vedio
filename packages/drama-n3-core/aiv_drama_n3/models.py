@@ -12,6 +12,18 @@ class N3MaterializeRequest(BaseModel):
     unlock_edit: bool = False
 
 
+class N3PutSceneRequest(BaseModel):
+    """Opt-in create/update of one SCENE working card. Does not rematerialize CHAR."""
+
+    model_config = {"extra": "forbid"}
+
+    id: str = Field(min_length=1)
+    name: str | None = None
+    one_line: str | None = None
+    actor: str | None = None
+    unlock_edit: bool = False
+
+
 class N3ThickenRequest(BaseModel):
     """Text-only CHAR/SCENE thicken. provider=llm only (no fixture success path)."""
 

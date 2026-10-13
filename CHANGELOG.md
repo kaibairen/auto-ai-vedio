@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.13 — N3 put-scene one SCENE work card (docs≠PASS)
+
+Opt-in create/update of **one** episode SCENE working card without rematerializing CHAR cards or dropping looks. Full `aiv drama n3 materialize` still rebuilds every CHAR/SCENE from cast. ForcePass=never. Does **not** merge to main. Does not call image APIs or thicken LLM.
+
+- API: `POST .../drama/n3/cards/put-scene`. CLI: `aiv drama n3 put-scene --id SCENE-*`.
+- Storyboard `scene_id` remains a used-set; missing `cast.scenes` can be filled from `--name` / `--one-line`.
+- Character card yaml and `looks` stay unchanged. No episode character/scene proper names baked into code.
+- Tests: `tests/drama/test_n3_put_scene.py`. OpenAPI stays **0.1.x**. **docs≠PASS**.
+
 ## 0.2.12 — split full-body / heads look generate (docs≠PASS)
 
 `generate-look` stays the Gold-A 3:2 combined 3+6 sheet. Two new standalone CLI commands assemble and generate **separate** images so full bodies are not cropped by the head grid.
