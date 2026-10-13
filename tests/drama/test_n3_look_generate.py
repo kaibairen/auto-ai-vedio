@@ -233,7 +233,7 @@ def test_ark_body_minimal_no_sequential():
     assert ARK_IMAGES_URL == "https://ark.cn-beijing.volces.com/api/v3/images/generations"
 
 
-def test_sku_fallback_then_success():
+def test_single_sku_no_fallback():
     posts = []
 
     def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
@@ -241,25 +241,29 @@ def test_sku_fallback_then_success():
         assert "sequential_image_generation" not in json
         assert "Authorization" in headers
         assert "sk-live" not in str(json)
-        if json["model"] != "doubao-seedream-5-0-pro-260628":
-            return _Resp(400, text="model not found")
-        return _Resp(200, payload={"data": [{"url": "https://cdn.example/sheet.jpg"}]})
+        return _Resp(400, text="model not found")
 
     def fake_get(url, timeout=None):
-        assert url == "https://cdn.example/sheet.jpg"
-        return _Resp(200, content=b"jpeg-bytes")
+        raise AssertionError("must not download after a rejected SKU")
 
-    out = generate_seedream_sheet(
-        api_key="sk-live",
-        prompt="p",
-        image_data_url="data:image/jpeg;base64,QQ==",
-        post=fake_post,
-        get=fake_get,
-    )
-    assert out["model"] == "doubao-seedream-5-0-pro-260628"
-    assert out["bytes"] == b"jpeg-bytes"
-    assert posts[0] == SEEDREAM_SKU_PRIMARY
-    assert "doubao-seedream-5-0-pro-260628" in posts
+    try:
+        generate_seedream_sheet(
+            api_key="sk-live",
+            prompt="p",
+            image_data_url="data:image/jpeg;base64,QQ==",
+            models=SEEDREAM_SKU_CHAIN,
+            post=fake_post,
+            get=fake_get,
+        )
+    except AppError as exc:
+        assert exc.code == "provider"
+        assert exc.status_code == 502
+        assert exc.details["attempts"] == [
+            {"model": SEEDREAM_SKU_PRIMARY, "http": 400, "status": "rejected", "image": False}
+        ]
+    else:
+        raise AssertionError("expected AppError")
+    assert posts == [SEEDREAM_SKU_PRIMARY]
 
 
 def test_dry_run_writes_prompt_not_sheet(tmp_path, monkeypatch):

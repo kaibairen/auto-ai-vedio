@@ -163,6 +163,7 @@ def generate_gold_a_sheet(
         api_key=api_key,
         prompt=prompt,
         image_data_url=data_url,
+        models=(SEEDREAM_SKU_PRIMARY,),
         endpoint=endpoint,
         post=post,
         get=get,

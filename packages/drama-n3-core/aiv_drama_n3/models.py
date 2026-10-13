@@ -36,6 +36,7 @@ class N3GenerateLookRequest(BaseModel):
     out_dir: str | None = None
     actor: str | None = None
     unlock_edit: bool = False
+    user_consent: bool = False  # ignored; consent must already be recorded on the episode
 
 
 class N3AttachRequest(BaseModel):

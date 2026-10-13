@@ -5,7 +5,26 @@ from typing import Any
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
+from aiv_drama.biz import reject_blocking_boolean, reject_force_keys_biz
+from aiv_drama.biz_models import (
+    AudioBedRequest,
+    AudioVoiceRequest,
+    CostEntryRequest,
+    OpenItemCloseRequest,
+    OpenItemConclusionRequest,
+    OpenItemConsentRequest,
+    OpenItemCreateRequest,
+    RedrawConsentRequest,
+    OutputRegisterRequest,
+    ReviewCreateRequest,
+    RoughCutRequest,
+    SeamMeasureRequest,
+    SegmentVideoRequest,
+    SubtitleWriteRequest,
+    UserGrantRequest,
+)
 from aiv_drama.errors import AppError
+from aiv_drama.secrets import reject_retry_flag, reject_secret_fields, require_user_grant
 from aiv_drama.models import (
     AttachRequest,
     CastWrite,
@@ -97,6 +116,8 @@ async def _raw_n3_look(request: Request) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AppError(400, "validation", "JSON object required")
     reject_force_keys_n3(data)
+    reject_secret_fields(data)
+    reject_retry_flag(data)
     if "sequential_image_generation" in data:
         raise AppError(
             400,
@@ -105,6 +126,18 @@ async def _raw_n3_look(request: Request) -> dict[str, Any]:
             field="sequential_image_generation",
             node=NODE_DN3,
         )
+    return data
+
+
+async def _raw_biz(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(data, dict):
+        raise AppError(400, "validation", "JSON object required")
+    reject_force_keys_biz(data)
+    reject_secret_fields(data)
     return data
 
 
@@ -627,6 +660,232 @@ async def assemble_n4(
     raw = await _raw_n4(request)
     body = N4AssembleRequest.model_validate(raw) if raw else N4AssembleRequest()
     return _svc(request).assemble_n4(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/segments/{segment_id}/video")
+async def generate_segment_video(
+    project_id: str,
+    ep: str,
+    segment_id: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = SegmentVideoRequest.model_validate(raw)
+    return _svc(request).generate_segment_video(
+        project_id, ep, segment_id, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/outputs")
+async def register_output(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = OutputRegisterRequest.model_validate(raw)
+    return _svc(request).register_output(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/rough-cuts")
+async def create_rough_cut(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = RoughCutRequest.model_validate(raw)
+    return _svc(request).create_rough_cut(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/rough-cuts/{version}/seams")
+async def measure_seams(
+    project_id: str,
+    ep: str,
+    version: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = SeamMeasureRequest.model_validate(raw)
+    return _svc(request).measure_seams(
+        project_id, ep, version, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.put("/projects/{project_id}/episodes/{ep}/subtitles/{version}")
+async def put_subtitles(
+    project_id: str,
+    ep: str,
+    version: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = SubtitleWriteRequest.model_validate(raw)
+    return _svc(request).put_subtitles(
+        project_id, ep, version, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/audio/bed")
+async def create_audio_bed(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = AudioBedRequest.model_validate(raw)
+    return _svc(request).create_audio_bed(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/audio/voice")
+async def place_voice_line(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = AudioVoiceRequest.model_validate(raw)
+    return _svc(request).place_voice_line(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/reviews")
+async def create_review(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = ReviewCreateRequest.model_validate(raw)
+    return _svc(request).create_review(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items")
+async def create_open_item(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    reject_blocking_boolean(raw)
+    body = OpenItemCreateRequest.model_validate(raw)
+    return _svc(request).create_open_item(project_id, ep, body, raw=raw, idempotency_key=idempotency_key)
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/consent")
+async def record_open_item_consent(
+    project_id: str,
+    ep: str,
+    item_no: int,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = OpenItemConsentRequest.model_validate(raw)
+    return _svc(request).record_open_item_consent(
+        project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/conclusion")
+async def record_open_item_conclusion(
+    project_id: str,
+    ep: str,
+    item_no: int,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = OpenItemConclusionRequest.model_validate(raw)
+    return _svc(request).record_open_item_conclusion(
+        project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/open-items/{item_no}/close")
+async def close_open_item(
+    project_id: str,
+    ep: str,
+    item_no: int,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = OpenItemCloseRequest.model_validate(raw)
+    return _svc(request).close_open_item(
+        project_id, ep, item_no, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/user-grants")
+async def record_user_grant(
+    project_id: str,
+    ep: str,
+    request: Request,
+    x_aiv_user_grant: str | None = Header(default=None, alias="X-AIV-User-Grant"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    require_user_grant(x_aiv_user_grant)
+    body = UserGrantRequest.model_validate(raw)
+    return _svc(request).record_user_grant(
+        project_id,
+        ep,
+        body,
+        raw=raw,
+        grant=x_aiv_user_grant,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post("/projects/{project_id}/episodes/{ep}/redraw-consent")
+async def record_redraw_consent(
+    project_id: str,
+    ep: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = RedrawConsentRequest.model_validate(raw)
+    return _svc(request).record_redraw_consent(
+        project_id, ep, body, raw=raw, idempotency_key=idempotency_key
+    )
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/look-ledger")
+def get_look_ledger(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    """Unique look-ledger preroll. Read-only summary. Not stuffed into GET drama/n3."""
+    return _svc(request).get_look_ledger(project_id, ep)
+
+
+@router.get("/projects/{project_id}/episodes/{ep}/segment-videos")
+def get_segment_videos(project_id: str, ep: str, request: Request) -> dict[str, Any]:
+    """Unique segment-videos preroll. Read-only. Not stuffed into GET drama/n3."""
+    return _svc(request).get_segment_videos(project_id, ep)
+
+
+@router.get("/projects/{project_id}/cost")
+def get_project_cost(project_id: str, request: Request) -> dict[str, Any]:
+    return _svc(request).get_project_cost(project_id)
+
+
+@router.post("/projects/{project_id}/cost/entries")
+async def add_cost_entry(
+    project_id: str,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    raw = await _raw_biz(request)
+    body = CostEntryRequest.model_validate(raw)
+    return _svc(request).add_cost_entry(project_id, body, raw=raw, idempotency_key=idempotency_key)
 
 
 def _koubo_isolated() -> JSONResponse:

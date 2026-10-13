@@ -347,6 +347,9 @@ class DramaN2Ops:
         if cached:
             return cached
         rec = self._rec(project_id, ep)
+        require_budget = getattr(self, "_require_generation_budget", None)
+        if callable(require_budget):
+            require_budget(project_id, rec["episode"]["episode_id"])
         self._require_g1b_for_n2(rec)
         req = body or StoryboardGenerateRequest()
         sb = rec.get("storyboard") or self._empty_storyboard(rec)

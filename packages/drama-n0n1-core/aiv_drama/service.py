@@ -5,6 +5,7 @@ import unicodedata
 from copy import deepcopy
 from typing import Any
 
+from aiv_drama.biz import DramaBizOps
 from aiv_drama.config import SHOT_CAP_HARD, Settings
 from aiv_drama.copy_contract import catalog_public, evaluate
 from aiv_drama.errors import AppError
@@ -116,7 +117,7 @@ def lane_identity_warnings(lane: str, cards: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-class DramaService(DramaN4Ops, DramaN2Ops):
+class DramaService(DramaBizOps, DramaN4Ops, DramaN2Ops):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = JsonStore(settings)
@@ -130,6 +131,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         proj = self.store.state["projects"].get(project_id)
         if not proj:
             raise AppError(404, "not_found", "project not found", project_id=project_id)
+        self._ensure_project_cost(proj)
         return proj
 
     def _rec(self, project_id: str, ep: str) -> dict[str, Any]:
@@ -140,6 +142,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         self._ensure_n2_fields(rec)
         self._ensure_n3_fields(rec)
         self._ensure_n4_fields(rec)
+        self._ensure_biz_fields(rec)
         return rec
 
     def _require_active_project(self, project_id: str) -> dict[str, Any]:
@@ -321,16 +324,53 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         if rec is not None:
             self._project_disk(rec)
 
+    @staticmethod
+    def _norm_idempotency_key(key: str | None) -> str | None:
+        if key is None:
+            return None
+        text = str(key).strip()
+        return text or None
+
     def _idem_get(self, key: str | None, op: str) -> Any | None:
+        key = self._norm_idempotency_key(key)
         if not key:
             return None
-        return self.store.state["idempotency"].get(f"{op}:{key}")
+        cached = self.store.state["idempotency"].get(f"{op}:{key}")
+        if isinstance(cached, dict) and cached.get("__app_error__"):
+            payload = cached["__app_error__"]
+            raise AppError(
+                int(payload.get("status_code") or 500),
+                str(payload.get("code") or "conflict"),
+                str(payload.get("message") or "cached error"),
+                messages=payload.get("messages"),
+                **(payload.get("details") or {}),
+            )
+        return cached
 
     def _idem_put(self, key: str | None, op: str, value: Any) -> Any:
+        key = self._norm_idempotency_key(key)
         if key:
             self.store.state["idempotency"][f"{op}:{key}"] = value
             self._save()
         return value
+
+    def _idem_put_error(self, key: str | None, op: str, exc: AppError) -> None:
+        key = self._norm_idempotency_key(key)
+        if not key:
+            return
+        self._idem_put(
+            key,
+            op,
+            {
+                "__app_error__": {
+                    "status_code": exc.status_code,
+                    "code": exc.code,
+                    "message": exc.message,
+                    "messages": exc.messages,
+                    "details": dict(exc.details or {}),
+                }
+            },
+        )
 
     # ----- envelopes ----------------------------------------------------------------
 
@@ -1144,6 +1184,7 @@ class DramaService(DramaN4Ops, DramaN2Ops):
         if cached:
             return cached
         rec = self._rec(project_id, validate_ep(ep))
+        self._require_generation_budget(project_id, rec["episode"]["episode_id"])
         self._require_unlock(rec, unlock_edit=False)
         self._require_intent_for_generate(rec)
         brief = rec.get("brief")

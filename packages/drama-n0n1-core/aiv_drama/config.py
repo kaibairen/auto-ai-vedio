@@ -28,17 +28,17 @@ SHOT_CAP_HARD = 12
 ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 
 
-def read_ark_api_key() -> str | None:
-    """Read Ark key from env or ~/.config/aiv/ARK_API_KEY. Never log the value."""
-    for env in ("ARK_API_KEY", "AIV_ARK_API_KEY"):
+def _read_secret_from_env_or_file(env_names: tuple[str, ...], file_env: str, default_name: str) -> str | None:
+    """Read a secret from env or ~/.config/aiv/<default_name>. Never log the value."""
+    for env in env_names:
         val = (os.environ.get(env) or "").strip()
         if val:
             return val
-    file_hint = (os.environ.get("ARK_API_KEY_FILE") or "").strip()
+    file_hint = (os.environ.get(file_env) or "").strip()
     candidates: list[Path] = []
     if file_hint:
         candidates.append(Path(file_hint).expanduser())
-    candidates.append(Path.home() / ".config" / "aiv" / "ARK_API_KEY")
+    candidates.append(Path.home() / ".config" / "aiv" / default_name)
     for path in candidates:
         try:
             if path.is_file():
@@ -48,6 +48,20 @@ def read_ark_api_key() -> str | None:
         except OSError:
             continue
     return None
+
+
+def read_ark_api_key() -> str | None:
+    """Read Ark key from env or ~/.config/aiv/ARK_API_KEY. Never log the value."""
+    return _read_secret_from_env_or_file(("ARK_API_KEY", "AIV_ARK_API_KEY"), "ARK_API_KEY_FILE", "ARK_API_KEY")
+
+
+def read_user_grant_secret() -> str | None:
+    """Read user-grant secret from env or ~/.config/aiv/AIV_USER_GRANT_SECRET. Never log."""
+    return _read_secret_from_env_or_file(
+        ("AIV_USER_GRANT_SECRET",),
+        "AIV_USER_GRANT_SECRET_FILE",
+        "AIV_USER_GRANT_SECRET",
+    )
 
 
 def skill_dir_relpath(lane: str) -> str:
@@ -93,6 +107,7 @@ class Settings:
     named_cast_check: str = "warn"
     ark_api_key: str | None = None
     ark_base_url: str = ARK_DEFAULT_BASE_URL
+    user_grant_secret: str | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -121,6 +136,7 @@ class Settings:
             ark_base_url=(
                 os.environ.get("ARK_BASE_URL") or os.environ.get("AIV_ARK_BASE_URL") or ARK_DEFAULT_BASE_URL
             ).rstrip("/"),
+            user_grant_secret=read_user_grant_secret(),
         )
 
     def skill_relpath(self, lane: str) -> str:

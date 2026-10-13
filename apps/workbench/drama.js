@@ -12,6 +12,8 @@ const state = {
   g1bLocked: false,
   g2: null,
   n3: null,
+  cost: null,
+  lookLedger: null,
   selectedShot: null,
 };
 
@@ -283,11 +285,39 @@ function applyIntent(data) {
     confirmBtn.disabled = !laneOk || !titleOk || !heroOk || Boolean(data.conflict);
   }
 }
-async function api(method, path, body, headers) {
+/** Keyless workbench: Content-Type only. No caller headers. No grant or secret. */
+function workbenchHeaders() {
+  return { "Content-Type": "application/json" };
+}
+
+function workbenchBody(body) {
+  if (body === undefined || body === null || typeof body !== "object") return body;
+  const clean = {};
+  for (const [key, value] of Object.entries(body)) {
+    const name = String(key).toLowerCase();
+    if (
+      name.includes("grant") ||
+      name.includes("api_key") ||
+      name === "secret" ||
+      name === "authorization" ||
+      name === "bearer"
+    ) {
+      continue;
+    }
+    clean[key] = value;
+  }
+  return clean;
+}
+
+async function api(method, path, body) {
+  if (/user-grants/i.test(String(path))) {
+    showBanner("privileged grant route is not available in the workbench", false, "error");
+    return { ok: false, error: { code: "unauthorized", message: "not available in the workbench" } };
+  }
   const res = await fetch(`/api/v0${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...(headers || {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: workbenchHeaders(),
+    body: body === undefined ? undefined : JSON.stringify(workbenchBody(body)),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -1017,15 +1047,76 @@ function isG2Ready() {
   const confirmed = Boolean(sb?.confirmed_by || g2?.actor);
   return Boolean(gateOk && confirmed && sb && sb.locked === true);
 }
+const LOOK_ATTEMPT_CAP = 2;
+function usableCostSnapshot(cost) {
+  return Boolean(
+    cost &&
+    typeof cost === "object" &&
+    typeof cost.blocked === "boolean" &&
+    Number.isFinite(Number(cost.remaining)),
+  );
+}
+function usableLookLedger(ledger) {
+  return Boolean(
+    ledger &&
+    typeof ledger === "object" &&
+    Number.isFinite(Number(ledger.attempts_used)) &&
+    typeof ledger.needs_redraw_consent === "boolean" &&
+    typeof ledger.has_user_redraw_consent === "boolean",
+  );
+}
+function lookBlockedByCost(cost) {
+  if (!usableCostSnapshot(cost)) return true;
+  return cost.blocked === true || Number(cost.remaining) <= 0;
+}
+function lookBlockedByLedger(ledger) {
+  if (!usableLookLedger(ledger)) return true;
+  if (Number(ledger.attempts_used) >= LOOK_ATTEMPT_CAP) return true;
+  return ledger.needs_redraw_consent && !ledger.has_user_redraw_consent;
+}
+function lookPrerollBlocksGenerate() {
+  return lookBlockedByCost(state.cost) || lookBlockedByLedger(state.lookLedger);
+}
+function paintHLookGateHint() {
+  const el = $("h-look-gate-hint");
+  if (!el) return;
+  if (!isG2Ready()) {
+    el.hidden = true;
+    return;
+  }
+  if (!usableCostSnapshot(state.cost) || !usableLookLedger(state.lookLedger)) {
+    el.hidden = false;
+    el.textContent = "费用或定妆账未读成功，禁止合板。";
+    return;
+  }
+  if (lookBlockedByCost(state.cost)) {
+    el.hidden = false;
+    el.textContent = "费用已满，禁止再打供应商。";
+    return;
+  }
+  const ledger = state.lookLedger;
+  if (Number(ledger.attempts_used) >= LOOK_ATTEMPT_CAP) {
+    el.hidden = false;
+    el.textContent = "定妆已达累计 2 次上限（含失败）。";
+    return;
+  }
+  if (ledger.needs_redraw_consent && !ledger.has_user_redraw_consent) {
+    el.hidden = false;
+    el.textContent = "上次重抽已失败，须事先记下的用户同意。工作台不代写同意。";
+    return;
+  }
+  el.hidden = true;
+}
 function applyHWriteGate() {
   const ready = isG2Ready();
   const g3Locked = isG3Locked(state.n3);
   const mat = $("btn-n3-mat");
   if (mat) mat.disabled = !ready || g3Locked;
   const lookBtn = $("btn-n3-look");
-  if (lookBtn) lookBtn.disabled = !ready;
+  if (lookBtn) lookBtn.disabled = !ready || lookPrerollBlocksGenerate();
   const hint = $("h-g2-hint");
   if (hint) hint.hidden = ready;
+  paintHLookGateHint();
 }
 function refChip(card) {
   const lib = card?.library_ref;
@@ -1150,9 +1241,56 @@ async function refreshG2State() {
     return null;
   }
 }
+async function refreshCostBar() {
+  const el = $("h-cost-bar");
+  if (!state.projectId) {
+    state.cost = null;
+    if (el) el.textContent = "费用：未建集";
+    return null;
+  }
+  try {
+    const data = await api("GET", `/projects/${state.projectId}/cost`);
+    if (!usableCostSnapshot(data)) {
+      state.cost = null;
+      if (el) el.textContent = "费用：读取失败";
+      return null;
+    }
+    state.cost = data;
+    if (el) {
+      const blocked = data.blocked ? " · blocked" : "";
+      el.textContent = `费用 spent=${data.spent} / cap=${data.cap} · remaining=${data.remaining}${blocked}`;
+    }
+    return data;
+  } catch {
+    state.cost = null;
+    if (el) el.textContent = "费用：读取失败";
+    return null;
+  }
+}
+async function refreshLookLedger() {
+  if (!state.projectId) {
+    state.lookLedger = null;
+    return null;
+  }
+  try {
+    // Unique preroll GET .../look-ledger. Not the drama/n3 envelope.
+    const data = await api("GET", `/projects/${state.projectId}/episodes/${state.ep}/look-ledger`);
+    if (!usableLookLedger(data)) {
+      state.lookLedger = null;
+      return null;
+    }
+    state.lookLedger = data;
+    return data;
+  } catch {
+    state.lookLedger = null;
+    return null;
+  }
+}
 async function refreshScreenH() {
   await refreshEpisodeChrome();
   await refreshG2State();
+  await refreshCostBar();
+  await refreshLookLedger();
   applyHWriteGate();
   if (!state.projectId) {
     paintHFromEnvelope({ gate: { locked: false }, usable_for_n4: false, cards: { characters: [], scenes: [] } });
@@ -1187,8 +1325,18 @@ if ($("btn-n3-get")) {
 }
 if ($("btn-n3-look")) {
   $("btn-n3-look").onclick = async () => {
-    if (!isG2Ready() || !state.projectId) {
+    if (!state.projectId) {
       applyHWriteGate();
+      return;
+    }
+    if (!isG2Ready() || lookPrerollBlocksGenerate()) {
+      applyHWriteGate();
+      return;
+    }
+    await refreshCostBar();
+    await refreshLookLedger();
+    applyHWriteGate();
+    if (!isG2Ready() || lookPrerollBlocksGenerate()) {
       return;
     }
     const ident = $("h-look-char")?.value;
@@ -1208,6 +1356,9 @@ if ($("btn-n3-look")) {
       payload,
     );
     paintHFromEnvelope(data);
+    await refreshLookLedger();
+    await refreshCostBar();
+    applyHWriteGate();
   };
 }
 async function confirmG3(decision) {
