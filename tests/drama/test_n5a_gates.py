@@ -1,4 +1,4 @@
-"""AIV-036 N5a min loop. ForcePass=never. No fake pixels. Mode B / EP01 EXEMPT nails."""
+"""AIV-036 N5a min loop. ForcePass=never. No fake pixels. Mode B. SCENE G4 pending/hard."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from aiv_cli.cli import app
 from aiv_drama.errors import AppError
 from aiv_drama_n3.models import N3MaterializeRequest
 from aiv_drama_n5a.checklist import build_checklist
-from aiv_drama_n5a.exempt import SCENE_NA_REASON, scene_look_exempt
+from aiv_drama_n5a.exempt import scene_look_exempt
 from aiv_drama_n5a.image import assert_real_image_bytes, generate_grid_image
 from aiv_drama_n5a.look_mode import MODE_B, look_mode_for_char, missing_face_is_hard_block
 from aiv_drama_n5a.models import N5aGenerateRequest
@@ -144,16 +144,18 @@ def test_mock_api_fake_bytes_do_not_write(svc, data_dir, monkeypatch):
     assert not list(grids.glob("*_grid_*.png")) if grids.exists() else True
 
 
-def test_ep01_scene_exempt_g4_item_na(svc, monkeypatch):
+def test_ep01_scene_g4_item_pending_hard(svc, monkeypatch):
     pid = _setup_mode_b(svc)
     rec = svc._rec(pid, "EP01")
-    assert scene_look_exempt(rec, "EP01") is True
+    assert scene_look_exempt(rec, "EP01") is False
+    rec["episode"]["scene_look_exempt"] = True
+    assert scene_look_exempt(rec, "EP01") is False
     monkeypatch.setattr("aiv_drama_n5a.ops.generate_grid_image", _mock_grid())
     env = svc.generate_n5a_grid(pid, "EP01", N5aGenerateRequest(actor="yangzhou"), raw={"actor": "yangzhou"})
     items = env["checklist"]["items"]
-    assert items["G4"]["verdict"] == SCENE_NA_REASON
-    assert items["G4"]["hard"] is False
-    assert env["scene_exempt"] is True
+    assert items["G4"]["verdict"] == "pending"
+    assert items["G4"]["hard"] is True
+    assert env["scene_exempt"] is False
     for ident in ("G1", "G2", "G3", "G9"):
         assert items[ident]["verdict"] == "pending"
         assert items[ident]["hard"] is True
@@ -254,7 +256,9 @@ def test_http_n5a_flow(client, monkeypatch):
     assert body["written"] is True
     assert body["layout"] == 9
     assert body["md5"]
-    assert body["checklist"]["items"]["G4"]["verdict"] == SCENE_NA_REASON
+    assert body["checklist"]["items"]["G4"]["verdict"] == "pending"
+    assert body["checklist"]["items"]["G4"]["hard"] is True
+    assert body["scene_exempt"] is False
     assert body["mode_b_face_required"] is False
     assert body["auto_open_dn5b"] is False
     g4 = client.post(
@@ -307,21 +311,25 @@ def test_health_and_openapi_n5a(client):
     assert "force_pass_forbidden" in text
     assert "missing_prompts_jsonl" in text
     assert "Mode B" in text
-    assert "SCENE EXEMPT" in text or "SCENE-LOOK-EXEMPT" in text or "N/A" in text
+    assert "scene_look_forbidden" in text or "CHAR-only" in text or "检 G4" in text
+    assert "SCENE EXEMPT" not in text
+    assert "SCENE-LOOK-EXEMPT" not in text
     assert "n5b_not_implemented" in text
     assert "fake" in text.lower() or "假像素" in text
 
 
-def test_checklist_builder_exempt_other_ep():
-    rec = {"episode": {"episode_id": "EP02"}}
-    sheet = build_checklist(
-        rec=rec,
-        ep="EP02",
-        layout=9,
-        grid_relpath="episodes/EP02/grids/EP02_grid_9_v1.png",
-        md5="abc",
-        sku="x",
-    )
-    assert sheet["items"]["G4"]["verdict"] == "pending"
-    assert sheet["scene_exempt"] is False
-    assert sheet["threshold_hard_gated"] is False
+def test_checklist_builder_g4_pending_hard_any_ep():
+    for ep in ("EP01", "EP02"):
+        rec = {"episode": {"episode_id": ep, "scene_look_exempt": True}}
+        sheet = build_checklist(
+            rec=rec,
+            ep=ep,
+            layout=9,
+            grid_relpath=f"episodes/{ep}/grids/{ep}_grid_9_v1.png",
+            md5="abc",
+            sku="x",
+        )
+        assert sheet["items"]["G4"]["verdict"] == "pending"
+        assert sheet["items"]["G4"]["hard"] is True
+        assert sheet["scene_exempt"] is False
+        assert sheet["threshold_hard_gated"] is False

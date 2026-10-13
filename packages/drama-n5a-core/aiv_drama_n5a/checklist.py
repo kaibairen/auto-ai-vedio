@@ -1,7 +1,8 @@
 """CAM 检 G1–G10 checklist (CHECKLIST-AIV-036-N5-CAM).
 
 门 G4 ≠ 检 G1–G10. ≥7/9 is documented, **not** hard-gated this IMPL.
-SCENE EXEMPT → 检 G4 场项 N/A；CHAR 身份项仍硬.
+检 G4 (场) is pending/hard for every episode (no EP01 SCENE EXEMPT).
+CHAR identity items stay hard.
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from aiv_drama_n5a.exempt import SCENE_NA_REASON, scene_exempt_label, scene_look_exempt
+from aiv_drama_n5a.exempt import scene_exempt_label, scene_look_exempt
 
 CHECK_G_ITEMS: tuple[dict[str, Any], ...] = (
     {"id": "G1", "item": "脸一致", "group": "char_identity", "hard": True, "veto": True},
@@ -35,7 +36,7 @@ THRESHOLD_NOTE = (
     "本 IMPL **未硬钉** ≥7/9；狗粮以无硬伤 + 记录抽检出门。"
 )
 VERDICT_UNPINNED = "PASS(建议阈未钉)"
-ALLOWED_ITEM_VERDICTS = frozenset({"PASS", "FAIL", "N/A", "pending", SCENE_NA_REASON})
+ALLOWED_ITEM_VERDICTS = frozenset({"PASS", "FAIL", "N/A", "pending"})
 
 
 def _item_row(spec: dict[str, Any], *, verdict: str, reason: str | None = None) -> dict[str, Any]:
@@ -67,11 +68,7 @@ def build_checklist(
     exempt = scene_look_exempt(rec, ep)
     items: dict[str, Any] = {}
     for spec in CHECK_G_ITEMS:
-        if spec["id"] == "G4" and exempt:
-            items[spec["id"]] = _item_row(spec, verdict=SCENE_NA_REASON, reason=scene_exempt_label(rec, ep))
-            items[spec["id"]]["hard"] = False
-        else:
-            items[spec["id"]] = _item_row(spec, verdict="pending")
+        items[spec["id"]] = _item_row(spec, verdict="pending")
     pa = {row["id"]: "pending" for row in PRECHECK_ITEMS}
     if precheck:
         pa.update(precheck)
@@ -141,8 +138,6 @@ def veto_blocks_pass(checklist: dict[str, Any] | None) -> list[str]:
         row = items.get(spec["id"]) or {}
         verdict = str(row.get("verdict") or "")
         if verdict.upper() != "FAIL":
-            continue
-        if spec["id"] == "G4" and verdict in {SCENE_NA_REASON, "N/A"}:
             continue
         if spec.get("veto") or spec.get("hard"):
             reasons.append(spec["id"])

@@ -3,7 +3,7 @@
 | 项 | 值 |
 |----|----|
 | ASSIGN | **AIV-036-ENG-N5A-IMPL** |
-| Base | `main` tip `69eda17`（含 PR#21 AIV-032） |
+| Base | `origin/main` tip `1552ca6e11c1aadfbdc36187665c16e5d5598af7`（#34 put-scene；含 #32/#38） |
 | 范围 | N5a 最小闭环：真图 API 合同 → `grids/` + 检项 + **门 G4** |
 | 状态 | draft PR · **≠合 main** · docs≠PASS · **N5b 不做** |
 
@@ -13,7 +13,7 @@
 |----|------|
 | P-CHAR | `usable_for_n4=true` 语义 = 人审合板；本 PR **不翻** usable。见 `look_mode.py` / envelope `p_char`。 |
 | Mode B | 无 face/full ref → Mode B；generate **不** 409。测：`test_mode_b_does_not_require_face_file`。 |
-| SCENE EXEMPT EP01 | 检 G4 → `N/A·EXEMPT`；G1/G2/G3/G9 仍 hard。测：`test_ep01_scene_exempt_g4_item_na`。 |
+| SCENE 检 G4 | 每集（含 EP01）pending/hard；不自动 EXEMPT。对齐 tip `scene_look_forbidden`。测：`test_ep01_scene_g4_item_pending_hard`。 |
 | ForcePass=never | generate / G4 / HTTP middleware 拒 `force_pass`/`force`/`skip_gate` → 400。 |
 | 禁假像素 | `assert_real_image_bytes`；无钥 → `provider` BLOCK（`blocked=true`,`written=false`）；不写 PNG。 |
 | ≥7/9 | `threshold_hard_gated=false`；检项记录 + 文档 only。 |

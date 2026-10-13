@@ -70,7 +70,7 @@ See [`docs/drama-n4.md`](docs/drama-n4.md). docs≠PASS. ForcePass=never.
 
 ## Drama D-N5a / G4 (036)
 
-After a non-empty `EP##-prompts.jsonl` exists, `POST .../drama/n5a/generate` calls the real image API (Ark/Seedream) and writes `grids/EP##_grid_{9|16}_vN.png` + checklist. Missing/empty jsonl → **409**. Missing `ARK_API_KEY` (and not `dry_run`) → **422 BLOCK** — no placeholder grid. **Mode B** does not require a face file. EP01 SCENE EXEMPT → 检 G4 = N/A. Gate **G4** is `POST .../gates/g4` `{verdict: pass|rework}`. N5b Job is **not** opened. ForcePass=never.
+After a non-empty `EP##-prompts.jsonl` exists, `POST .../drama/n5a/generate` calls the real image API (Ark/Seedream) and writes `grids/EP##_grid_{9|16}_vN.png` + checklist. Missing/empty jsonl → **409**. Missing `ARK_API_KEY` (and not `dry_run`) → **422 BLOCK** — no placeholder grid. **Mode B** does not require a face file. 检 G4 (场) is pending/hard for every episode (no EP01 SCENE EXEMPT). Gate **G4** is `POST .../gates/g4` `{verdict: pass|rework}`. N5b Job is **not** opened. ForcePass=never.
 
 ```bash
 aiv drama n5a generate-grid --project proj_01 --ep EP01 --layout 9 --actor yangzhou

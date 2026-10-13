@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from aiv_drama_n5a.exempt import scene_look_exempt
 
 GRID_PROMPT_PATHS = {
     9: ".prompt/generation/宫格-9.md",
@@ -50,13 +49,7 @@ def assemble_grid_prompt(
 ) -> str:
     rows = 3 if layout == 9 else 4
     cols = rows
-    ep = rec["episode"]["episode_id"]
-    exempt = scene_look_exempt(rec, ep)
-    scene_note = (
-        "SCENE-LOOK-EXEMPT: location may vary; do not require a locked scene plate."
-        if exempt
-        else "Keep scene space logic consistent across cells when a scene card exists."
-    )
+    scene_note = "Keep scene space logic consistent across cells when a scene card exists."
     header = [
         f"Output ONE photoreal cinematic {rows}x{cols} storyboard grid ({layout} panels) as a single image.",
         "Same character identity, wardrobe, and hairstyle in every cell. No face-swap.",

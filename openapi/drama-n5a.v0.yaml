@@ -10,7 +10,7 @@ info:
     ## 冻结钉
     - **P-CHAR**：`usable_for_n4=true` = 人审 look 合板，**不是**必须有 face 文件。
     - **Mode B**：厚卡文案定妆即可；**禁止**把「缺 face 文件」写成 N5a 硬挡。
-    - **SCENE EXEMPT (EP01)**：检 G4 场项 **N/A**；CHAR 身份项仍硬。
+    - **SCENE 检 G4**：每集（含 EP01）场项 **pending/hard**（tip `scene_look_forbidden`：金样 A 仅 CHAR-only；SCENE 另轨）。CHAR 身份项仍硬。
     - **ForcePass=never**（`force_pass` / `force` / `skip_gate` → **400**）。
     - **禁假像素**：无钥 / API 全败 → 结构化 **BLOCK**（`provider`），不写彩条/占位格，不记 PASS。
     - ≥7/9 **未硬钉**（文档/检项记录 only）。

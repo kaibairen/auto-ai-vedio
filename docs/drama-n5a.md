@@ -16,7 +16,7 @@
 
 1. **P-CHAR**：进镜 CHAR `usable_for_n4=true` = 人审 **look 合板**，不是必须有 face 文件。本包 **不翻** usable。
 2. **Mode B**：厚卡 `appearance`+`immutable` 即可出格；**禁止**把「缺 face 文件」写成 N5a 硬挡。Mode A 有 face 时才带 img2img。
-3. **SCENE EXEMPT (EP01)**：检 G4 场项 = **N/A·EXEMPT**；检 G1–G3 / G9 身份项仍硬。
+3. **SCENE 检 G4**：每集（含 EP01）场项 **pending/hard**。Tip `scene_look_forbidden`：金样 A 仅 CHAR，SCENE 另轨。**不**再自动 EXEMPT。CHAR 身份项仍硬。
 4. **ForcePass=never**：`force_pass` / `force` / `skip_gate` → **400**.
 5. **无假像素**：无钥 / API 全败 → 结构化 **BLOCK**（`provider`，`blocked=true`，`written=false`）。不写彩条、不写占位格、不记 PASS。
 6. 门序：非空 `EP##-prompts.jsonl` → `generate-grid` → **门 G4** → N5b（锁前 409；本 PR submit = 404 `n5b_not_implemented`）。
